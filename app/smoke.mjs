@@ -13,7 +13,7 @@ import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyro
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
 import { filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
-import { decideReplacementProblem, replacementEligibility } from "./js/replacement-workflow.js";
+import { decideReplacementProblem, replacementEligibility, replacementDuplicateForUser, replacementIsHyrox } from "./js/replacement-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -55,6 +55,8 @@ assert.equal(hyroxVenueChoiceProblem({ mode: "queue", currentSessionId: "bft", t
 assert.equal(replacementEligibility({ userId: "u1", status: "confirmed", snapshot: { kind: "paid", name: "HYROX", dateISO: "2099-01-01", time: "10:00" }, sessionId: "hyrox-bft" }, { now: 0 }).ok, true);
 assert.equal(decideReplacementProblem({ request: { status: "accepted", expiresAt: 100 }, confirm: true, now: 10, bookingAvailable: true }), null);
 assert.equal(decideReplacementProblem({ request: { status: "pending" }, confirm: true, now: 10, bookingAvailable: true }), "Only an accepted replacement can be confirmed.");
+assert.equal(replacementIsHyrox({ snapshot: { kind: "paid", name: "HYROX" } }), true);
+assert.equal(replacementDuplicateForUser([{ id: "other", userId: "u2", status: "confirmed", snapshot: { kind: "paid", name: "HYROX", dateISO: "2099-01-01" } }], "u2", { id: "current", snapshot: { dateISO: "2099-01-01" } }), true);
 const attendanceSession = { dateISO: "2026-08-08", time: "10:00", durationMin: 60 };
 const attendanceStart = data.hktEventStartMs(attendanceSession.dateISO, attendanceSession.time);
 assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart - 15 * 60_000 - 1).state, "upcoming");

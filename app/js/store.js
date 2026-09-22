@@ -35,7 +35,7 @@ import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequ
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
-import { decideReplacementProblem, replacementEligibility } from "./replacement-workflow.js";
+import { decideReplacementProblem, replacementDuplicateForUser, replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -1385,20 +1385,6 @@ function replacementActor() {
   return actor;
 }
 
-function replacementIsHyrox(booking) {
-  return booking?.snapshot?.kind === "paid"
-    && (String(booking.snapshot?.name || "").toUpperCase().includes("HYROX")
-      || String(booking.sessionId || "").startsWith("hyrox-"));
-}
-
-function replacementDuplicateForUser(userId, booking) {
-  return state.bookings.some((candidate) => candidate.id !== booking.id
-    && candidate.userId === userId
-    && ["reserved", "confirmed"].includes(candidate.status)
-    && replacementIsHyrox(candidate)
-    && candidate.snapshot?.dateISO === booking.snapshot?.dateISO);
-}
-
 function recordReplacementAudit(request, action, actorId, reason = null, now = Date.now()) {
   state.replacementAudit.push({
     id: uid("replacement-audit"),
@@ -1480,7 +1466,7 @@ export async function acceptReplacement(token, now = Date.now()) {
   }
   if (actor.id === request.originalUserId) replacementRequestError("The original member cannot accept their own replacement invite.");
   const booking = getBooking(request.bookingId);
-  if (!booking || !replacementEligible(booking, now).ok || replacementDuplicateForUser(actor.id, booking)) {
+  if (!booking || !replacementEligible(booking, now).ok || replacementDuplicateForUser(state.bookings, actor.id, booking)) {
     replacementRequestError("This booking is no longer available for replacement.");
   }
   request.status = "accepted";
@@ -1546,7 +1532,7 @@ export async function decideReplacement(requestId, confirm, reason = null, now =
     confirm,
     now,
     bookingAvailable: Boolean(booking && replacementEligible(booking, now).ok
-      && !replacementDuplicateForUser(request?.replacementUserId, booking)),
+      && !replacementDuplicateForUser(state.bookings, request?.replacementUserId, booking)),
   });
   if (decisionProblem) replacementRequestError(decisionProblem);
   if (request.status === "confirmed" && confirm) return request;

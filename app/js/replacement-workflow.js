@@ -1,5 +1,19 @@
 import { hktEventStartMs } from "./data.js";
 
+export function replacementIsHyrox(booking) {
+  return booking?.snapshot?.kind === "paid"
+    && (String(booking.snapshot?.name || "").toUpperCase().includes("HYROX")
+      || String(booking.sessionId || "").startsWith("hyrox-"));
+}
+
+export function replacementDuplicateForUser(bookings, userId, booking) {
+  return (bookings || []).some((candidate) => candidate.id !== booking?.id
+    && candidate.userId === userId
+    && ["reserved", "confirmed"].includes(candidate.status)
+    && replacementIsHyrox(candidate)
+    && candidate.snapshot?.dateISO === booking?.snapshot?.dateISO);
+}
+
 export function decideReplacementProblem({ request, confirm, now = Date.now(), bookingAvailable = true }) {
   if (!request) return "Replacement request not found.";
   if (request.status === "confirmed" && confirm) return null;
