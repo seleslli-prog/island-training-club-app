@@ -139,6 +139,7 @@ const scheduleWorkflow = createScheduleWorkflow({
   readLocalWindow: ({ startISO, endISO, viewer }) => localScheduleWindow(startISO, endISO, viewer),
   readLiveWindow: ({ startISO, endISO, viewer, force }) => {
     const viewerId = viewer?.status === "approved" ? viewer.id : null;
+    void liveOps.startScheduleRealtime(() => invalidateScheduleWindows());
     const key = JSON.stringify({ startISO, endISO, viewerId });
     return liveScheduleWindows.get(key, { force });
   },
@@ -4412,6 +4413,7 @@ export async function getCurrentUser() {
     liveScheduleWindows.clear();
     stopScheduleOperationsSubscription?.();
     stopScheduleOperationsSubscription = null;
+    void liveOps.stopScheduleRealtime();
     liveSessionCache.clear();
     return null;
   }
@@ -4422,6 +4424,7 @@ export async function getCurrentUser() {
     liveScheduleWindows.clear();
     stopScheduleOperationsSubscription?.();
     stopScheduleOperationsSubscription = null;
+    void liveOps.stopScheduleRealtime();
     liveSessionCache.clear();
   }
   let liveProfile = liveSessionCache.profile();
@@ -4490,6 +4493,7 @@ export async function signOutLive() {
   liveScheduleWindows.clear();
   stopScheduleOperationsSubscription?.();
   stopScheduleOperationsSubscription = null;
+  void liveOps.stopScheduleRealtime();
   liveSessionCache.clear();
   livePaymentDirectory = new Map();
   const { error } = await supabase.auth.signOut();

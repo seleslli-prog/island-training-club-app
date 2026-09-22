@@ -64,6 +64,7 @@ const liveCache = {
 
 const listeners = new Set();
 let subscription = null;
+let scheduleSubscription = null;
 
 function notifyListeners() {
   for (const fn of listeners) {
@@ -754,6 +755,26 @@ export function operationalStateStatus() {
       : null,
     updatedAt: liveCache.updatedAt,
   };
+}
+
+export async function startScheduleRealtime(onChange = () => {}) {
+  if (!isLive() || !supabase || scheduleSubscription) return scheduleSubscription;
+  if (typeof supabase.channel !== "function") return null;
+  const channel = supabase.channel("itc-schedule")
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_sessions" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_cycles" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_bookings" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_rsvp_counts" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_activity_templates" }, onChange)
+    .subscribe();
+  scheduleSubscription = channel;
+  return channel;
+}
+
+export async function stopScheduleRealtime() {
+  if (!scheduleSubscription || !supabase) return;
+  try { await supabase.removeChannel(scheduleSubscription); } catch {}
+  scheduleSubscription = null;
 }
 
 export async function startOperationalRealtime() {

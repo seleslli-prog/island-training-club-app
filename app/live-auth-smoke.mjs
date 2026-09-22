@@ -1508,6 +1508,16 @@ for (const table of [
     `Schedule reads must not load ${table}`);
 }
 console.log("ok  live Schedule window is bounded and excludes unrelated operations");
+const scheduleRealtime = await operations.startScheduleRealtime(() => {});
+assert.equal(scheduleRealtime?.name, "itc-schedule");
+assert.deepEqual(scheduleRealtime.handlers.map((handler) => handler.filter.table), [
+  "operational_sessions",
+  "operational_hyrox_cycles",
+  "operational_bookings",
+  "operational_rsvp_counts",
+  "operational_activity_templates",
+], "Schedule realtime must subscribe only to Schedule-owned tables");
+await operations.stopScheduleRealtime();
 const cachedScheduleReadsBefore = operationalTableReadCounts.get("operational_sessions") || 0;
 await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });
 await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });
@@ -1813,7 +1823,9 @@ liveSession = {
   access_token: "test-access-token", token_type: "bearer", expires_in: 3600,
   expires_at: 9999999999, refresh_token: "test-refresh-token", user: authUser,
 };
-const initialRealtimeHandlers = operationalSubscriptions.flatMap((channel) => channel.handlers);
+const initialRealtimeHandlers = operationalSubscriptions
+  .filter((channel) => channel.name === "itc-operations")
+  .flatMap((channel) => channel.handlers);
 assert.equal(
   initialRealtimeHandlers.filter(({ filter }) => filter.table === "operational_hyrox_cycles").length,
   1,
@@ -2299,6 +2311,7 @@ assert.deepEqual(operations.getLiveVenueOverride("wnt-2026-08-05"), {
   memberNotifiedAt: Date.parse(fixedIso),
 });
 const realtimeHandlers = operationalSubscriptions
+  .filter((channel) => channel.name === "itc-operations")
   .flatMap((channel) => channel.handlers);
 assert.ok(
   operationalSubscriptions.some((channel) =>
