@@ -29,7 +29,7 @@ import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
-import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
+import { activeBookingRowsForSession, heldBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
@@ -1621,10 +1621,7 @@ export function notificationsFor(userId) {
 
 export function heldBookingsForSession(sessionId) {
   if (isLive()) return liveOps.liveHeldBookingsForSession(sessionId);
-  return state.bookings.filter(
-    (b) => b.sessionId === sessionId
-      && (b.status === "reserved" || b.status === "confirmed" || b.status === "attended")
-  );
+  return heldBookingRowsForSession(state.bookings, sessionId);
 }
 
 export function userReservationFor(userId, sessionId) {

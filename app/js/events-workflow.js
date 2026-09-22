@@ -1,5 +1,10 @@
 import { hktEventStartMs, sessionStarted } from "./data.js";
 
+export function heldBookingRowsForSession(bookings, sessionId) {
+  return (bookings || []).filter((booking) => booking.sessionId === sessionId
+    && ["reserved", "confirmed", "attended"].includes(booking.status));
+}
+
 export function activeBookingRowsForSession(bookings, sessionId) {
   return (bookings || []).filter((booking) => booking.sessionId === sessionId
     && (booking.status === "confirmed" || booking.status === "attended"));

@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
-import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
+import { activeBookingRowsForSession, heldBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
 import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, buildDonationRecord, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxQueueGroups, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
@@ -143,6 +143,12 @@ assert.deepEqual(activeBookingRowsForSession([
   { id: "b", sessionId: "s1", status: "attended" },
   { id: "c", sessionId: "s1", status: "cancelled" },
 ], "s1").map((row) => row.id), ["a", "b"]);
+assert.deepEqual(heldBookingRowsForSession([
+  { id: "a", sessionId: "s1", status: "reserved" },
+  { id: "b", sessionId: "s1", status: "confirmed" },
+  { id: "c", sessionId: "s1", status: "attended" },
+  { id: "d", sessionId: "s1", status: "cancelled" },
+], "s1").map((row) => row.id), ["a", "b", "c"]);
 assert.equal(rsvpJoinProblem({
   session: { kind: "rsvp", requiresRsvp: true, price: 0, cancelled: false },
   alreadyBooked: false,
