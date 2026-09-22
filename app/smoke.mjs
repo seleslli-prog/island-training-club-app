@@ -47,8 +47,8 @@ const { buildIndemnityCsv } = await import("./js/exports.js");
 const scheduleWindowCalls = [];
 const scheduleWorkflow = createScheduleWorkflow({
   isLive: () => false,
-  readLocalWindow: async ({ startISO, endISO, viewer }) => {
-    scheduleWindowCalls.push({ startISO, endISO, viewerId: viewer?.id || null });
+  readLocalWindow: async ({ startISO, endISO, viewer, force }) => {
+    scheduleWindowCalls.push({ startISO, endISO, viewerId: viewer?.id || null, force });
     return {
       sessions: [
         { id: "later", dateISO: "2026-09-28", time: "19:00" },
@@ -71,6 +71,7 @@ assert.deepEqual(scheduleWindowCalls, [{
   startISO: "2026-09-28",
   endISO: "2026-10-04",
   viewerId: "member-1",
+  force: false,
 }], "Schedule windows must pass the visible range and viewer to the local adapter");
 console.log("ok  Schedule workflow selects and orders a local visible window");
 

@@ -1508,6 +1508,15 @@ for (const table of [
     `Schedule reads must not load ${table}`);
 }
 console.log("ok  live Schedule window is bounded and excludes unrelated operations");
+const cachedScheduleReadsBefore = operationalTableReadCounts.get("operational_sessions") || 0;
+await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });
+await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });
+assert.equal((operationalTableReadCounts.get("operational_sessions") || 0) - cachedScheduleReadsBefore, 1,
+  "unchanged Schedule windows must reuse their live read model");
+store.invalidateScheduleWindows();
+await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });
+assert.equal((operationalTableReadCounts.get("operational_sessions") || 0) - cachedScheduleReadsBefore, 2,
+  "invalidating Schedule windows must refresh the live read model");
 
 // Prayer store actions must use only the five authoritative RPCs in live mode,
 // normalize snake_case rows, reject unsafe inputs before RPC, and never fall

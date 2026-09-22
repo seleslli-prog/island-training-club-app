@@ -123,12 +123,24 @@ function localScheduleWindow(startISO, endISO, viewer = null) {
   return { sessions, cycles, viewerBookings, heldBookingCounts, rsvpCounts };
 }
 
+const liveScheduleWindows = createLiveResource((key) => {
+  const { startISO, endISO, viewerId } = JSON.parse(key);
+  return liveOps.liveScheduleWindow(startISO, endISO, viewerId);
+});
+
 const scheduleWorkflow = createScheduleWorkflow({
   isLive,
   readLocalWindow: ({ startISO, endISO, viewer }) => localScheduleWindow(startISO, endISO, viewer),
-  readLiveWindow: ({ startISO, endISO, viewer }) =>
-    liveOps.liveScheduleWindow(startISO, endISO, viewer?.status === "approved" ? viewer.id : null),
+  readLiveWindow: ({ startISO, endISO, viewer, force }) => {
+    const viewerId = viewer?.status === "approved" ? viewer.id : null;
+    const key = JSON.stringify({ startISO, endISO, viewerId });
+    return liveScheduleWindows.get(key, { force });
+  },
 });
+
+export function invalidateScheduleWindows() {
+  liveScheduleWindows.clear();
+}
 
 export function scheduleWindow(options) {
   return scheduleWorkflow.loadWindow(options);
