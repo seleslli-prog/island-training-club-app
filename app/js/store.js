@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
 import { applicationDecisionProblem } from "./admin-workflow.js";
@@ -2143,13 +2143,7 @@ export function leaveHyroxCycleQueue(userId, entryId) {
 
 export function hyroxCycleQueues(cycleId) {
   if (isLive()) return liveOps.liveHyroxQueuesForCycle(cycleId);
-  const rows = hyroxQueueEntries(cycleId);
-  return {
-    weeklyWaitlist: rows.filter((entry) => entry.kind === "weekly_waitlist" && entry.status === "active")
-      .sort((a, b) => (a.joinedAt - b.joinedAt) || a.id.localeCompare(b.id)),
-    venueSwitches: rows.filter((entry) => entry.kind === "venue_switch" && entry.status === "active")
-      .sort((a, b) => (a.joinedAt - b.joinedAt) || a.id.localeCompare(b.id)),
-  };
+  return hyroxQueueGroups(hyroxQueueEntries(cycleId));
 }
 
 export function hyroxCycleQueuePosition(userId, cycleId, kind = "weekly_waitlist", targetSessionId = null) {

@@ -25,6 +25,15 @@ export function hyroxActiveBookingRows(bookings, cycleId) {
     && ["reserved", "confirmed"].includes(booking.status));
 }
 
+export function hyroxQueueGroups(entries) {
+  const active = (entries || []).filter((entry) => entry.status === "active");
+  const sort = (a, b) => (a.joinedAt - b.joinedAt) || String(a.id).localeCompare(String(b.id));
+  return {
+    weeklyWaitlist: active.filter((entry) => entry.kind === "weekly_waitlist").sort(sort),
+    venueSwitches: active.filter((entry) => entry.kind === "venue_switch").sort(sort),
+  };
+}
+
 export function hyroxActiveQueueEntryForUser(entries, userId, kind = null) {
   return (entries || []).find((entry) => entry.userId === userId
     && (!kind || entry.kind === kind) && entry.status === "active") || null;
