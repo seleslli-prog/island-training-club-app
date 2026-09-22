@@ -20,6 +20,14 @@ export function hyroxVenueSwitchProblem({ booking, cycle, now = Date.now() }) {
   return null;
 }
 
+export function hyroxVenueChoiceProblem({ mode, currentSessionId, targetSessionId, targetFull = false }) {
+  if (mode === "queue" && currentSessionId === targetSessionId) {
+    return "Choose the other venue in this HYROX cycle.";
+  }
+  if (mode === "select" && targetFull) return "Target venue is full.";
+  return null;
+}
+
 export function hyroxVenueTargetProblem(cycle, sessionId) {
   if (!cycle || ![cycle.bftSessionId, cycle.midtownSessionId].includes(sessionId)) {
     return "Target venue is not part of this HYROX cycle.";

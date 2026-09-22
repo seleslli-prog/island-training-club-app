@@ -9,7 +9,7 @@ import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
-import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
 import { filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
@@ -49,6 +49,8 @@ assert.equal(hyroxPaymentProblem({ reason: "  " }), "Payment rejection reason is
 assert.equal(hyroxPaymentProblem({ reason: "Unreadable reference", booking: { cycleId: "cycle-1", status: "reserved", paymentMarkedAt: 1 } }), null);
 assert.equal(hyroxVenueSwitchProblem({ cycle: { venuePlan: "both", venueChoiceDeadlineAt: 100 }, booking: { status: "confirmed", allocationState: "provisional" }, now: 10 }), null);
 assert.equal(hyroxVenueTargetProblem({ bftSessionId: "bft", midtownSessionId: "midtown" }, "other"), "Target venue is not part of this HYROX cycle.");
+assert.equal(hyroxVenueChoiceProblem({ mode: "select", currentSessionId: "bft", targetFull: true }), "Target venue is full.");
+assert.equal(hyroxVenueChoiceProblem({ mode: "queue", currentSessionId: "bft", targetSessionId: "bft", targetFull: true }), "Choose the other venue in this HYROX cycle.");
 const attendanceSession = { dateISO: "2026-08-08", time: "10:00", durationMin: 60 };
 const attendanceStart = data.hktEventStartMs(attendanceSession.dateISO, attendanceSession.time);
 assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart - 15 * 60_000 - 1).state, "upcoming");

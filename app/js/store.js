@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
@@ -2483,7 +2483,13 @@ export function selectHyroxCycleVenue(bookingId, sessionId, now = Date.now()) {
   hyroxAssertSwitchable(booking, cycle, now);
   const target = hyroxAssertTarget(cycle, sessionId);
   if (booking.sessionId === sessionId) return booking;
-  if (hyroxConfirmedCount(cycle.id, sessionId) >= target.capacity) throw new Error("Target venue is full.");
+  const choiceProblem = hyroxVenueChoiceProblem({
+    mode: "select",
+    currentSessionId: booking.sessionId,
+    targetSessionId: sessionId,
+    targetFull: hyroxConfirmedCount(cycle.id, sessionId) >= target.capacity,
+  });
+  if (choiceProblem) throw new Error(choiceProblem);
   appendHyroxAllocation(booking, sessionId, "member", now);
   const request = hyroxQueueEntries(cycle.id).find((entry) => entry.kind === "venue_switch"
     && entry.userId === booking.userId && entry.status === "active");
@@ -2503,7 +2509,12 @@ export function joinHyroxVenueSwitchQueue(bookingId, sessionId, now = Date.now()
   const cycle = hyroxCycleById(booking.cycleId);
   hyroxAssertSwitchable(booking, cycle, now);
   const target = hyroxAssertTarget(cycle, sessionId);
-  if (booking.sessionId === sessionId) throw new Error("Choose the other venue in this HYROX cycle.");
+  const choiceProblem = hyroxVenueChoiceProblem({
+    mode: "queue",
+    currentSessionId: booking.sessionId,
+    targetSessionId: sessionId,
+  });
+  if (choiceProblem) throw new Error(choiceProblem);
   const entries = hyroxQueueEntries(cycle.id);
   if (entries.some((entry) => entry.userId === booking.userId && entry.kind === "venue_switch" && entry.status === "active")) {
     throw new Error("You already have an active HYROX queue request.");
