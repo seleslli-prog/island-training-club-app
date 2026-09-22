@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
-import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
+import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campaignTransitionProblem } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
@@ -86,6 +86,14 @@ assert.equal(rsvpJoinProblem({
   alreadyBooked: true,
   spots: 2,
 }), "Already booked");
+assert.equal(rsvpWithdrawProblem({
+  booking: { status: "confirmed", snapshot: { price: 0 } },
+  session: { dateISO: "2099-01-01", time: "10:00", kind: "rsvp" }, now: 0,
+}), null);
+assert.equal(rsvpWithdrawProblem({
+  booking: { status: "confirmed", snapshot: { price: 0 } },
+  session: { dateISO: "2000-01-01", time: "10:00", kind: "rsvp" }, now: Date.now(),
+}), "Session has already started");
 assert.equal(isRsvpOccurrence({ kind: "paid", requiresRsvp: true, price: 180 }), false);
 const routeErrorHtml = views.viewRouteError();
 assert.match(routeErrorHtml, /data-route-error/,

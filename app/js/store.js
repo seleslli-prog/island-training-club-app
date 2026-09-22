@@ -29,7 +29,7 @@ import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
-import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
+import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
@@ -3465,15 +3465,11 @@ export async function withdrawRsvp(bookingId, now = Date.now()) {
     return afterScheduleMutation(liveOps.liveWithdrawRsvp(bookingId));
   }
   const booking = getBooking(bookingId);
+  const session = booking ? getSession(booking.sessionId) : null;
+  const problem = rsvpWithdrawProblem({ booking, session, now });
+  if (problem) throw new Error(problem);
   if (!booking || booking.status !== "confirmed") return null;
-  const session = getSession(booking.sessionId);
-  if (!session) throw new Error("Session not found.");
-  if (!isRsvpOccurrence({ ...session, price: booking.snapshot?.price })) return null;
   requireAuthorizedPaymentOwner(booking.userId);
-  const startsAt = hktEventStartMs(session.dateISO, session.time);
-  if (!Number.isFinite(startsAt) || startsAt <= now) {
-    throw new Error("Session has already started");
-  }
   booking.status = "cancelled";
   booking.cancelledAt = now;
   booking.cancelledSource = "member";
