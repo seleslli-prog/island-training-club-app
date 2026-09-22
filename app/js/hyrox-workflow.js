@@ -20,6 +20,11 @@ export function hyroxVenueSwitchProblem({ booking, cycle, now = Date.now() }) {
   return null;
 }
 
+export function hyroxActiveBookingRows(bookings, cycleId) {
+  return (bookings || []).filter((booking) => booking.cycleId === cycleId
+    && ["reserved", "confirmed"].includes(booking.status));
+}
+
 export function hyroxQueuePositionForEntries(entries, userId, {
   kind = "weekly_waitlist",
   targetSessionId = null,

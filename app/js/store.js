@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { attendanceWindowForSession, hyroxPaymentProblem, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxPaymentProblem, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
 import { applicationDecisionProblem } from "./admin-workflow.js";
@@ -1911,8 +1911,7 @@ function hyroxCycleById(cycleId) {
 }
 
 function hyroxActiveBookings(cycleId) {
-  return state.bookings.filter((booking) => booking.cycleId === cycleId
-    && ["reserved", "confirmed"].includes(booking.status));
+  return hyroxActiveBookingRows(state.bookings, cycleId);
 }
 
 function hyroxQueueEntries(cycleId) {
