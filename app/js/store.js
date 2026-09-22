@@ -31,7 +31,7 @@ import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
-import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
+import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
@@ -3058,14 +3058,10 @@ export async function setAdminPrayerRequestStatus(requestId, status) {
   requirePrayerAdminActor();
   const prayer = state.prayers.find((row) => row.id === requestId);
   if (!prayer) throw new Error("Prayer request not found.");
-  const valid = prayer.status === "new"
-    ? ["prayed_for", "closed"].includes(status)
-    : prayer.status === "prayed_for" && status === "closed";
-  if (!valid) throw new Error("Prayer request cannot be changed from its current state.");
   const now = Date.now();
-  prayer.status = status;
-  prayer.updatedAt = now;
-  prayer.closedAt = status === "closed" ? now : null;
+  const transition = prayerAdminTransition(prayer, status, now);
+  if (transition.error) throw new Error(transition.error);
+  Object.assign(prayer, transition.value);
   save();
   return localAdminPrayerRow(prayer);
 }

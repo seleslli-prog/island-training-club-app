@@ -21,6 +21,21 @@ export function validatePrayerText(request) {
   return trimmed;
 }
 
+export function prayerAdminTransition(prayer, status, now = Date.now()) {
+  const valid = prayer?.status === "new"
+    ? ["prayed_for", "closed"].includes(status)
+    : prayer?.status === "prayed_for" && status === "closed";
+  if (!valid) return { error: "Prayer request cannot be changed from its current state." };
+  return {
+    value: {
+      ...prayer,
+      status,
+      updatedAt: now,
+      closedAt: status === "closed" ? now : null,
+    },
+  };
+}
+
 export function prayerTransition(prayer, action, now = Date.now()) {
   const problem = prayerActionProblem(prayer?.status, action);
   if (problem) return { error: problem };
