@@ -11,6 +11,22 @@ export function attendanceWindowForSession(session, now = Date.now()) {
   };
 }
 
+export function hyroxVenueSwitchProblem({ booking, cycle, now = Date.now() }) {
+  if (!cycle || cycle.venuePlan !== "both") return "Venue changes are available only when both gyms open.";
+  if (booking?.status !== "confirmed" || booking?.allocationState !== "provisional") {
+    return "Booking allocation is not changeable.";
+  }
+  if (now >= cycle.venueChoiceDeadlineAt) return "Venue changes closed Friday at 9 PM HKT.";
+  return null;
+}
+
+export function hyroxVenueTargetProblem(cycle, sessionId) {
+  if (!cycle || ![cycle.bftSessionId, cycle.midtownSessionId].includes(sessionId)) {
+    return "Target venue is not part of this HYROX cycle.";
+  }
+  return null;
+}
+
 export function hyroxPaymentProblem({ reason, booking }) {
   if (!String(reason || "").trim()) return "Payment rejection reason is required.";
   if (!booking?.cycleId) return "Pooled HYROX booking not found.";

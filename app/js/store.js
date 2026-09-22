@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
@@ -2359,17 +2359,13 @@ function hyroxCycleForSession(sessionId) {
 }
 
 function hyroxAssertSwitchable(booking, cycle, now) {
-  if (!cycle || cycle.venuePlan !== "both") throw new Error("Venue changes are available only when both gyms open.");
-  if (booking.status !== "confirmed" || booking.allocationState !== "provisional") {
-    throw new Error("Booking allocation is not changeable.");
-  }
-  if (now >= cycle.venueChoiceDeadlineAt) throw new Error("Venue changes closed Friday at 9 PM HKT.");
+  const problem = hyroxVenueSwitchProblem({ booking, cycle, now });
+  if (problem) throw new Error(problem);
 }
 
 function hyroxAssertTarget(cycle, sessionId) {
-  if (![cycle.bftSessionId, cycle.midtownSessionId].includes(sessionId)) {
-    throw new Error("Target venue is not part of this HYROX cycle.");
-  }
+  const problem = hyroxVenueTargetProblem(cycle, sessionId);
+  if (problem) throw new Error(problem);
   return getSession(sessionId);
 }
 
