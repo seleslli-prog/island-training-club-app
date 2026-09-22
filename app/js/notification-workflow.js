@@ -1,3 +1,8 @@
+export function markLocalNotificationRead(notification) {
+  if (!notification || notification.read) return { error: "Notification update conflict." };
+  return { value: { ...notification, read: true } };
+}
+
 export function orderNotificationsForUser(notifications, userId) {
   return (notifications || [])
     .filter((notification) => notification.userId === userId)

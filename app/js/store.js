@@ -34,7 +34,7 @@ import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campa
 import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
-import { normalizeLocalNotification, orderNotificationsForUser } from "./notification-workflow.js";
+import { markLocalNotificationRead, normalizeLocalNotification, orderNotificationsForUser } from "./notification-workflow.js";
 import { applicationDecisionProblem, orderApprovalCandidates } from "./admin-workflow.js";
 import { decideReplacementProblem, replacementDuplicateForUser, replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
@@ -4869,8 +4869,9 @@ export async function markNotificationRead(id) {
     const notification = state.notifications.find(
       (row) => row.id === id && row.userId === user?.id && !row.read
     );
-    if (!notification) throw new Error("Notification update conflict.");
-    notification.read = true;
+    const transition = markLocalNotificationRead(notification);
+    if (transition.error) throw new Error(transition.error);
+    Object.assign(notification, transition.value);
     save();
     const normalized = normalizeLocalNotification(notification);
     return { id: normalized.id, read_at: normalized.read_at };
