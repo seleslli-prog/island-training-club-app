@@ -8,7 +8,7 @@ import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, validatePrayerText } from "./js/prayer-workflow.js";
-import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields } from "./js/giving-workflow.js";
+import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campaignTransitionProblem } from "./js/giving-workflow.js";
 import { hyroxCycleStatus } from "./js/hyrox-workflow.js";
 import { isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 
@@ -36,6 +36,9 @@ assert.deepEqual(hyroxCycleStatus({ registrationState: "open", registrationOpens
   label: "Sign up opens Monday at 6 PM HKT", compactLabel: "Opens Mon · 6 PM", className: "neutral",
 });
 assert.equal(campaignIsOpen({ status: "published" }), true);
+assert.equal(campaignTransitionProblem({ status: "draft" }, "draft", "published"), null);
+assert.equal(campaignTransitionProblem({ status: "published" }, "draft", "published"),
+  "Campaign must be draft before it can be published.");
 assert.deepEqual(validateCampaignFields({ title: "  Appeal ", description: " Help ", goalHKD: "1200", fpsId: "FPS-1", fpsPayee: "ITC" }), {
   title: "Appeal", description: "Help", goalHKD: 1200, fpsId: "FPS-1", fpsPayee: "ITC",
 });

@@ -30,7 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
-import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
+import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, validatePrayerText } from "./prayer-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
@@ -3994,8 +3994,8 @@ async function transitionGivingCampaign(id, fromStatus, toStatus) {
   if (!campaignId) throw new Error("Giving campaign not found.");
   if (!isLive() || !supabase) {
     const campaign = localCampaignById(campaignId);
-    if (!campaign) throw new Error("Giving campaign not found.");
-    if (campaign.status !== fromStatus) throw new Error(`Campaign must be ${fromStatus} before it can be ${toStatus}.`);
+    const transitionProblem = campaignTransitionProblem(campaign, fromStatus, toStatus);
+    if (transitionProblem) throw new Error(transitionProblem);
     if (toStatus === "published") validatedCampaignFields(campaign);
     const now = new Date().toISOString();
     campaign.status = toStatus;
@@ -4025,7 +4025,8 @@ export async function publishGivingCampaign(id) {
   const campaign = (await listGivingCampaigns()).find((item) => item.id === id);
   if (!campaign) throw new Error("Giving campaign not found.");
   validatedCampaignFields(campaign);
-  if (campaign.status !== "draft") throw new Error("Campaign must be draft before it can be published.");
+  const transitionProblem = campaignTransitionProblem(campaign, "draft", "published");
+  if (transitionProblem) throw new Error(transitionProblem);
   return transitionGivingCampaign(id, "draft", "published");
 }
 

@@ -2,6 +2,12 @@ export function campaignIsOpen(campaign) {
   return campaign?.status === "published";
 }
 
+export function campaignTransitionProblem(campaign, fromStatus, toStatus) {
+  if (!campaign) return "Giving campaign not found.";
+  if (campaign.status !== fromStatus) return `Campaign must be ${fromStatus} before it can be ${toStatus}.`;
+  return null;
+}
+
 export function validateCampaignFields(draft) {
   const title = String(draft?.title || "").trim();
   const description = String(draft?.description || "").trim();
