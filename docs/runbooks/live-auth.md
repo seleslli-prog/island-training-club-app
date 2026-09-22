@@ -75,6 +75,22 @@ Use this safe deployment process:
 For localStorage-only operation, set both assignments to empty strings in a
 local, uncommitted copy.
 
+## Route performance verification
+
+1. Open DevTools Performance and clear existing recordings.
+2. Load `/app/` while signed out; record the interval from navigation start to
+   the `itc:first-route-commit` mark. Home or Account must be visible before
+   `itc:operations-ready`.
+3. Sign in with an approved test account, then switch Home → Schedule →
+   Community → Account. Confirm the Network panel shows no `applications`
+   query on unchanged navigation.
+4. Block one Schedule request. Confirm only that route shows its retry panel
+   while Home and Account remain usable.
+
+Do not use a fixed network threshold. Compare `itc:first-route-commit` and
+`itc:operations-ready` on the same browser and connection; this prototype has
+no production performance budget yet.
+
 ## Canonical production URL
 
 The canonical member-facing URL is:

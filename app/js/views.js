@@ -2645,6 +2645,14 @@ export function viewNotFound(msg = "Page not found.") {
   </div></div>`;
 }
 
+export function viewRouteError() {
+  return `<section class="card" data-route-error><div class="card-body">
+    <p class="kicker">Unable to load</p>
+    <h1 class="display">We couldn’t load this page. Please try again.</h1>
+    <button class="btn mt16" type="button" data-action="retry-route">Retry</button>
+  </div></section>`;
+}
+
 // --- Admin --------------------------------------------------------------------------------------
 
 // PostgREST emits PGRST205 when a query names a table the deployed schema

@@ -17,6 +17,14 @@ globalThis.localStorage = {
 const store = await import("./js/store.js");
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
+const routeErrorHtml = views.viewRouteError();
+assert.match(routeErrorHtml, /data-route-error/,
+  "route failures must render a route-local error panel");
+assert.match(routeErrorHtml, /data-action="retry-route"/,
+  "route failures must offer an in-place retry");
+assert.match(routeErrorHtml, /We couldn’t load this page\. Please try again\./,
+  "route failures must use the recoverable route copy");
+console.log("ok  route failures expose a retry panel");
 const hyroxCycle = await import("./js/hyrox-cycle.js");
 const { buildIndemnityCsv } = await import("./js/exports.js");
 

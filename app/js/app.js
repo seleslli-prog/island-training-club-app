@@ -440,6 +440,26 @@ function renderNotificationChrome(user, active, generation, rowsPromise = null) 
   return request;
 }
 
+function commitRouteError() {
+  const [page] = parseHash();
+  const user = store.currentUser();
+  viewEl.innerHTML = views.viewRouteError();
+  navEl.innerHTML = views.navHTML(NAV_FOR[page] ?? "home", user);
+  avatarEl.classList.toggle("is-empty", !user);
+  avatarEl.innerHTML = views.avatarHTML(user);
+  viewEl.removeAttribute("aria-busy");
+  viewEl.focus({ preventScroll: true });
+}
+
+function presentRouteError(error) {
+  const [page] = parseHash();
+  if (page === "home" || page === "schedule") {
+    commitRouteError();
+    return;
+  }
+  toast(error?.message || "Unable to load this page", true);
+}
+
 async function renderWithFeedback() {
   const generation = ++renderGeneration;
   const routeLoader = document.getElementById("route-loader");
@@ -819,6 +839,13 @@ document.addEventListener("click", async (e) => {
   e.preventDefault?.();
 
   switch (action) {
+    case "retry-route":
+      try {
+        await withBusyControl(el, "Retrying…", () => renderWithFeedback());
+      } catch {
+        commitRouteError();
+      }
+      break;
     case "avatar-hide":
     case "avatar-approve":
     case "avatar-reject":
@@ -2161,7 +2188,7 @@ async function boot() {
     try {
       await renderWithFeedback();
     } catch (err) {
-      toast(err.message || "Unable to load your account", true);
+      presentRouteError(err);
     }
   });
 
@@ -2178,7 +2205,7 @@ async function boot() {
     try {
       await renderWithFeedback();
     } catch (err) {
-      toast(err.message || "Unable to refresh the current page", true);
+      presentRouteError(err);
     }
   });
 
@@ -2217,7 +2244,6 @@ async function boot() {
 
 export const bootPromise = boot().catch((err) => {
   console.error("Boot failed", err);
-  const message = err?.message || String(err) || "Startup failed";
-  toast(message, true);
-  throw err;
+  presentRouteError(err);
+  return null;
 });
