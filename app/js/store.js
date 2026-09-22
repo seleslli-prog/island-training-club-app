@@ -31,7 +31,7 @@ import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign } from "./giving-workflow.js";
-import { normalizePrayerRequest } from "./prayer-workflow.js";
+import { normalizePrayerRequest, validatePrayerText } from "./prayer-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -2967,14 +2967,7 @@ function requirePrayerAdminActor() {
   return actor;
 }
 
-function validatedPrayerText(request) {
-  const trimmed = String(request ?? "").trim();
-  const length = Array.from(trimmed).length;
-  if (length < 1 || length > 2000) {
-    throw new Error("Prayer request must be between 1 and 2,000 characters.");
-  }
-  return trimmed;
-}
+const validatedPrayerText = validatePrayerText;
 
 function validatedLivePrayerId(requestId) {
   const id = String(requestId ?? "").trim();

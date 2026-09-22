@@ -7,7 +7,7 @@ import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
-import { normalizePrayerRequest } from "./js/prayer-workflow.js";
+import { normalizePrayerRequest, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign } from "./js/giving-workflow.js";
 
 // --- localStorage shim ---
@@ -21,6 +21,8 @@ globalThis.localStorage = {
 const store = await import("./js/store.js");
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
+assert.equal(validatePrayerText("  Please pray  "), "Please pray");
+assert.throws(() => validatePrayerText(""), /between 1 and 2,000/);
 assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please pray", status: "prayed_for" }), {
   id: "prayer-1", request: "Please pray", anonymousToLeaders: false, status: "prayed_for",
   createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,

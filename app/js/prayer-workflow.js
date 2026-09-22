@@ -1,5 +1,14 @@
 const PRAYER_STATUSES = new Set(["new", "prayed_for", "closed", "withdrawn"]);
 
+export function validatePrayerText(request) {
+  const trimmed = String(request ?? "").trim();
+  const length = Array.from(trimmed).length;
+  if (length < 1 || length > 2000) {
+    throw new Error("Prayer request must be between 1 and 2,000 characters.");
+  }
+  return trimmed;
+}
+
 export function normalizePrayerRequest(row) {
   const field = (camel, snake) => row?.[snake] !== undefined ? row[snake] : row?.[camel];
   return {
