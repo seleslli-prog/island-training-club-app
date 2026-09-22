@@ -32,7 +32,7 @@
 | `app/js/operations.js` | Narrow live Schedule read adapter and its row normalization, without invoking global cache hydration. |
 | `app/js/store.js` | Compatibility facade: application cache invalidation and Schedule workflow construction/export. |
 | `app/js/views.js` | Home/Schedule consume the Schedule facade only; no direct `liveOps` import. |
-| `app/js/app.js` | Route timing marks, non-blocking startup work, route-local Schedule error/retry state, and no unconditional application/avatar waits on ordinary navigation. |
+| `app/js/app.js` | Route timing marks, non-blocking startup work, route-local Schedule error/retry state, and no unconditional application wait on ordinary navigation. |
 | `app/smoke.mjs` | Local workflow and Home/Schedule regression coverage. |
 | `app/live-auth-smoke.mjs` | Fake-Supabase cache, narrow Schedule read, startup ordering, and route-failure containment coverage. |
 
