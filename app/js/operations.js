@@ -369,10 +369,10 @@ function buildVenueOverrideRow(row) {
 
 function replaceState(payload) {
   liveCache.sessions = new Map(payload.sessions.map((row) => [row.id, row]));
-  liveCache.hyroxCycles = new Map(
-    (payload.hyroxCycles || []).map((row) => [row.id, row])
-  );
-  liveCache.hyroxQueues = payload.hyroxQueues || [];
+  if (payload.hyroxCycles) {
+    liveCache.hyroxCycles = new Map(payload.hyroxCycles.map((row) => [row.id, row]));
+  }
+  if (payload.hyroxQueues) liveCache.hyroxQueues = payload.hyroxQueues;
   if (payload.replacementRequests) {
     liveCache.replacementRequests = payload.replacementRequests
       .map(buildReplacementRequestRow).filter(Boolean);
@@ -575,7 +575,7 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
   };
 }
 
-async function fetchOperationalState({ authenticated } = {}) {
+async function fetchOperationalState({ authenticated, skipHyrox = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {
     try {
@@ -612,10 +612,14 @@ async function fetchOperationalState({ authenticated } = {}) {
     supabase.from("operational_activity_templates").select("*").order("activity_id"),
     supabase.from("operational_session_venue_overrides").select("*"),
     fetchRsvpCounts(),
-    supabase.from("operational_hyrox_cycles").select("*").order("session_date"),
-    authenticated
-      ? supabase.from("operational_hyrox_queue_entries").select("*").order("joined_at")
-      : Promise.resolve({ data: [], error: null }),
+    skipHyrox
+      ? Promise.resolve({ data: [], error: null })
+      : supabase.from("operational_hyrox_cycles").select("*").order("session_date"),
+    skipHyrox
+      ? Promise.resolve({ data: [], error: null })
+      : authenticated
+        ? supabase.from("operational_hyrox_queue_entries").select("*").order("joined_at")
+        : Promise.resolve({ data: [], error: null }),
   ]);
   for (const result of [
     sessions,
@@ -667,8 +671,10 @@ async function fetchOperationalState({ authenticated } = {}) {
   return {
     sessions: sessionRows,
     templates: templateRows,
-    hyroxCycles: (hyroxCycles.data || []).map(buildHyroxCycleRow),
-    hyroxQueues: (hyroxQueues.data || []).map(buildHyroxQueueRow),
+    ...(skipHyrox ? {} : {
+      hyroxCycles: (hyroxCycles.data || []).map(buildHyroxCycleRow),
+      hyroxQueues: (hyroxQueues.data || []).map(buildHyroxQueueRow),
+    }),
     bookings: (bookings.data || []).map((row) => buildBookingRow(row, sessionsById)),
     queues: (queues.data || []).map(buildQueueRow),
     receipts: (receipts.data || []).map(buildReceiptRow),
@@ -701,7 +707,7 @@ export async function ensureLiveSessionWindow() {
   return null;
 }
 
-export async function hydrateOperationalState({ force = false, authenticated } = {}) {
+export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (liveCache.loaded && !force) return liveCache;
   if (hydrationPromise) {
@@ -713,7 +719,7 @@ export async function hydrateOperationalState({ force = false, authenticated } =
   }
   liveCache.loading = Promise.resolve().then(async () => {
     try {
-      const payload = await fetchOperationalState({ authenticated });
+      const payload = await fetchOperationalState({ authenticated, skipHyrox });
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
