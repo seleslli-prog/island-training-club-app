@@ -30,7 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { activeBookingRowsForSession, heldBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
-import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, orderGivingCampaigns, validateCampaignFields } from "./giving-workflow.js";
+import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, findActiveGivingCampaign, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, orderGivingCampaigns, validateCampaignFields } from "./giving-workflow.js";
 import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
@@ -3785,7 +3785,7 @@ export function campaigns() {
 }
 
 export function activeGivingCampaign() {
-  return state.campaigns.find(campaignIsOpen) ?? null;
+  return findActiveGivingCampaign(state.campaigns);
 }
 
 const ADMIN_CAMPAIGN_ROLES = new Set(["admin", "superadmin", "super_admin"]);

@@ -8,7 +8,7 @@ import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { activeBookingRowsForSession, heldBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
 import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./js/prayer-workflow.js";
-import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, buildDonationRecord, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderGivingCampaigns, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
+import { campaignIsOpen, findActiveGivingCampaign, campaignRaisedFromDonations, campaignTransitionProblem, buildDonationRecord, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderGivingCampaigns, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxQueueGroups, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
@@ -112,6 +112,7 @@ assert.deepEqual(hyroxCycleStatus({ registrationState: "open", registrationOpens
   label: "Sign up opens Monday at 6 PM HKT", compactLabel: "Opens Mon · 6 PM", className: "neutral",
 });
 assert.equal(campaignIsOpen({ status: "published" }), true);
+assert.equal(findActiveGivingCampaign([{ id: "draft", status: "draft" }, { id: "live", status: "published" }])?.id, "live");
 assert.equal(campaignTransitionProblem({ status: "draft" }, "draft", "published"), null);
 assert.equal(campaignTransitionProblem({ status: "published" }, "draft", "published"),
   "Campaign must be draft before it can be published.");

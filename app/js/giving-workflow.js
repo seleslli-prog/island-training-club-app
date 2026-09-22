@@ -43,6 +43,10 @@ export function donationOwnerProblem({ user, inputUserId } = {}) {
   return null;
 }
 
+export function findActiveGivingCampaign(campaigns) {
+  return (campaigns || []).find(campaignIsOpen) ?? null;
+}
+
 export function campaignRaisedFromDonations(donations, campaignId) {
   if (!campaignId) return 0;
   return (donations || [])
