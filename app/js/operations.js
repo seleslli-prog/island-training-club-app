@@ -14,6 +14,7 @@
 import { SEED_ACTIVITIES } from "./data.js";
 import { isLive, supabase } from "./config.js";
 import { normalizeMeetingPoint } from "./venue.js";
+import { hyroxQueueGroups } from "./hyrox-workflow.js";
 
 const LIVE_TABLES = [
   "operational_sessions",
@@ -889,15 +890,7 @@ export function getLiveHyroxCycle(id) {
 }
 
 export function liveHyroxQueuesForCycle(id) {
-  const rows = liveCache.hyroxQueues.filter((row) => row.cycleId === id);
-  return {
-    weeklyWaitlist: rows
-      .filter((row) => row.kind === "weekly_waitlist")
-      .sort((a, b) => (a.joinedAt - b.joinedAt) || a.id.localeCompare(b.id)),
-    venueSwitches: rows
-      .filter((row) => row.kind === "venue_switch")
-      .sort((a, b) => (a.joinedAt - b.joinedAt) || a.id.localeCompare(b.id)),
-  };
+  return hyroxQueueGroups(liveCache.hyroxQueues.filter((row) => row.cycleId === id));
 }
 
 export function liveActivityTemplates() {
