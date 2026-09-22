@@ -28,6 +28,7 @@ import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
+import { normalizeLiveViewer } from "./session-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -4472,23 +4473,7 @@ export async function getCurrentUser() {
     };
     liveProfileFetchedAt = Date.now();
   }
-  const fullName = liveProfile.full_name || liveProfile.email || "ITC Member";
-  liveUser = {
-    id: liveProfile.id,
-    email: liveProfile.email,
-    fullName,
-    preferredName: fullName.split(" ")[0],
-    avatarUrl: liveProfile.avatar_url,
-    appliedAt: liveProfile.created_at,
-    role: liveProfile.role,
-    status:
-      liveProfile.role === "pending"
-        ? "pending"
-        : liveProfile.role === "declined"
-          ? "declined"
-          : "approved",
-    profile: liveProfile,
-  };
+  liveUser = normalizeLiveViewer(liveProfile);
   livePaymentDirectory.set(liveUser.id, normalizePaymentUser(liveUser));
   if (liveUser.status !== "approved") clearAvatarCache();
   return liveUser;

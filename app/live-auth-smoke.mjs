@@ -5,8 +5,36 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeLiveViewer } from "./js/session-workflow.js";
 
 const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
+
+assert.deepEqual(normalizeLiveViewer({
+  id: "profile-1",
+  email: "member@example.com",
+  full_name: "Ada Runner",
+  avatar_url: "https://example.com/ada.jpg",
+  role: "super_admin",
+  created_at: "2026-09-01T00:00:00.000Z",
+}), {
+  id: "profile-1",
+  email: "member@example.com",
+  fullName: "Ada Runner",
+  preferredName: "Ada",
+  avatarUrl: "https://example.com/ada.jpg",
+  appliedAt: "2026-09-01T00:00:00.000Z",
+  role: "super_admin",
+  status: "approved",
+  profile: {
+    id: "profile-1",
+    email: "member@example.com",
+    full_name: "Ada Runner",
+    avatar_url: "https://example.com/ada.jpg",
+    role: "super_admin",
+    created_at: "2026-09-01T00:00:00.000Z",
+  },
+}, "Session normalization must preserve the existing live viewer shape");
+console.log("ok  Session workflow normalizes live profiles");
 
 const mem = new Map();
 globalThis.localStorage = {
