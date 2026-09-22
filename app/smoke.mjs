@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
+import { projectHomeWeek } from "./js/home-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -57,6 +58,26 @@ assert.deepEqual(scheduleWindowCalls, [{
   viewerId: "member-1",
 }], "Schedule windows must pass the visible range and viewer to the local adapter");
 console.log("ok  Schedule workflow selects and orders a local visible window");
+
+const homeProjection = projectHomeWeek({
+  user: { id: "member-1", status: "approved" },
+  sessions: [
+    { id: "direct", dateISO: "2099-09-07", time: "07:00", kind: "paid" },
+    { id: "pooled-child", dateISO: "2099-09-07", time: "11:00", kind: "paid" },
+    { id: "unbooked", dateISO: "2099-09-07", time: "19:00", kind: "paid" },
+  ],
+  viewerBookings: [
+    { id: "direct-booking", sessionId: "direct", cycleId: null, status: "confirmed", snapshot: { dateISO: "2099-09-07" } },
+    { id: "pooled-booking", sessionId: "pooled-child", cycleId: "cycle-1", status: "confirmed", snapshot: { dateISO: "2099-09-07" } },
+  ],
+  weekStartISO: "2099-09-07",
+  weekEndISO: "2099-09-13",
+});
+assert.deepEqual(homeProjection.rows.map((row) => row.id), ["direct", "pooled-booking"],
+  "Home must show confirmed direct and pooled bookings without showing unbooked sessions");
+assert.equal(homeProjection.weekHeading, "My Week");
+assert.match(homeProjection.emptyMsg, /Nothing booked this week yet/);
+console.log("ok  Home workflow projects confirmed direct and pooled bookings");
 
 const indemnityExportCsv = buildIndemnityCsv([{
   fullName: 'O"Connor, Ada',

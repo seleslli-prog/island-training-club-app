@@ -10,6 +10,7 @@ import { isLive } from "./config.js";
 import * as liveOps from "./operations.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
+import { projectHomeWeek } from "./home-workflow.js";
 import {
   normalizeMeetingPoint,
   normalizeVenueLocation,
@@ -355,41 +356,15 @@ export function viewHome(scheduleModel = null) {
   const upcoming = scheduleModel?.sessions || store.upcomingSessions(14);
   const weekStart = mondayOf(todayLocal());
   const weekEnd = addDays(weekStart, 6);
-  const inThisWeek = (s) => {
-    const iso = s.dateISO || (s.snapshot && s.snapshot.dateISO);
-    if (!iso) return false;
-    const t = parseISO(iso).getTime();
-    return t >= weekStart.getTime() && t <= weekEnd.getTime();
-  };
+  const homeWeek = projectHomeWeek({
+    user,
+    sessions: upcoming,
+    viewerBookings: scheduleModel?.viewerBookings || (user ? store.bookingsForUser(user.id) : []),
+    weekStartISO: isoDate(weekStart),
+    weekEndISO: isoDate(weekEnd),
+  });
+  const { rows, emptyMsg, weekHeading } = homeWeek;
   const name = user ? esc(user.preferredName || user.fullName.split(" ")[0]) : null;
-
-  let rows;
-  let emptyMsg;
-  let weekHeading;
-  if (!user) {
-    rows = upcoming.filter((session) => session.kind === "free" && inThisWeek(session));
-    emptyMsg = "No open sessions this week — check back soon.";
-    weekHeading = "This week — open to all";
-  } else if (user.status !== "approved") {
-    rows = upcoming.filter((session) => session.kind === "free" && inThisWeek(session));
-    emptyMsg = "No open sessions this week — check back soon.";
-    weekHeading = "My Week";
-  } else {
-    const bookings = scheduleModel?.viewerBookings || store.bookingsForUser(user.id);
-    const sessionsById = new Map(upcoming.map((session) => [session.id, session]));
-    const pooledBookings = bookings
-      .filter((booking) => booking.cycleId && booking.status === "confirmed")
-      .filter((booking) => !booking.sessionId || !sessionStarted(sessionsById.get(booking.sessionId) || booking.snapshot));
-    const pooledSessionIds = new Set(pooledBookings.map((booking) => booking.sessionId).filter(Boolean));
-    const bookedIds = new Set(
-      bookings
-        .filter((booking) => booking.status === "confirmed" && !booking.cycleId && !sessionStarted(booking.snapshot))
-        .map((booking) => booking.sessionId)
-    );
-    rows = [...upcoming.filter((session) => bookedIds.has(session.id) && !pooledSessionIds.has(session.id)), ...pooledBookings];
-    emptyMsg = `Nothing booked this week yet. <a href="#/schedule" style="color:var(--accent)">Find a session →</a>`;
-    weekHeading = "My Week";
-  }
 
   const guest = !user
     ? `
