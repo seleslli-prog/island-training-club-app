@@ -8,6 +8,12 @@ export function campaignTransitionProblem(campaign, fromStatus, toStatus) {
   return null;
 }
 
+export function donationForReference(donations, campaignId, reference) {
+  if (!campaignId || !reference) return null;
+  return (donations || []).find((donation) => donation.campaignId === campaignId
+    && donation.ref === reference) || null;
+}
+
 export function donationCampaignProblem({ campaign } = {}) {
   return campaign ? null : "No active Giving campaign";
 }
