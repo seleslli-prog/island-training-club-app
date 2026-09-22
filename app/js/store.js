@@ -29,7 +29,7 @@ import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
-import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./events-workflow.js";
+import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
@@ -51,7 +51,7 @@ import {
   HYROX_POOL_CAPACITY,
 } from "./hyrox-cycle.js";
 
-export { attendanceWindowForSession, effectiveAttendeeId, paymentStateForBooking };
+export { attendanceWindowForSession, effectiveAttendeeId, paymentStateForBooking, sessionRequiresRsvp };
 
 const STORAGE_KEY = "itc.prototype.v1";
 const APPLY_DEVICE_KEY = "itc.device.id";
@@ -1216,10 +1216,6 @@ export function spotsLeft(session) {
     return Math.max(0, session.capacity - liveOps.liveHeldBookingsForSession(session.id).length);
   }
   return Math.max(0, session.capacity - heldBookingsForSession(session.id).length);
-}
-
-export function sessionRequiresRsvp(session) {
-  return Boolean(session?.requiresRsvp || session?.kind === "rsvp");
 }
 
 export function attendeeCountFor(session) {

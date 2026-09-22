@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
-import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./js/events-workflow.js";
+import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
@@ -100,6 +100,8 @@ assert.deepEqual(normalizeGivingCampaign({ id: "campaign-1", goal_hkd: "1200", f
   createdAt: null, updatedAt: null, publishedAt: null, closedAt: null,
 });
 assert.equal(isRsvpOccurrence({ kind: "free", requiresRsvp: true, price: 0 }), true);
+assert.equal(sessionRequiresRsvp({ kind: "rsvp" }), true);
+assert.equal(sessionRequiresRsvp({ kind: "paid" }), false);
 assert.equal(rsvpJoinProblem({
   session: { kind: "rsvp", requiresRsvp: true, price: 0, cancelled: false },
   alreadyBooked: false,

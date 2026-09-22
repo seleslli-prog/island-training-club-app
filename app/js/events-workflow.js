@@ -1,8 +1,11 @@
 import { hktEventStartMs, sessionStarted } from "./data.js";
 
+export function sessionRequiresRsvp(session) {
+  return Boolean(session?.requiresRsvp || session?.kind === "rsvp");
+}
+
 export function isRsvpOccurrence(session) {
-  return Boolean(session?.requiresRsvp || session?.kind === "rsvp")
-    && Number(session?.price ?? 0) === 0;
+  return sessionRequiresRsvp(session) && Number(session?.price ?? 0) === 0;
 }
 
 export function rsvpWithdrawProblem({ booking, session, now = Date.now() }) {
