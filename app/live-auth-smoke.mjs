@@ -234,6 +234,7 @@ const prayerRpcResult = (name) => {
 };
 const operationalPayoutDirectReads = [];
 const operationalSessionQueries = [];
+const operationalTableReadCounts = new Map();
 const operationalSubscriptions = [];
 const fixtureMember = { id: "approved-member" };
 const operationalTableRows = {
@@ -721,8 +722,9 @@ const fakeSupabase = {
     }
     if (table in operationalTableRows) {
       const rows = operationalTableRows[table];
-      const sessionFilters = { since: null, ids: null };
+      const sessionFilters = { since: null, until: null, ids: null, inColumn: null, inValues: null };
       const result = () => {
+        operationalTableReadCounts.set(table, (operationalTableReadCounts.get(table) || 0) + 1);
         const error = table === "operational_session_venue_overrides"
           ? operationalVenueOverrideReadError
           : table === "operational_hyrox_queue_entries" && !liveSession
@@ -737,14 +739,19 @@ const fakeSupabase = {
             && !["admin", "super_admin"].includes(role)) {
           visibleRows = visibleRows.filter((row) => row.profile_id === authUser.id);
         }
-        if (table === "operational_sessions") {
+        if (["operational_sessions", "operational_hyrox_cycles"].includes(table)) {
           if (sessionFilters.since) {
             visibleRows = visibleRows.filter((row) => row.session_date >= sessionFilters.since);
           }
-          if (sessionFilters.ids) {
-            const ids = new Set(sessionFilters.ids);
-            visibleRows = visibleRows.filter((row) => ids.has(row.id));
+          if (sessionFilters.until) {
+            visibleRows = visibleRows.filter((row) => row.session_date <= sessionFilters.until);
           }
+        }
+        if (sessionFilters.inColumn && sessionFilters.inValues) {
+          const values = new Set(sessionFilters.inValues);
+          visibleRows = visibleRows.filter((row) => values.has(row[sessionFilters.inColumn]));
+        }
+        if (table === "operational_sessions") {
           operationalSessionQueries.push({ ...sessionFilters, ids: sessionFilters.ids?.slice() || null });
         }
         if (table === "collector_payout_profiles") {
@@ -762,20 +769,26 @@ const fakeSupabase = {
       const chain = {
         order: thenable,
         gte(column, value) {
-          if (table !== "operational_sessions" || column !== "session_date") {
-            throw new Error("Only operational session date queries may use gte");
+          if (!['operational_sessions', 'operational_hyrox_cycles'].includes(table) || column !== "session_date") {
+            throw new Error("Only operational session/cycle date queries may use gte");
           }
           sessionFilters.since = value;
+          return chain;
+        },
+        lte(column, value) {
+          if (!['operational_sessions', 'operational_hyrox_cycles'].includes(table) || column !== "session_date") {
+            throw new Error("Only operational session/cycle date queries may use lte");
+          }
+          sessionFilters.until = value;
           return chain;
         },
         or: () => chain,
         eq: () => chain,
         neq: () => chain,
         in(column, values) {
-          if (table !== "operational_sessions" || column !== "id") {
-            throw new Error("Only operational session ID queries may use in");
-          }
-          sessionFilters.ids = values;
+          sessionFilters.inColumn = column;
+          sessionFilters.inValues = values;
+          if (table === "operational_sessions" && column === "id") sessionFilters.ids = values;
           return chain;
         },
         is: () => chain,
@@ -1440,6 +1453,29 @@ assert.equal(
 );
 store.load();
 
+const scheduleReadCountBefore = new Map(operationalTableReadCounts);
+const liveScheduleWindow = await operations.liveScheduleWindow("2026-08-09", "2026-08-15", authUser.id);
+assert.deepEqual(liveScheduleWindow.sessions.map((session) => session.id), [
+  "run-2026-08-10",
+  "water-2026-08-11",
+  "wnt-2026-08-12",
+  "hyrox-bft-2026-08-15",
+  "hyrox-midtown-2026-08-15",
+], "Schedule reads must preserve the existing visible session order");
+assert.equal(liveScheduleWindow.sessions.find((session) => session.id === "wnt-2026-08-12")?.name,
+  "Wednesday Night Training", "Schedule rows must retain template presentation");
+for (const table of [
+  "operational_receipts",
+  "collector_assignments",
+  "collector_payout_profiles",
+  "operational_queue_entries",
+  "operational_hyrox_queue_entries",
+]) {
+  assert.equal(operationalTableReadCounts.get(table) || 0, scheduleReadCountBefore.get(table) || 0,
+    `Schedule reads must not load ${table}`);
+}
+console.log("ok  live Schedule window is bounded and excludes unrelated operations");
+
 // Prayer store actions must use only the five authoritative RPCs in live mode,
 // normalize snake_case rows, reject unsafe inputs before RPC, and never fall
 // back to device-local prayer data when Supabase fails.
@@ -1632,6 +1668,10 @@ assert.equal(
   1,
   "initial live hydration must sweep HYROX deadlines",
 );
+const operationalWarmup = await store.warmOperationalState();
+assert.equal(operationalWarmup.ok, true,
+  "background operational warm-up must contain successful hydration");
+console.log("ok  operational warm-up is a non-throwing Store boundary");
 const hyroxRpcCases = [
   ["liveReserveHyroxCycle", "reserve_hyrox_cycle", ["hyrox-pool-2099-01-03", "midtown", true], {
     p_cycle_id: "hyrox-pool-2099-01-03", p_preference: "midtown", p_fallback_acknowledged: true,
@@ -4303,8 +4343,8 @@ const app = await import("./js/app.js?application-read-errors");
 await app.bootPromise;
 await new Promise(setImmediate);
 const toastStack = elements.get("toast-stack");
-if (escapedRejections.length || toastStack.children.length !== 1 || toastStack.children[0].textContent !== "Application read failed") {
-  throw new Error("Boot should catch one failed application read and show one error toast");
+if (escapedRejections.length || toastStack.children.length !== 0) {
+  throw new Error("Boot should let the Account fallback contain an application-read failure without a preload toast");
 }
 
 escapedRejections.length = 0;

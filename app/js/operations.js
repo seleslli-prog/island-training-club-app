@@ -501,6 +501,76 @@ async function fetchRsvpCounts() {
   }
 }
 
+export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
+  if (!isLive() || !supabase) {
+    return { sessions: [], cycles: [], viewerBookings: [], rsvpCounts: [] };
+  }
+  const [sessionsResult, cyclesResult] = await Promise.all([
+    supabase.from("operational_sessions")
+      .select("*")
+      .gte("session_date", startISO)
+      .lte("session_date", endISO)
+      .order("session_date"),
+    supabase.from("operational_hyrox_cycles")
+      .select("*")
+      .gte("session_date", startISO)
+      .lte("session_date", endISO)
+      .order("session_date"),
+  ]);
+  if (sessionsResult.error) throw operationalProblem(sessionsResult.error);
+  if (cyclesResult.error) throw operationalProblem(cyclesResult.error);
+
+  const sessionRows = sessionsResult.data || [];
+  const cycleRows = cyclesResult.data || [];
+  const activityIds = [...new Set(sessionRows.map((row) => row.activity_id).filter(Boolean))];
+  const templatesResult = activityIds.length
+    ? await supabase.from("operational_activity_templates").select("*").in("activity_id", activityIds)
+    : { data: [], error: null };
+  if (templatesResult.error) throw operationalProblem(templatesResult.error);
+  const templatesById = new Map((templatesResult.data || [])
+    .map(buildTemplateRow)
+    .map((template) => [template.activity_id, template]));
+  const sessions = sessionRows.map((row) => buildSessionRow(row, templatesById));
+  const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+
+  let viewerBookings = [];
+  const heldBookingCounts = {};
+  if (viewerId) {
+    const sessionIds = sessions.map((session) => session.id);
+    const cycleIds = cycleRows.map((row) => row.id);
+    const bookingReads = [];
+    if (sessionIds.length) {
+      bookingReads.push(supabase.from("operational_bookings").select("*").in("session_id", sessionIds));
+    }
+    if (cycleIds.length) {
+      bookingReads.push(supabase.from("operational_bookings").select("*").in("hyrox_cycle_id", cycleIds));
+    }
+    const bookingResults = await Promise.all(bookingReads);
+    for (const result of bookingResults) {
+      if (result.error) throw operationalProblem(result.error);
+    }
+    const bookingRows = new Map();
+    for (const result of bookingResults) {
+      for (const row of result.data || []) {
+        if (row.session_id && ["reserved", "confirmed", "attended"].includes(row.status)) {
+          heldBookingCounts[row.session_id] = (heldBookingCounts[row.session_id] || 0) + 1;
+        }
+        if (row.profile_id === viewerId) bookingRows.set(row.id, row);
+      }
+    }
+    viewerBookings = [...bookingRows.values()].map((row) => buildBookingRow(row, sessionsById));
+  }
+
+  const rsvpCounts = await fetchRsvpCounts();
+  return {
+    sessions,
+    cycles: cycleRows.map(buildHyroxCycleRow),
+    viewerBookings,
+    heldBookingCounts,
+    rsvpCounts: rsvpCounts.rows.filter((row) => sessionsById.has(row.session_id)),
+  };
+}
+
 async function fetchOperationalState({ authenticated } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {

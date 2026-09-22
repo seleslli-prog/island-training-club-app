@@ -27,6 +27,7 @@ import { config, supabase, isLive } from "./config.js";
 import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
+import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -96,6 +97,40 @@ export function invalidateLiveApplication(profileId) {
 }
 
 let state = null;
+
+function localScheduleWindow(startISO, endISO, viewer = null) {
+  const startDate = parseISO(startISO);
+  const days = Math.round((parseISO(endISO).getTime() - startDate.getTime()) / 86_400_000) + 1;
+  const sessions = sessionsInRange(state.activities, startDate, days)
+    .map((session) => getSession(session.id))
+    .filter(Boolean);
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  const cycles = hyroxCycles().filter((cycle) => cycle.dateISO >= startISO && cycle.dateISO <= endISO);
+  const cycleIds = new Set(cycles.map((cycle) => cycle.id));
+  const viewerBookings = viewer?.status === "approved"
+    ? bookingsForUser(viewer.id).filter((booking) => sessionIds.has(booking.sessionId) || cycleIds.has(booking.cycleId))
+    : [];
+  const heldBookingCounts = {};
+  for (const booking of state.bookings) {
+    if (!sessionIds.has(booking.sessionId) || !["reserved", "confirmed", "attended"].includes(booking.status)) continue;
+    heldBookingCounts[booking.sessionId] = (heldBookingCounts[booking.sessionId] || 0) + 1;
+  }
+  const rsvpCounts = sessions
+    .filter((session) => session.requiresRsvp)
+    .map((session) => ({ session_id: session.id, going_count: attendeeCountFor(session) }));
+  return { sessions, cycles, viewerBookings, heldBookingCounts, rsvpCounts };
+}
+
+const scheduleWorkflow = createScheduleWorkflow({
+  isLive,
+  readLocalWindow: ({ startISO, endISO, viewer }) => localScheduleWindow(startISO, endISO, viewer),
+  readLiveWindow: ({ startISO, endISO, viewer }) =>
+    liveOps.liveScheduleWindow(startISO, endISO, viewer?.status === "approved" ? viewer.id : null),
+});
+
+export function scheduleWindow(options) {
+  return scheduleWorkflow.loadWindow(options);
+}
 
 export function isRestorableRoute(route) {
   return typeof route === "string"
@@ -210,6 +245,15 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
   await liveOps.hydrateOperationalState({ force, authenticated });
   await liveOps.startOperationalRealtime();
   return liveOps.operationalStateStatus();
+}
+
+export async function warmOperationalState() {
+  try {
+    await hydrateLiveOperations({ ensureWindow: true });
+    return { ok: true, error: null };
+  } catch (error) {
+    return { ok: false, error };
+  }
 }
 
 function normalizeReceiptCounter() {

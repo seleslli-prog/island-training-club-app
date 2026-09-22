@@ -3,7 +3,7 @@
 // ==========================================================================
 
 import * as store from "./store.js";
-import { buildICS, findSession, todayLocal, mondayOf, addDays, isoDate, donorIdProblem } from "./data.js";
+import { buildICS, findSession, todayLocal, mondayOf, sundayOf, addDays, isoDate, donorIdProblem } from "./data.js";
 import { buildIndemnityCsv } from "./exports.js";
 import * as views from "./views.js";
 import { isLive, supabase } from "./config.js";
@@ -21,6 +21,10 @@ const notificationEl = document.getElementById("top-notifications");
 const avatarEl = document.getElementById("top-avatar");
 const toastStack = document.getElementById("toast-stack");
 const MAP_FALLBACK_HTML = `<p class="muted small activity-map-fallback" role="status">Couldn't find the venue on the map — tap Get directions instead.</p>`;
+
+function markPerformance(name) {
+  try { performance?.mark?.(name); } catch {}
+}
 
 export function revealAvatarInitials(image) {
   const isAvatarImage = image?.classList?.contains?.("avatar__image")
@@ -492,11 +496,21 @@ async function render(generation = renderGeneration) {
   let out;
   switch (page) {
     case "home":
-      out = views.viewHome();
+      out = views.viewHome(await store.scheduleWindow({
+        startDate: todayLocal(),
+        days: 14,
+        viewer: routeUser,
+      }));
       break;
-    case "schedule":
-      out = views.viewSchedule();
+    case "schedule": {
+      const weekStart = addDays(sundayOf(todayLocal()), views.scheduleState.weekOffset * 7);
+      out = views.viewSchedule(await store.scheduleWindow({
+        startDate: weekStart,
+        days: 7,
+        viewer: routeUser,
+      }));
       break;
+    }
     case "activity": {
       const session = store.getSession(arg);
       const viewer = store.currentUser();
@@ -2088,25 +2102,24 @@ function form_kind_toggle(select) {
 // --- Boot ---------------------------------------------------------------------------------------
 
 async function boot() {
+  markPerformance("itc:shell-start");
   store.load();
-  // Live mode: hydrate the synchronous view model before the first render
-  // so Home renders with the correct signed-in state. The callback lock
-  // is held by Supabase's own handler, so getCurrentUser() must not run
-  // while it is held.
+  // Live mode: hydrate only the synchronous viewer model before first render.
+  // Avatar sync stays in its existing pre-render position; broad operational
+  // provisioning and hydration begin only after the first route commits.
   if (isLive()) {
     let bootError = null;
     try {
       await store.getCurrentUser();
-      await store.fetchApplicationForUser(store.currentUser());
       await syncApprovedGoogleAvatar({ ifMissing: true });
-      await store.hydrateLiveOperations({ ensureWindow: true });
     } catch (err) {
       bootError = err;
     }
     if (bootError) {
-      toast(bootError.message || "Application read failed", true);
+      toast(bootError.message || "Unable to restore your session", true);
     }
   }
+  markPerformance("itc:viewer-ready");
   const startup = store.startupRoute(location.hash, store.currentUser()?.id);
   if (startup !== location.hash) replaceRoute(startup);
   window.addEventListener("hashchange", async () => {
@@ -2189,7 +2202,17 @@ async function boot() {
   }
 
   await renderWithFeedback();
-  if (isLive()) await maybeRedirectToApply();
+  markPerformance("itc:first-route-commit");
+  if (isLive()) {
+    void store.warmOperationalState().then((result) => {
+      if (result.ok) {
+        markPerformance("itc:operations-ready");
+      } else {
+        toast(result.error?.message || "Background session refresh failed", true);
+      }
+    });
+    await maybeRedirectToApply();
+  }
 }
 
 export const bootPromise = boot().catch((err) => {

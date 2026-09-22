@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { assertFpsCopyBindings } from "./test-html.mjs";
+import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -18,6 +19,36 @@ const views = await import("./js/views.js");
 const data = await import("./js/data.js");
 const hyroxCycle = await import("./js/hyrox-cycle.js");
 const { buildIndemnityCsv } = await import("./js/exports.js");
+
+const scheduleWindowCalls = [];
+const scheduleWorkflow = createScheduleWorkflow({
+  isLive: () => false,
+  readLocalWindow: async ({ startISO, endISO, viewer }) => {
+    scheduleWindowCalls.push({ startISO, endISO, viewerId: viewer?.id || null });
+    return {
+      sessions: [
+        { id: "later", dateISO: "2026-09-28", time: "19:00" },
+        { id: "first", dateISO: "2026-09-28", time: "07:00" },
+      ],
+      cycles: [],
+      viewerBookings: [],
+    };
+  },
+  readLiveWindow: async () => { throw new Error("live adapter must not run"); },
+});
+const scheduleWindowModel = await scheduleWorkflow.loadWindow({
+  startDate: new Date("2026-09-28T00:00:00"),
+  days: 7,
+  viewer: { id: "member-1" },
+});
+assert.deepEqual(scheduleWindowModel.sessions.map((row) => row.id), ["later", "first"],
+  "Schedule windows must preserve the adapter's established row order");
+assert.deepEqual(scheduleWindowCalls, [{
+  startISO: "2026-09-28",
+  endISO: "2026-10-04",
+  viewerId: "member-1",
+}], "Schedule windows must pass the visible range and viewer to the local adapter");
+console.log("ok  Schedule workflow selects and orders a local visible window");
 
 const indemnityExportCsv = buildIndemnityCsv([{
   fullName: 'O"Connor, Ada',
@@ -208,6 +239,21 @@ function assertPrimaryNav(user, expected, label) {
 }
 
 store.load();
+const localScheduleStart = data.sundayOf(data.todayLocal());
+const localScheduleModel = await store.scheduleWindow({
+  startDate: localScheduleStart,
+  days: 7,
+  viewer: null,
+});
+assert.deepEqual(
+  localScheduleModel.sessions.map((session) => session.id),
+  data.sessionsInRange(store.activities(), localScheduleStart, 7)
+    .map((session) => store.getSession(session.id))
+    .filter(Boolean)
+    .map((session) => session.id),
+  "the Schedule facade must preserve the local visible-session projection",
+);
+console.log("ok  Store Schedule facade preserves the local visible-session projection");
 const bftSeed = data.SEED_ACTIVITIES.find((activity) => activity.id === "hyrox-bft");
 const quarryBaySeed = data.SEED_ACTIVITIES.find((activity) => activity.id === "hyrox-quarry-bay");
 for (const activityId of ["wnt", "run", "water"]) {
@@ -1625,8 +1671,8 @@ assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPr
   "Privacy & Notifications must persist reminder preferences through the form delegate");
 assert.equal(typeof store.attendeeCountFor, "function",
   "store must export attendeeCountFor for identity-independent RSVP counts");
-assert.equal((integratedViewSource.match(/store\.attendeeCountFor\([^)]*\)/g) || []).length, 4,
-  "Schedule Going/RSVP states, capability-driven Activity Details, and Admin controls must use attendeeCountFor");
+assert.ok((integratedViewSource.match(/store\.attendeeCountFor\([^)]*\)/g) || []).length >= 3,
+  "Activity Details and Admin RSVP count surfaces must use attendeeCountFor; prepared Schedule models provide their own scoped count");
 assert.doesNotMatch(integratedViewSource, /store\.attendeesFor\(s\)\.length/,
   "RSVP count surfaces must not derive counts from attendee identities");
 const combinedRuntimeSource = `${integratedViewSource}\n${integratedAppSource}`;

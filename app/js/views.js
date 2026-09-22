@@ -113,8 +113,7 @@ function badgeFor(s, booking = null, reservation = null) {
   return `<span class="badge paid">${fmtMoney(s.price)}</span>`;
 }
 
-function spotsLabel(s) {
-  const spots = store.spotsLeft(s);
+function spotsLabel(s, spots = store.spotsLeft(s)) {
   if (spots <= 0) return `<span class="badge neutral">Full</span>`;
   return `<span class="spots">${spots} spot${spots === 1 ? "" : "s"} left</span>`;
 }
@@ -156,16 +155,17 @@ function hyroxCycleStatus(cycle) {
   return { label: "Registration open", className: "paid" };
 }
 
-function hyroxCycleBookingForUser(cycle) {
+function hyroxCycleBookingForUser(cycle, viewerBookings = null) {
   const user = store.currentUser();
   if (!user) return null;
-  return store.bookingsForUser(user.id).find((booking) => booking.cycleId === cycle.id
+  const bookings = Array.isArray(viewerBookings) ? viewerBookings : store.bookingsForUser(user.id);
+  return bookings.find((booking) => booking.cycleId === cycle.id
     && ["reserved", "confirmed", "attended"].includes(booking.status)) || null;
 }
 
-function hyroxCycleRow(cycle) {
+function hyroxCycleRow(cycle, scheduleModel = null) {
   const status = hyroxCycleStatus(cycle);
-  const booking = hyroxCycleBookingForUser(cycle);
+  const booking = hyroxCycleBookingForUser(cycle, scheduleModel?.viewerBookings);
   const action = booking
     ? `<span class="badge free">${booking.status === "reserved" ? "Payment due" : booking.status === "attended" ? "Arrived" : "Booked"}</span>`
     : `<span class="badge ${status.className}">${esc(status.compactLabel || status.label)}</span>`;
@@ -190,34 +190,49 @@ function hyroxVenueCards(cycle) {
     </div>`).join("");
 }
 
-function sessionRow(s, { past, showDate = true, highlight } = {}) {
+function sessionRow(s, { past, showDate = true, highlight, scheduleModel = null } = {}) {
   // A session the signed-in member has already booked shows a "Booked"
   // badge instead of price/spots, so Home, Schedule and the booking itself
   // all tell the same story. Per-week overrides (cancelled, time, venue
   // TBC, notice, Midtown open/closed) surface here so the Schedule tab
   // mirrors the detail page.
   const user = store.currentUser();
-  const booked = user ? store.userBookingFor(user.id, s.id) : null;
-  const reserved = user ? store.userReservationFor(user.id, s.id) : null;
-  const midtownClosed = s.kind === "paid" && store.isMidtown(s) && !store.midtownOpenFor(s);
+  const modelBookings = scheduleModel?.viewerBookings;
+  const bookings = Array.isArray(modelBookings) ? modelBookings : null;
+  const booked = user ? (bookings
+    ? bookings.find((booking) => booking.sessionId === s.id
+      && ["confirmed", "attended"].includes(booking.status)) || null
+    : store.userBookingFor(user.id, s.id)) : null;
+  const reserved = user ? (bookings
+    ? bookings.find((booking) => booking.sessionId === s.id && booking.status === "reserved") || null
+    : store.userReservationFor(user.id, s.id)) : null;
+  const requiresRsvp = scheduleModel ? Boolean(s.requiresRsvp || s.kind === "rsvp") : store.sessionRequiresRsvp(s);
+  const rsvpCount = scheduleModel
+    ? Number(scheduleModel.rsvpCounts?.find((row) => row.session_id === s.id)?.going_count || 0)
+    : store.attendeeCountFor(s);
+  const midtownClosed = scheduleModel
+    ? s.kind === "paid" && s.activityId === "hyrox-midtown" && !s.isOpen
+    : s.kind === "paid" && store.isMidtown(s) && !store.midtownOpenFor(s);
   let end;
   if (s.cancelled) {
     end = `<span class="badge danger">Cancelled</span>`;
   } else if (booked) {
-    end = store.sessionRequiresRsvp(s)
-      ? `<span class="badge free booked">Going</span><span class="spots">${store.attendeeCountFor(s)} going</span>`
+    end = requiresRsvp
+      ? `<span class="badge free booked">Going</span><span class="spots">${rsvpCount} going</span>`
       : `<span class="badge free booked">${booked.status === "attended" ? "Arrived" : "Booked"}</span>`;
   } else if (reserved) {
     end = `<span class="badge warn">Pay by ${fmtDeadline(reserved.payDeadlineAt)}</span>`;
   } else if (s.kind === "rsvp") {
-    const going = store.attendeeCountFor(s);
-    end = `<span class="badge free">RSVP</span><span class="spots">${going} going</span>`;
+    end = `<span class="badge free">RSVP</span><span class="spots">${rsvpCount} going</span>`;
   } else if (s.kind === "free") {
     end = `<span class="badge free">Free</span><span class="spots">Just show up</span>`;
   } else if (midtownClosed) {
     end = `<span class="badge neutral">Not yet open</span>`;
   } else {
-    end = `${store.spotsLeft(s) > 0 ? `<span class="badge paid">${fmtMoney(s.price)}</span>` : ""}${spotsLabel(s)}`;
+    const spots = scheduleModel
+      ? Math.max(0, Number(s.capacity || 0) - Number(scheduleModel.heldBookingCounts?.[s.id] || 0))
+      : store.spotsLeft(s);
+    end = `${spots > 0 ? `<span class="badge paid">${fmtMoney(s.price)}</span>` : ""}${spotsLabel(s, spots)}`;
   }
   const sub = [
     showDate ? `${esc(fmtDate(s.date))} · ${esc(s.location)}` : esc(s.location),
@@ -333,11 +348,11 @@ function visitorDraftActions() {
     </div>`;
 }
 
-export function viewHome() {
+export function viewHome(scheduleModel = null) {
   const user = store.currentUser();
   // Same 14-day window bookings are made in — a confirmed booking can never
   // fall out of "My week" (e.g. next Saturday's booking seen on Sat evening).
-  const upcoming = store.upcomingSessions(14);
+  const upcoming = scheduleModel?.sessions || store.upcomingSessions(14);
   const weekStart = mondayOf(todayLocal());
   const weekEnd = addDays(weekStart, 6);
   const inThisWeek = (s) => {
@@ -360,10 +375,11 @@ export function viewHome() {
     emptyMsg = "No open sessions this week — check back soon.";
     weekHeading = "My Week";
   } else {
-    const bookings = store.bookingsForUser(user.id);
+    const bookings = scheduleModel?.viewerBookings || store.bookingsForUser(user.id);
+    const sessionsById = new Map(upcoming.map((session) => [session.id, session]));
     const pooledBookings = bookings
       .filter((booking) => booking.cycleId && booking.status === "confirmed")
-      .filter((booking) => !booking.sessionId || !sessionStarted(store.getSession(booking.sessionId)));
+      .filter((booking) => !booking.sessionId || !sessionStarted(sessionsById.get(booking.sessionId) || booking.snapshot));
     const pooledSessionIds = new Set(pooledBookings.map((booking) => booking.sessionId).filter(Boolean));
     const bookedIds = new Set(
       bookings
@@ -411,7 +427,7 @@ export function viewHome() {
     <div class="session-list">
       ${rows.length
         ? rows.map((item, i) => item.cycleId ? pooledBookingRow(item, { highlight: i === 0 })
-          : sessionRow(item, { highlight: i === 0 })).join("")
+          : sessionRow(item, { highlight: i === 0, scheduleModel })).join("")
         : `<div class="empty">${emptyMsg}</div>`}
     </div>
     <div class="section-head"><h2>The Club</h2><a href="#/community">More →</a></div>
@@ -460,25 +476,18 @@ function matchesFilter(s, filter) {
   return s.category === filter;
 }
 
-export function viewSchedule() {
+export function viewSchedule(scheduleModel = null) {
   const t = todayLocal();
   const weekStart = addDays(sundayOf(t), scheduleState.weekOffset * 7);
   if (!scheduleState.selected) {
     scheduleState.selected = scheduleSelectionForWeek(t, scheduleState.weekOffset);
   }
-  let weekSessions;
-  if (isLive()) {
-    const weekStartISO = isoDate(weekStart);
-    const weekEndISO = isoDate(addDays(weekStart, 6));
-    weekSessions = liveOps.listLiveSessions()
-      .filter((session) => session.dateISO >= weekStartISO && session.dateISO <= weekEndISO)
+  const weekSessions = scheduleModel?.sessions || (isLive()
+    ? store.upcomingSessions(Math.max(14, scheduleState.weekOffset * 7 + 7))
+      .filter((session) => session.dateISO >= isoDate(weekStart) && session.dateISO <= isoDate(addDays(weekStart, 6)))
+    : sessionsInRange(store.activities(), weekStart, 7)
       .map((session) => store.getSession(session.id))
-      .filter(Boolean);
-  } else {
-    weekSessions = sessionsInRange(store.activities(), weekStart, 7)
-      .map((session) => store.getSession(session.id))
-      .filter(Boolean);
-  }
+      .filter(Boolean));
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const cells = Array.from({ length: 7 }, (_, i) => {
@@ -492,16 +501,17 @@ export function viewSchedule() {
       </button>`;
   }).join("");
 
-  const cycle = store.hyroxCycleForDate(scheduleState.selected);
+  const cycle = scheduleModel?.cycles?.find((item) => item.dateISO === scheduleState.selected)
+    || store.hyroxCycleForDate(scheduleState.selected);
   const cycleChildIds = cycle ? new Set([cycle.bftSessionId, cycle.midtownSessionId]) : new Set();
   const list = weekSessions
     .filter((s) => s.dateISO === scheduleState.selected)
     .filter((s) => !cycleChildIds.has(s.id))
     .filter((s) => matchesFilter(s, scheduleState.filter));
   const poolItem = cycle && matchesFilter({ category: "HYROX" }, scheduleState.filter)
-    ? hyroxCycleRow(cycle) : "";
+    ? hyroxCycleRow(cycle, scheduleModel) : "";
   const listHTML = list.length || poolItem
-    ? `${poolItem}${list.map((s) => sessionRow(s, { past: sessionStarted(s), showDate: false })).join("")}`
+    ? `${poolItem}${list.map((s) => sessionRow(s, { past: sessionStarted(s), showDate: false, scheduleModel })).join("")}`
     : `<div class="empty">No ${scheduleState.filter === "all" ? "" : esc(scheduleState.filter) + " "}sessions on ${esc(fmtDate(scheduleState.selected))}.</div>`;
 
   return `
