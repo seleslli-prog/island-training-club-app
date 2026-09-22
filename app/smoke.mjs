@@ -9,7 +9,7 @@ import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
-import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
 import { applicationDecisionProblem, filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
@@ -63,6 +63,10 @@ assert.deepEqual(hyroxActiveBookingRows([
   { id: "b2", cycleId: "c1", status: "cancelled" },
   { id: "b3", cycleId: "c2", status: "confirmed" },
 ], "c1").map((row) => row.id), ["b1"]);
+assert.equal(hyroxActiveQueueEntryForUser([
+  { id: "q1", userId: "u1", status: "left", kind: "weekly_waitlist" },
+  { id: "q2", userId: "u1", status: "active", kind: "weekly_waitlist" },
+], "u1")?.id, "q2");
 assert.equal(replacementEligibility({ userId: "u1", status: "confirmed", snapshot: { kind: "paid", name: "HYROX", dateISO: "2099-01-01", time: "10:00" }, sessionId: "hyrox-bft" }, { now: 0 }).ok, true);
 assert.equal(decideReplacementProblem({ request: { status: "accepted", expiresAt: 100 }, confirm: true, now: 10, bookingAvailable: true }), null);
 assert.equal(decideReplacementProblem({ request: { status: "pending" }, confirm: true, now: 10, bookingAvailable: true }), "Only an accepted replacement can be confirmed.");

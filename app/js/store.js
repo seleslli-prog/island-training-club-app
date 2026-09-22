@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxPaymentProblem, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
 import { applicationDecisionProblem } from "./admin-workflow.js";
@@ -1919,8 +1919,7 @@ function hyroxQueueEntries(cycleId) {
 }
 
 function hyroxQueueEntryForUser(cycleId, userId, kind = null) {
-  return hyroxQueueEntries(cycleId).find((entry) => entry.userId === userId
-    && (!kind || entry.kind === kind) && entry.status === "active") || null;
+  return hyroxActiveQueueEntryForUser(hyroxQueueEntries(cycleId), userId, kind);
 }
 
 function hyroxCycleSnapshot(cycle) {

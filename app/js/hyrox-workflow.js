@@ -25,6 +25,11 @@ export function hyroxActiveBookingRows(bookings, cycleId) {
     && ["reserved", "confirmed"].includes(booking.status));
 }
 
+export function hyroxActiveQueueEntryForUser(entries, userId, kind = null) {
+  return (entries || []).find((entry) => entry.userId === userId
+    && (!kind || entry.kind === kind) && entry.status === "active") || null;
+}
+
 export function hyroxQueuePositionForEntries(entries, userId, {
   kind = "weekly_waitlist",
   targetSessionId = null,
