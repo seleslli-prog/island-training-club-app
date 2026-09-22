@@ -21,6 +21,20 @@ export function validatePrayerText(request) {
   return trimmed;
 }
 
+export function buildPrayerRequest({ id, ownerId, request, anonymousToLeaders = false, now = Date.now() }) {
+  return {
+    id,
+    ownerId,
+    request,
+    anonymousToLeaders: anonymousToLeaders === true,
+    status: "new",
+    createdAt: now,
+    updatedAt: now,
+    closedAt: null,
+    withdrawnAt: null,
+  };
+}
+
 export function orderMemberPrayerRequests(rows, ownerId) {
   return (rows || [])
     .map((row, index) => ({ row, index }))

@@ -7,7 +7,7 @@ import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
-import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
+import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, buildDonationRecord, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxQueueGroups, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
@@ -30,6 +30,10 @@ assert.equal(validatePrayerText("  Please pray  "), "Please pray");
 assert.equal(prayerActionProblem("new", "close"), null);
 assert.equal(prayerActionProblem("withdrawn", "close"), "Prayer request cannot be closed from its current state.");
 assert.throws(() => validatePrayerText(""), /between 1 and 2,000/);
+assert.deepEqual(buildPrayerRequest({ id: "p1", ownerId: "u1", request: "Please pray", anonymousToLeaders: true, now: 10 }), {
+  id: "p1", ownerId: "u1", request: "Please pray", anonymousToLeaders: true, status: "new",
+  createdAt: 10, updatedAt: 10, closedAt: null, withdrawnAt: null,
+});
 assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please pray", status: "prayed_for" }), {
   id: "prayer-1", request: "Please pray", anonymousToLeaders: false, status: "prayed_for",
   createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,

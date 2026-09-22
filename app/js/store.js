@@ -31,7 +31,7 @@ import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
-import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
+import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
@@ -2982,17 +2982,13 @@ export async function submitPrayerRequest({ request, anonymousToLeaders = false 
 
   const actor = requireApprovedPrayerActor();
   const now = Date.now();
-  const prayer = {
+  const prayer = buildPrayerRequest({
     id: uid("p"),
     ownerId: actor.id,
     request: trimmed,
-    anonymousToLeaders: anonymousToLeaders === true,
-    status: "new",
-    createdAt: now,
-    updatedAt: now,
-    closedAt: null,
-    withdrawnAt: null,
-  };
+    anonymousToLeaders,
+    now,
+  });
   state.prayers.push(prayer);
   save();
   return memberPrayerRow(prayer);
