@@ -4411,6 +4411,7 @@ export async function getCurrentUser() {
   if (sessErr || !sessData.session) {
     clearAvatarCache();
     liveApplications.clear();
+    liveScheduleWindows.clear();
     liveSessionCache.clear();
     return null;
   }
@@ -4418,6 +4419,7 @@ export async function getCurrentUser() {
   if (liveSessionCache.currentUser()?.id && liveSessionCache.currentUser().id !== authUser.id) {
     clearAvatarCache();
     liveApplications.clear();
+    liveScheduleWindows.clear();
     liveSessionCache.clear();
   }
   let liveProfile = liveSessionCache.profile();
@@ -4483,6 +4485,7 @@ export async function signOutLive() {
   if (!isLive() || !supabase) return signOut();
   clearAvatarCache();
   liveApplications.clear();
+  liveScheduleWindows.clear();
   liveSessionCache.clear();
   livePaymentDirectory = new Map();
   const { error } = await supabase.auth.signOut();
