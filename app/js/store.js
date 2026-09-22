@@ -35,7 +35,7 @@ import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequ
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
-import { replacementEligibility } from "./replacement-workflow.js";
+import { decideReplacementProblem, replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -1544,16 +1544,18 @@ export async function decideReplacement(requestId, confirm, reason = null, now =
   }
   const actor = requirePaymentAdminActor();
   const request = state.replacementRequests.find((item) => item.id === requestId);
-  if (!request) replacementRequestError("Replacement request not found.");
+  const booking = request ? getBooking(request.bookingId) : null;
+  const decisionProblem = decideReplacementProblem({
+    request,
+    confirm,
+    now,
+    bookingAvailable: Boolean(booking && replacementEligible(booking, now).ok
+      && !replacementDuplicateForUser(request?.replacementUserId, booking)),
+  });
+  if (decisionProblem) replacementRequestError(decisionProblem);
   if (request.status === "confirmed" && confirm) return request;
   if (request.status === "rejected" && !confirm) return request;
   if (confirm) {
-    if (request.status !== "accepted") replacementRequestError("Only an accepted replacement can be confirmed.");
-    if (request.expiresAt <= now) replacementRequestError("This replacement request has expired.");
-    const booking = getBooking(request.bookingId);
-    if (!booking || !replacementEligible(booking, now).ok || replacementDuplicateForUser(request.replacementUserId, booking)) {
-      replacementRequestError("This booking is no longer available for replacement.");
-    }
     booking.replacementUserId = request.replacementUserId;
     booking.replacementConfirmedAt = now;
     booking.replacementConfirmedBy = actor.id;
