@@ -765,8 +765,6 @@ export async function startScheduleRealtime(onChange = () => {}) {
   if (typeof supabase.channel !== "function") return null;
   const channel = supabase.channel("itc-schedule")
     .on("postgres_changes", { event: "*", schema: "public", table: "operational_sessions" }, onChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_cycles" }, onChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "operational_bookings" }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "operational_rsvp_counts" }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "operational_activity_templates" }, onChange)
     .subscribe();
@@ -841,44 +839,28 @@ export async function stopHyroxRealtime() {
 export async function startOperationalRealtime() {
   if (!isLive() || !supabase || subscription) return subscription;
   if (typeof supabase.channel !== "function") return null;
-  const channel = supabase.channel("itc-operations")
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_sessions" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_bookings" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_queue_entries" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_receipts" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "collector_assignments" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "collector_payout_profiles" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_session_venue_overrides" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_rsvp_counts" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_hyrox_cycles" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_hyrox_queue_entries" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_booking_replacement_requests" },
-      () => scheduleRealtimeRefresh())
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "operational_booking_replacement_audit" },
-      () => scheduleRealtimeRefresh())
-    .subscribe();
+  const tables = [
+    "operational_sessions",
+    "operational_bookings",
+    "operational_queue_entries",
+    "operational_receipts",
+    "collector_assignments",
+    "collector_payout_profiles",
+    "operational_session_venue_overrides",
+    "operational_rsvp_counts",
+    ...(hyroxSubscription ? [] : [
+      "operational_hyrox_cycles",
+      "operational_hyrox_queue_entries",
+      "operational_booking_replacement_requests",
+      "operational_booking_replacement_audit",
+    ]),
+  ];
+  let channel = supabase.channel("itc-operations");
+  for (const table of tables) {
+    channel = channel.on("postgres_changes", { event: "*", schema: "public", table },
+      () => scheduleRealtimeRefresh());
+  }
+  channel = channel.subscribe();
   subscription = channel;
   return channel;
 }

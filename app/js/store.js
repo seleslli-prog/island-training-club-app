@@ -274,6 +274,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
   }
   if (authenticated) await liveOps.liveSweepHyroxDeadlines({ refresh: false });
   await liveOps.hydrateOperationalState({ force, authenticated });
+  await liveOps.startHyroxRealtime(() => invalidateScheduleWindows());
   await liveOps.startOperationalRealtime();
   if (!stopScheduleOperationsSubscription) {
     stopScheduleOperationsSubscription = liveOps.subscribeOperationalState(() => invalidateScheduleWindows());

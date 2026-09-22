@@ -429,7 +429,7 @@ const avatarAdminRows = [
   },
 ];
 const deferredAuthTasks = [];
-const LIVE_TABLES_COUNT = 10;
+const LIVE_TABLES_COUNT = 8;
 const fixedIso = "2026-08-05T02:00:00.000Z";
 const RealDate = Date;
 globalThis.Date = class extends RealDate {
@@ -1512,8 +1512,6 @@ const scheduleRealtime = await operations.startScheduleRealtime(() => {});
 assert.equal(scheduleRealtime?.name, "itc-schedule");
 assert.deepEqual(scheduleRealtime.handlers.map((handler) => handler.filter.table), [
   "operational_sessions",
-  "operational_hyrox_cycles",
-  "operational_bookings",
   "operational_rsvp_counts",
   "operational_activity_templates",
 ], "Schedule realtime must subscribe only to Schedule-owned tables");
@@ -1840,7 +1838,6 @@ liveSession = {
   expires_at: 9999999999, refresh_token: "test-refresh-token", user: authUser,
 };
 const initialRealtimeHandlers = operationalSubscriptions
-  .filter((channel) => channel.name === "itc-operations")
   .flatMap((channel) => channel.handlers);
 assert.equal(
   initialRealtimeHandlers.filter(({ filter }) => filter.table === "operational_hyrox_cycles").length,
@@ -2327,7 +2324,6 @@ assert.deepEqual(operations.getLiveVenueOverride("wnt-2026-08-05"), {
   memberNotifiedAt: Date.parse(fixedIso),
 });
 const realtimeHandlers = operationalSubscriptions
-  .filter((channel) => channel.name === "itc-operations")
   .flatMap((channel) => channel.handlers);
 assert.ok(
   operationalSubscriptions.some((channel) =>
@@ -3618,8 +3614,10 @@ const foreignRealtimeBooking = {
 operationalTableRows.operational_bookings.push(foreignRealtimeBooking);
 assert.equal(store.attendeeCountFor(lunchSession), 1,
   "a foreign booking hidden by RLS must not update the cached aggregate by itself");
-const countTableHandler = realtimeHandlers.find(({ filter }) =>
-  filter.table === "operational_rsvp_counts");
+const countTableHandler = operationalSubscriptions
+  .filter((channel) => channel.name === "itc-operations")
+  .flatMap((channel) => channel.handlers)
+  .find(({ filter }) => filter.table === "operational_rsvp_counts");
 assert.ok(countTableHandler, "count-table Realtime handler must exist");
 const countRefresh = new Promise((resolve, reject) => {
   const timeout = setTimeout(() => {
