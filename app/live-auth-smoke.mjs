@@ -1399,6 +1399,35 @@ const store = await import("./js/store.js");
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
 const operations = await import("./js/operations.js");
+const { createLiveResource } = await import("./js/live-resource.js");
+
+// A route cache must reuse a fresh resolved value, reload only invalidated
+// keys, and let a transient failure retry instead of becoming sticky.
+let resourceNow = 1_000;
+let resourceCalls = 0;
+const resource = createLiveResource(async (key) => {
+  resourceCalls += 1;
+  return { key, call: resourceCalls };
+}, { ttlMs: 30_000, now: () => resourceNow });
+const resourceFirst = await resource.get("member-1");
+const resourceSecond = await resource.get("member-1");
+assert.equal(resourceCalls, 1, "a fresh key must load once");
+assert.deepEqual(resourceSecond, resourceFirst, "a fresh cached value must be reused");
+resource.invalidate("member-1");
+const resourceThird = await resource.get("member-1");
+assert.equal(resourceCalls, 2, "invalidating one key must reload only that key");
+assert.notDeepEqual(resourceThird, resourceFirst, "invalidated reads must return the replacement value");
+
+let resourceFailures = 0;
+const flakyResource = createLiveResource(async () => {
+  resourceFailures += 1;
+  if (resourceFailures === 1) throw new Error("temporary failure");
+  return "recovered";
+});
+await assert.rejects(() => flakyResource.get("only"), /temporary failure/);
+assert.equal(await flakyResource.get("only"), "recovered");
+assert.equal(resourceFailures, 2, "a rejected load must be retried");
+console.log("ok  keyed live resources reuse, invalidate, and retry");
 const todayISO = data.todayHktISO();
 assert.equal(todayISO, fixedHktTodayIso,
   "fixed live smoke instant must resolve to the same HKT date in every host timezone");
