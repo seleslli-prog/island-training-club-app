@@ -26,6 +26,7 @@ import {
 import { config, supabase, isLive } from "./config.js";
 import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
+import { createLiveResource } from "./live-resource.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -79,6 +80,20 @@ let ownAvatarRequest = null;
 let avatarRequestGeneration = 0;
 const sessionAvatarCache = new Map();
 let adminAvatarCache = null;
+
+const liveApplications = createLiveResource(async (profileId) => {
+  const { data, error } = await supabase
+    .from("applications")
+    .select("*")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+});
+
+export function invalidateLiveApplication(profileId) {
+  liveApplications.invalidate(profileId);
+}
 
 let state = null;
 
@@ -4381,12 +4396,14 @@ export async function getCurrentUser() {
   const { data: sessData, error: sessErr } = await supabase.auth.getSession();
   if (sessErr || !sessData.session) {
     clearAvatarCache();
+    liveApplications.clear();
     liveUser = null;
     return null;
   }
   const authUser = sessData.session.user;
   if (liveUser?.id && liveUser.id !== authUser.id) {
     clearAvatarCache();
+    liveApplications.clear();
     liveProfile = null;
     liveProfileFetchedAt = 0;
   }
@@ -4466,6 +4483,7 @@ export async function signInWithMagicLink(email) {
 export async function signOutLive() {
   if (!isLive() || !supabase) return signOut();
   clearAvatarCache();
+  liveApplications.clear();
   liveProfile = null;
   liveUser = null;
   liveProfileFetchedAt = 0;
@@ -4645,31 +4663,19 @@ function privacyPatch(form) {
   };
 }
 
-export async function fetchApplicationForUser(user) {
+export async function fetchApplicationForUser(user, { force = false } = {}) {
   if (!isLive() || !supabase || !user || !user.id) return null;
-  const { data, error } = await supabase
-    .from("applications")
-    .select("*")
-    .eq("profile_id", user.id)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  return liveApplications.get(user.id, { force });
 }
 
-export async function getMyApplication() {
+export async function getMyApplication({ force = false } = {}) {
   if (!isLive() || !supabase) {
     const user = currentUser();
     return user ? localApplication(user) : null;
   }
   const cu = await getCurrentUser();
   if (!cu) return null;
-  const { data, error } = await supabase
-    .from("applications")
-    .select("*")
-    .eq("profile_id", cu.id)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  return fetchApplicationForUser(cu, { force });
 }
 
 export async function saveMyApplication(form) {
@@ -4727,6 +4733,7 @@ export async function saveMyApplication(form) {
 
   const { error } = await supabase.from("applications").upsert(row);
   if (error) throw error;
+  invalidateLiveApplication(cu.id);
   clearApplyDraft();
 }
 
@@ -4758,6 +4765,7 @@ export async function updateMyMembershipDetails(form) {
     .select()
     .single();
   if (error) throw error;
+  invalidateLiveApplication(cu.id);
   return data;
 }
 
@@ -4783,6 +4791,7 @@ export async function updateMyPrivacyPreferences(form) {
     .select()
     .single();
   if (error) throw error;
+  invalidateLiveApplication(cu.id);
   return data;
 }
 
@@ -4826,6 +4835,7 @@ export async function acceptMyIndemnity(payload) {
     .select()
     .single();
   if (error) throw error;
+  invalidateLiveApplication(cu.id);
   return data.waiver_accepted_at;
 }
 

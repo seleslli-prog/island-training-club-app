@@ -2132,7 +2132,6 @@ async function boot() {
     if (isLive()) {
       try {
         await store.getCurrentUser();
-        await store.fetchApplicationForUser(store.currentUser());
       } catch (err) {
         navError = err;
       }

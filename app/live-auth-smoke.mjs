@@ -150,6 +150,7 @@ applicationRows.set("pending-submitted", {
 const applicationUpdates = [];
 const profileUpdates = [];
 let applicationReadError = null;
+let applicationReadCount = 0;
 let applicationReadGate = null;
 const applicationReadGates = [];
 let notificationReadError = null;
@@ -672,6 +673,7 @@ const fakeSupabase = {
               }
               return {
                 maybeSingle: async () => {
+                  applicationReadCount += 1;
                   const readGate = applicationReadGates.shift() || applicationReadGate;
                   if (readGate) await readGate;
                   return {
@@ -2181,6 +2183,9 @@ assert.match(appSource, /case "save-draft"/);
 assert.match(appSource, /case "discard-draft"/);
 assert.match(appSource, /store\.saveApplyDraft/);
 assert.match(appSource, /store\.clearApplyDraft/);
+const hashNavigationSource = appSource.slice(appSource.indexOf('window.addEventListener("hashchange"'));
+assert.doesNotMatch(hashNavigationSource, /fetchApplicationForUser/,
+  "ordinary hash navigation must not prefetch membership applications");
 
 await store.setWeekVenue("wnt-2026-08-05", {
   location: "Central Harbourfront — 7pm sharp",
@@ -3846,6 +3851,7 @@ applicationRows.set(authUser.id, {
   ...applicationRows.get(authUser.id),
   preferred_name: null,
 });
+store.invalidateLiveApplication(authUser.id);
 const nullPreferredSummary = await views.viewAccount("details");
 if (!nullPreferredSummary.includes("Preferred name</span><strong>Not provided</strong>")) {
   throw new Error("Null preferred_name should render as Not provided");
@@ -3858,6 +3864,7 @@ applicationRows.set(authUser.id, {
   ...applicationRows.get(authUser.id),
   preferred_name: "Riley",
 });
+store.invalidateLiveApplication(authUser.id);
 const privacySummary = await views.viewAccount("privacy");
 for (const label of [
   "Photo/video consent",
@@ -3920,6 +3927,7 @@ applicationRows.set(authUser.id, {
   email_receipts: undefined,
   community_news: undefined,
 });
+store.invalidateLiveApplication(authUser.id);
 const missingPreferenceSummary = await views.viewAccount("privacy");
 if ((missingPreferenceSummary.match(/>Off</g) || []).length < 3) {
   throw new Error("Live privacy summary should default omitted preference properties to Off");
@@ -3930,6 +3938,13 @@ applicationRows.set(authUser.id, {
   email_receipts: true,
   community_news: true,
 });
+store.invalidateLiveApplication(authUser.id);
+const applicationReadsBeforeCache = applicationReadCount;
+await store.fetchApplicationForUser(authUser, { force: true });
+await store.fetchApplicationForUser(authUser);
+assert.equal(applicationReadCount - applicationReadsBeforeCache, 1,
+  "unchanged application reads must reuse the cached application");
+
 await store.updateMyMembershipDetails({
   mobile: "+852 9000 0000",
   age_over_18: "yes",
@@ -3942,6 +3957,9 @@ await store.updateMyMembershipDetails({
 });
 const membershipPatch = applicationUpdates.at(-1);
 if (!membershipPatch) throw new Error("membership update missing");
+await store.fetchApplicationForUser(authUser);
+assert.equal(applicationReadCount - applicationReadsBeforeCache, 2,
+  "a successful membership update must invalidate cached application data");
 const membershipKeys = Object.keys(membershipPatch).sort().join(",");
 if (
   membershipKeys !==
@@ -4019,6 +4037,7 @@ applicationRows.set(authUser.id, {
   ...applicationRows.get(authUser.id),
   emergency_phone: "",
 });
+store.invalidateLiveApplication(authUser.id);
 await assert.rejects(
   () => store.acceptMyIndemnity({
     signature: "Riley Runner",
@@ -4039,6 +4058,7 @@ applicationRows.set(authUser.id, {
   waiver_form_version: null,
   emergency_relationship: null,
 });
+store.invalidateLiveApplication(authUser.id);
 const legacyAccount = await views.viewAccount();
 if (!legacyAccount.includes(`Legacy acceptance recorded on ${confirmedDay}`) || legacyAccount.includes("Indemnity confirmed on")) {
   throw new Error("Legacy live rows must stay stale/re-signable on the Profile summary");
@@ -4095,11 +4115,13 @@ applicationRows.set(authUser.id, {
   waiver_form_version: null,
   emergency_relationship: null,
 });
+store.invalidateLiveApplication(authUser.id);
 const waiverMissing = await views.viewAccount("indemnity");
 if (!waiverMissing.includes("To be accepted")) {
   throw new Error("Indemnity page should prompt when the live waiver is missing");
 }
 applicationRows.delete(authUser.id);
+store.invalidateLiveApplication(authUser.id);
 const missingAccount = await views.viewAccount();
 if (missingAccount?.redirect) {
   throw new Error("Approved/admin users missing an application must not redirect from Profile");
@@ -4147,6 +4169,7 @@ for (const [label, html, title, backHref, backLabel] of [
     `Missing-application ${label} must not repeat Profile in a kicker`);
 }
 applicationRows.set("live-user-1", structuredClone(originalApplicationForApply));
+store.invalidateLiveApplication(authUser.id);
 
 const domListeners = new Map();
 const windowListeners = new Map();
@@ -4293,8 +4316,8 @@ try {
   hashRejected = true;
 }
 await new Promise(setImmediate);
-if (hashRejected || escapedRejections.length || toastStack.children.length !== 1 || toastStack.children[0].textContent !== "Application read failed") {
-  throw new Error("Hash changes should catch failed application reads and show one error toast");
+if (hashRejected || escapedRejections.length || toastStack.children.length !== 0) {
+  throw new Error("Hash changes should let the Account fallback handle failed application reads without a duplicate preload toast");
 }
 console.error = originalConsoleError;
 assert.deepEqual(
@@ -4321,6 +4344,7 @@ const redirectFixture = {
 try {
   profile.role = "pending";
   applicationRows.delete(authUser.id);
+  store.invalidateLiveApplication(authUser.id);
 
   location.hash = "#/community/prayers";
   await app.maybeRedirectToApply();
@@ -4338,6 +4362,7 @@ try {
     "the application route must not redirect to itself");
 
   applicationRows.set(authUser.id, structuredClone(redirectFixture.application));
+  store.invalidateLiveApplication(authUser.id);
   location.hash = "#/home";
   await app.maybeRedirectToApply();
   assert.equal(location.hash, "#/home",
@@ -4345,6 +4370,7 @@ try {
 
   profile.role = "declined";
   applicationRows.delete(authUser.id);
+  store.invalidateLiveApplication(authUser.id);
   location.hash = "#/home";
   await app.maybeRedirectToApply();
   assert.equal(location.hash, "#/home",
@@ -6824,6 +6850,7 @@ if (location.hash !== "#/apply"
 }
 
 applicationReadError = new Error("Application read failed");
+store.invalidateLiveApplication(authUser.id);
 location.hash = "#/home";
 await dispatchAuthStateChange("SIGNED_IN");
 await new Promise(setImmediate);

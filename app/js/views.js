@@ -2035,7 +2035,7 @@ export async function viewApplyLive() {
   if (cu.role !== "pending") {
     return `<section class="card"><p class="muted">Your application has already been processed.</p></section>`;
   }
-  const existing = await store.getMyApplication();
+  const existing = await store.getMyApplication({ force: true });
   if (existing) {
     return `
       <section class="card">
