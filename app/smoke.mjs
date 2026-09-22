@@ -12,7 +12,7 @@ import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campai
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
 import { paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
-import { isAdminRole, normalizeRole } from "./js/admin-workflow.js";
+import { filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -35,6 +35,10 @@ assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please 
 });
 assert.equal(isAdminRole("super_admin"), true);
 assert.equal(normalizeRole("super_admin"), "superadmin");
+assert.deepEqual(filterMembers([
+  { id: "a", fullName: "Ada Runner", email: "ada@example.com", status: "approved", role: "member" },
+  { id: "b", fullName: "Ben Admin", email: "ben@example.com", status: "approved", role: "admin" },
+], { query: "ADA", status: "approved", role: "member" }).map((member) => member.id), ["a"]);
 assert.equal(hyroxPaymentProblem({ reason: "  " }), "Payment rejection reason is required.");
 assert.equal(hyroxPaymentProblem({ reason: "Unreadable reference", booking: { cycleId: "cycle-1", status: "reserved", paymentMarkedAt: 1 } }), null);
 const attendanceSession = { dateISO: "2026-08-08", time: "10:00", durationMin: 60 };

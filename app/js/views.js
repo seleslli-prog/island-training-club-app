@@ -11,7 +11,7 @@ import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
 import { projectHomeWeek } from "./home-workflow.js";
 import { hyroxCycleStatus } from "./hyrox-workflow.js";
-import { isAdminRole, isSuperRole, normalizeRole, normalizedRole, roleLabel } from "./admin-workflow.js";
+import { filterMembers, isAdminRole, isSuperRole, normalizeRole, normalizedRole, roleLabel } from "./admin-workflow.js";
 import {
   normalizeMeetingPoint,
   normalizeVenueLocation,
@@ -3668,12 +3668,7 @@ function adminMembers(
         </div>`).join("") : '<div class="empty">No profile photos awaiting review.</div>'}
     </section>`;
   const query = adminMemberFilters.query.trim().toLocaleLowerCase();
-  const filtered = users.filter((u) => {
-    const matchesQuery = !query || `${u.fullName || ""} ${u.email || ""}`.toLocaleLowerCase().includes(query);
-    const matchesStatus = adminMemberFilters.status === "all" || u.status === adminMemberFilters.status;
-    const matchesRole = adminMemberFilters.role === "all" || normalizedRole(u.role) === adminMemberFilters.role;
-    return matchesQuery && matchesStatus && matchesRole;
-  });
+  const filtered = filterMembers(users, adminMemberFilters);
   const approvalsSection = pendingApplicants.length
     ? adminApprovals(pendingApplicants)
     : "";
