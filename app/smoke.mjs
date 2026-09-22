@@ -13,6 +13,7 @@ import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyro
 import { paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
 import { filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
+import { replacementEligibility } from "./js/replacement-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -51,6 +52,7 @@ assert.equal(hyroxVenueSwitchProblem({ cycle: { venuePlan: "both", venueChoiceDe
 assert.equal(hyroxVenueTargetProblem({ bftSessionId: "bft", midtownSessionId: "midtown" }, "other"), "Target venue is not part of this HYROX cycle.");
 assert.equal(hyroxVenueChoiceProblem({ mode: "select", currentSessionId: "bft", targetFull: true }), "Target venue is full.");
 assert.equal(hyroxVenueChoiceProblem({ mode: "queue", currentSessionId: "bft", targetSessionId: "bft", targetFull: true }), "Choose the other venue in this HYROX cycle.");
+assert.equal(replacementEligibility({ userId: "u1", status: "confirmed", snapshot: { kind: "paid", name: "HYROX", dateISO: "2099-01-01", time: "10:00" }, sessionId: "hyrox-bft" }, { now: 0 }).ok, true);
 const attendanceSession = { dateISO: "2026-08-08", time: "10:00", durationMin: 60 };
 const attendanceStart = data.hktEventStartMs(attendanceSession.dateISO, attendanceSession.time);
 assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart - 15 * 60_000 - 1).state, "upcoming");

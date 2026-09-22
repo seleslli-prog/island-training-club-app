@@ -35,6 +35,7 @@ import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequ
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
+import { replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -1319,20 +1320,8 @@ export function effectiveAttendeeId(booking) {
 }
 
 export function replacementEligible(booking, now = Date.now()) {
-  if (!booking?.userId) return { ok: false, reason: "missing-owner" };
-  if (booking.status !== "confirmed") return { ok: false, reason: "not-confirmed" };
-  if (booking.replacementUserId) return { ok: false, reason: "already-replaced" };
-  const snapshot = booking.snapshot || {};
-  const isHyrox = snapshot.kind === "paid"
-    && (String(snapshot.name || "").toUpperCase().includes("HYROX")
-      || String(booking.sessionId || "").startsWith("hyrox-"));
-  if (!isHyrox) return { ok: false, reason: "not-paid-hyrox" };
-  const session = booking.sessionId ? getSession(booking.sessionId) : null;
-  if (session?.cancelled) return { ok: false, reason: "cancelled" };
-  const startsAt = hktEventStartMs(snapshot.dateISO, snapshot.time);
-  if (!Number.isFinite(startsAt) || startsAt <= now) return { ok: false, reason: "started" };
-  const expiresAt = Math.min(startsAt, now + 24 * 60 * 60 * 1000);
-  return { ok: true, expiresAt };
+  const session = booking?.sessionId ? getSession(booking.sessionId) : null;
+  return replacementEligibility(booking, { now, sessionCancelled: session?.cancelled === true });
 }
 
 export function replacementInviteForToken(token) {
