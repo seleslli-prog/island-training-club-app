@@ -30,7 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
-import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
+import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
@@ -3982,12 +3982,11 @@ export function donationsForUser(userId) {
 
 export function recordDonation(input = {}) {
   const user = currentUser();
-  if (!user || !user.id || user.status !== "approved") {
-    throw new Error("Approved member access required");
-  }
-  if (Object.hasOwn(input, "userId") && input.userId !== user.id) {
-    throw new Error("Donation owner must match the approved member");
-  }
+  const ownerProblem = donationOwnerProblem({
+    user,
+    inputUserId: Object.hasOwn(input, "userId") ? input.userId : undefined,
+  });
+  if (ownerProblem) throw new Error(ownerProblem);
   const { name, amount, note, ref, campaignId } = input;
   const campaign = campaignId
     ? state.campaigns.find((item) => item.id === campaignId && campaignIsOpen(item)) ||

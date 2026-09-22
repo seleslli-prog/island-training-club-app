@@ -8,7 +8,7 @@ import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
-import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
+import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxQueueGroups, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
@@ -109,6 +109,8 @@ assert.deepEqual(validateCampaignFields({ title: "  Appeal ", description: " Hel
   title: "Appeal", description: "Help", goalHKD: 1200, fpsId: "FPS-1", fpsPayee: "ITC",
 });
 assert.equal(campaignRaisedFromDonations([{ campaignId: "c1", amount: 20 }, { campaignId: "c1", amount: 5 }], "c1"), 25);
+assert.equal(donationOwnerProblem({ user: { id: "u1", status: "approved" }, inputUserId: "u1" }), null);
+assert.equal(donationOwnerProblem({ user: null }), "Approved member access required");
 assert.deepEqual(orderDonationsForUser([
   { id: "old", userId: "u1", createdAt: 1 }, { id: "new", userId: "u1", createdAt: 2 },
 ], "u1").map((row) => row.id), ["new", "old"]);

@@ -8,6 +8,14 @@ export function campaignTransitionProblem(campaign, fromStatus, toStatus) {
   return null;
 }
 
+export function donationOwnerProblem({ user, inputUserId } = {}) {
+  if (!user?.id || user.status !== "approved") return "Approved member access required";
+  if (inputUserId !== undefined && inputUserId !== user.id) {
+    return "Donation owner must match the approved member";
+  }
+  return null;
+}
+
 export function campaignRaisedFromDonations(donations, campaignId) {
   if (!campaignId) return 0;
   return (donations || [])
