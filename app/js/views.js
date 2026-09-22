@@ -11,6 +11,7 @@ import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
 import { projectHomeWeek } from "./home-workflow.js";
 import { hyroxCycleStatus } from "./hyrox-workflow.js";
+import { isAdminRole, isSuperRole, normalizeRole, normalizedRole, roleLabel } from "./admin-workflow.js";
 import {
   normalizeMeetingPoint,
   normalizeVenueLocation,
@@ -44,16 +45,6 @@ import {
 
 // Auth roles are normalized: live Supabase returns "super_admin"; the
 // prototype internally uses "superadmin". The helpers below bridge both.
-const isAdminRole = (role) => ["admin", "superadmin", "super_admin"].includes(role);
-const isSuperRole = (role) => ["superadmin", "super_admin"].includes(role);
-const normalizeRole = (role) => (role === "super_admin" ? "superadmin" : role);
-const normalizedRole = (role) => (role === "super_admin" ? "superadmin" : role);
-const roleLabel = (role) => role === "superadmin" || role === "super_admin"
-  ? "Super Admin"
-  : role === "admin" ? "Admin"
-  : role === "declined" ? "Declined"
-  : role === "pending" ? "Pending"
-  : "Member";
 
 // Toggling member filters must only affect the in-memory view state, never
 // the persisted store. Tests reset this explicitly where required.

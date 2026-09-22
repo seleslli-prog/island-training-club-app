@@ -10,6 +10,7 @@ import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields } from "./js/giving-workflow.js";
 import { hyroxCycleStatus } from "./js/hyrox-workflow.js";
+import { isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -28,6 +29,8 @@ assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please 
   id: "prayer-1", request: "Please pray", anonymousToLeaders: false, status: "prayed_for",
   createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,
 });
+assert.equal(isAdminRole("super_admin"), true);
+assert.equal(normalizeRole("super_admin"), "superadmin");
 assert.deepEqual(hyroxCycleStatus({ registrationState: "cancelled" }, 0), { label: "Cancelled", className: "danger" });
 assert.deepEqual(hyroxCycleStatus({ registrationState: "open", registrationOpensAt: 100 }, 0), {
   label: "Sign up opens Monday at 6 PM HKT", compactLabel: "Opens Mon · 6 PM", className: "neutral",
