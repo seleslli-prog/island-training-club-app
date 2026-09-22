@@ -378,9 +378,9 @@ function replaceState(payload) {
       .map(buildReplacementRequestRow).filter(Boolean);
   }
   liveCache.templates = payload.templates || [];
-  liveCache.bookings = payload.bookings;
-  liveCache.queues = payload.queues;
-  liveCache.receipts = payload.receipts;
+  if (payload.bookings) liveCache.bookings = payload.bookings;
+  if (payload.queues) liveCache.queues = payload.queues;
+  if (payload.receipts) liveCache.receipts = payload.receipts;
   liveCache.assignments = new Map(
     payload.assignments.map((row) => [row.saturdayISO, row])
   );
@@ -575,7 +575,7 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
   };
 }
 
-async function fetchOperationalState({ authenticated, skipHyrox = false } = {}) {
+async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {
     try {
@@ -607,7 +607,9 @@ async function fetchOperationalState({ authenticated, skipHyrox = false } = {}) 
     supabase.from("operational_queue_entries").select("*")
       .or("status.eq.active,status.eq.promoted,status.eq.dissolved")
       .order("joined_at"),
-    supabase.from("operational_receipts").select("*").order("issued_at", { ascending: false }),
+    skipReceipts
+      ? Promise.resolve({ data: [], error: null })
+      : supabase.from("operational_receipts").select("*").order("issued_at", { ascending: false }),
     supabase.from("collector_assignments").select("*"),
     supabase.from("collector_payout_profiles").select("*"),
     fetchAssignedPayoutRows(),
@@ -679,7 +681,7 @@ async function fetchOperationalState({ authenticated, skipHyrox = false } = {}) 
     }),
     bookings: (bookings.data || []).map((row) => buildBookingRow(row, sessionsById)),
     queues: (queues.data || []).map(buildQueueRow),
-    receipts: (receipts.data || []).map(buildReceiptRow),
+    ...(skipReceipts ? {} : { receipts: (receipts.data || []).map(buildReceiptRow) }),
     assignments: (assignments.data || []).map(buildAssignmentRow),
     payouts: [...payoutRowsByProfile.values()].map(buildPayoutRow),
     payoutError: assignedPayouts.error,
@@ -709,7 +711,7 @@ export async function ensureLiveSessionWindow() {
   return null;
 }
 
-export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false } = {}) {
+export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (liveCache.loaded && !force) return liveCache;
   if (hydrationPromise) {
@@ -721,7 +723,7 @@ export async function hydrateOperationalState({ force = false, authenticated, sk
   }
   liveCache.loading = Promise.resolve().then(async () => {
     try {
-      const payload = await fetchOperationalState({ authenticated, skipHyrox });
+      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts });
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
@@ -982,6 +984,12 @@ export function listLiveBookings(filter = () => true) {
   return liveCache.bookings.filter(filter);
 }
 
+function mergeLiveRows(collection, rows) {
+  const byId = new Map(collection.map((row) => [row.id, row]));
+  for (const row of rows) byId.set(row.id, row);
+  return [...byId.values()];
+}
+
 export async function ensureLiveBooking(bookingId) {
   if (!isLive() || !supabase) return null;
   const cached = liveCache.bookings.find((booking) => booking.id === bookingId);
@@ -994,8 +1002,49 @@ export async function ensureLiveBooking(bookingId) {
   if (result.error) throw operationalProblem(result.error);
   if (!result.data) return null;
   const booking = buildBookingRow(result.data);
-  liveCache.bookings.push(booking);
+  liveCache.bookings = mergeLiveRows(liveCache.bookings, [booking]);
   return booking;
+}
+
+export async function ensureLiveBookingsForUser(userId) {
+  if (!isLive() || !supabase) return [];
+  const result = await supabase
+    .from("operational_bookings")
+    .select("*")
+    .eq("profile_id", userId);
+  if (result.error) throw operationalProblem(result.error);
+  const bookings = (result.data || []).map((row) => buildBookingRow(row));
+  liveCache.bookings = mergeLiveRows(liveCache.bookings, bookings);
+  return bookings;
+}
+
+export async function ensureLiveReceiptsForUser(userId) {
+  if (!isLive() || !supabase) return [];
+  const result = await supabase
+    .from("operational_receipts")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("issued_at", { ascending: false });
+  if (result.error) throw operationalProblem(result.error);
+  const receipts = (result.data || []).map(buildReceiptRow);
+  liveCache.receipts = mergeLiveRows(liveCache.receipts, receipts);
+  return receipts;
+}
+
+export async function ensureLiveReceipt(receiptId) {
+  if (!isLive() || !supabase) return null;
+  const cached = liveCache.receipts.find((receipt) => receipt.id === receiptId);
+  if (cached) return cached;
+  const result = await supabase
+    .from("operational_receipts")
+    .select("*")
+    .eq("id", receiptId)
+    .maybeSingle();
+  if (result.error) throw operationalProblem(result.error);
+  if (!result.data) return null;
+  const receipt = buildReceiptRow(result.data);
+  liveCache.receipts = mergeLiveRows(liveCache.receipts, [receipt]);
+  return receipt;
 }
 
 export function liveBookingsForUser(userId) {

@@ -1378,6 +1378,7 @@ export async function viewAccount(section, sub) {
     case "donor":
       return await accountDetails(user);
     case "payments":
+      if (isLive()) await store.ensurePaymentData(user.id);
       return accountPayments(user);
     case "privacy":
       return await accountPrivacy(user);

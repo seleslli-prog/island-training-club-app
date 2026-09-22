@@ -256,7 +256,7 @@ export function load() {
   return state;
 }
 
-export async function hydrateLiveOperations({ ensureWindow = false, force = false, skipHyrox = false } = {}) {
+export async function hydrateLiveOperations({ ensureWindow = false, force = false, skipHyrox = false, skipReceipts = false } = {}) {
   if (!isLive()) return null;
   if (ensureWindow) {
     try {
@@ -273,7 +273,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
     authenticated = false;
   }
   if (authenticated) await liveOps.liveSweepHyroxDeadlines({ refresh: false });
-  await liveOps.hydrateOperationalState({ force, authenticated, skipHyrox });
+  await liveOps.hydrateOperationalState({ force, authenticated, skipHyrox, skipReceipts });
   await liveOps.startHyroxRealtime(() => invalidateScheduleWindows());
   await liveOps.startOperationalRealtime();
   if (!stopScheduleOperationsSubscription) {
@@ -284,7 +284,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
 
 export async function warmOperationalState() {
   try {
-    await hydrateLiveOperations({ ensureWindow: true, skipHyrox: true });
+    await hydrateLiveOperations({ ensureWindow: true, skipHyrox: true, skipReceipts: true });
     return { ok: true, error: null };
   } catch (error) {
     return { ok: false, error };
@@ -1588,6 +1588,21 @@ export async function ensureHyroxCycleData(cycleId) {
 export async function ensureBookingData(bookingId) {
   if (isLive()) return liveOps.ensureLiveBooking(bookingId);
   return getBooking(bookingId);
+}
+
+export async function ensurePaymentData(userId) {
+  if (isLive()) {
+    await Promise.all([
+      liveOps.ensureLiveBookingsForUser(userId),
+      liveOps.ensureLiveReceiptsForUser(userId),
+    ]);
+  }
+  return { bookings: bookingsForUser(userId), receipts: receiptsForUser(userId) };
+}
+
+export async function ensureReceiptData(receiptId) {
+  if (isLive()) return liveOps.ensureLiveReceipt(receiptId);
+  return getReceipt(receiptId);
 }
 
 export function hyroxCycleBookings(cycleId) {

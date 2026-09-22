@@ -603,6 +603,7 @@ async function render(generation = renderGeneration) {
       out = await views.viewReplacementInvite(arg);
       break;
     case "receipt":
+      await store.ensureReceiptData(arg);
       out = views.viewReceipt(arg);
       break;
     case "admin":
