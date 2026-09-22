@@ -1,3 +1,27 @@
+export function hyroxRegistrationProblem({
+  cycle,
+  now = Date.now(),
+  preference,
+  fallbackAcknowledged,
+  alreadyJoined = false,
+  hasQuarryBooking = false,
+  activeCount = 0,
+  mode = "reserve",
+}) {
+  if (!cycle) return "HYROX cycle not found.";
+  if (!["bft", "midtown", "either"].includes(preference)) return "Choose BFT, Midtown, or Either.";
+  if (!fallbackAcknowledged) return "Fallback acknowledgement is required.";
+  if (cycle.registrationState === "cancelled") return "This HYROX cycle is cancelled.";
+  if (now < cycle.registrationOpensAt) return "HYROX registration opens Monday at 6 PM HKT.";
+  if (now >= cycle.paymentDeadlineAt) return "HYROX registration is closed.";
+  if (cycle.registrationState !== "draft" && cycle.registrationState !== "open") return "HYROX registration is closed.";
+  if (alreadyJoined) return "You already joined this HYROX registration.";
+  if (hasQuarryBooking) return "You already have a HYROX booking for this Saturday.";
+  if (mode === "waitlist" && activeCount < cycle.capacity) return "HYROX places are still available.";
+  if (mode === "reserve" && activeCount >= cycle.capacity) return "HYROX registration is full. Join the weekly waitlist.";
+  return null;
+}
+
 export function hyroxCycleStatus(cycle, now = Date.now()) {
   if (cycle.registrationState === "cancelled") return { label: "Cancelled", className: "danger" };
   if (now < cycle.registrationOpensAt) return {

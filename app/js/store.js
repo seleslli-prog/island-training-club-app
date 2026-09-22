@@ -32,6 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
+import { hyroxRegistrationProblem } from "./hyrox-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -2067,29 +2068,29 @@ export function reserveHyroxCycle(userId, cycleId, preference, fallbackAcknowled
   if (isLive()) return liveOps.liveReserveHyroxCycle(cycleId, preference, fallbackAcknowledged);
   requireAuthorizedPaymentOwner(userId);
   const cycle = hyroxCycleById(cycleId);
-  if (!cycle) throw new Error("HYROX cycle not found.");
-  if (!["bft", "midtown", "either"].includes(preference)) {
-    throw new Error("Choose BFT, Midtown, or Either.");
-  }
-  if (!fallbackAcknowledged) throw new Error("Fallback acknowledgement is required.");
-  if (cycle.registrationState === "cancelled") throw new Error("This HYROX cycle is cancelled.");
-  if (now < cycle.registrationOpensAt) throw new Error("HYROX registration opens Monday at 6 PM HKT.");
-  if (now >= cycle.paymentDeadlineAt) throw new Error("HYROX registration is closed.");
+  const activeBookings = cycle ? hyroxActiveBookings(cycleId) : [];
+  const hasQuarryBooking = cycle ? state.bookings.some((booking) => booking.userId === userId
+    && ["reserved", "confirmed"].includes(booking.status)
+    && booking.sessionId === `hyrox-quarry-bay-${cycle.dateISO}`) : false;
+  const problem = hyroxRegistrationProblem({
+    cycle,
+    now,
+    preference,
+    fallbackAcknowledged,
+    alreadyJoined: Boolean(cycle && (activeBookings.some((booking) => booking.userId === userId)
+      || hyroxQueueEntryForUser(cycleId, userId))),
+    hasQuarryBooking,
+    activeCount: activeBookings.length,
+    mode: "reserve",
+  });
+  if (problem) throw new Error(problem);
   if (cycle.registrationState === "draft") {
     cycle.registrationState = "open";
     cycle.openedAt ||= now;
   } else if (cycle.registrationState !== "open") {
     throw new Error("HYROX registration is closed.");
   }
-  if (hyroxActiveBookings(cycleId).some((booking) => booking.userId === userId)
-      || hyroxQueueEntryForUser(cycleId, userId)) {
-    throw new Error("You already joined this HYROX registration.");
-  }
-  const quarryBooking = state.bookings.find((booking) => booking.userId === userId
-    && ["reserved", "confirmed"].includes(booking.status)
-    && booking.sessionId === `hyrox-quarry-bay-${cycle.dateISO}`);
-  if (quarryBooking) throw new Error("You already have a HYROX booking for this Saturday.");
-  if (hyroxActiveBookings(cycleId).length >= cycle.capacity) {
+  if (activeBookings.length >= cycle.capacity) {
     throw new Error("HYROX registration is full. Join the weekly waitlist.");
   }
   const booking = {
@@ -2146,23 +2147,25 @@ export function joinHyroxCycleWaitlist(userId, cycleId, preference, fallbackAckn
   if (isLive()) return liveOps.liveJoinHyroxCycleWaitlist(cycleId, preference, fallbackAcknowledged);
   requireAuthorizedPaymentOwner(userId);
   const cycle = hyroxCycleById(cycleId);
-  if (!cycle) throw new Error("HYROX cycle not found.");
-  if (!["bft", "midtown", "either"].includes(preference)) throw new Error("Choose BFT, Midtown, or Either.");
-  if (!fallbackAcknowledged) throw new Error("Fallback acknowledgement is required.");
-  if (cycle.registrationState === "cancelled") throw new Error("This HYROX cycle is cancelled.");
-  if (now < cycle.registrationOpensAt) throw new Error("HYROX registration opens Monday at 6 PM HKT.");
-  if (now >= cycle.paymentDeadlineAt) throw new Error("HYROX registration is closed.");
+  const activeBookings = cycle ? hyroxActiveBookings(cycleId) : [];
+  const problem = hyroxRegistrationProblem({
+    cycle,
+    now,
+    preference,
+    fallbackAcknowledged,
+    alreadyJoined: Boolean(cycle && (activeBookings.some((booking) => booking.userId === userId)
+      || hyroxQueueEntryForUser(cycleId, userId))),
+    activeCount: activeBookings.length,
+    mode: "waitlist",
+  });
+  if (problem) throw new Error(problem);
   if (cycle.registrationState === "draft") {
     cycle.registrationState = "open";
     cycle.openedAt ||= now;
   } else if (cycle.registrationState !== "open") {
     throw new Error("HYROX registration is closed.");
   }
-  if (hyroxActiveBookings(cycleId).some((booking) => booking.userId === userId)
-      || hyroxQueueEntryForUser(cycleId, userId)) {
-    throw new Error("You already joined this HYROX registration.");
-  }
-  if (hyroxActiveBookings(cycleId).length < cycle.capacity) throw new Error("HYROX places are still available.");
+  if (activeBookings.length < cycle.capacity) throw new Error("HYROX places are still available.");
   const entry = {
     id: uid("hq"), cycleId, userId, kind: "weekly_waitlist", targetSessionId: null,
     venuePreference: preference, fallbackAcknowledgedAt: now, status: "active",
