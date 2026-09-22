@@ -8,6 +8,10 @@ export function campaignTransitionProblem(campaign, fromStatus, toStatus) {
   return null;
 }
 
+export function donationCampaignProblem({ campaign } = {}) {
+  return campaign ? null : "No active Giving campaign";
+}
+
 export function donationOwnerProblem({ user, inputUserId } = {}) {
   if (!user?.id || user.status !== "approved") return "Approved member access required";
   if (inputUserId !== undefined && inputUserId !== user.id) {
