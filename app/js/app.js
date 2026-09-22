@@ -614,6 +614,9 @@ async function render(generation = renderGeneration) {
       out = views.viewReceipt(arg);
       break;
     case "admin":
+      if (isLive() && ["activity", "activities", "payments"].includes(arg)) {
+        await store.hydrateLiveOperations({ force: true });
+      }
       out = arg === "activity"
         ? await views.viewAdminActivity(arg2)
         : arg === "campaign"
