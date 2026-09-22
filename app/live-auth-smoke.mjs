@@ -1518,6 +1518,16 @@ assert.deepEqual(scheduleRealtime.handlers.map((handler) => handler.filter.table
   "operational_activity_templates",
 ], "Schedule realtime must subscribe only to Schedule-owned tables");
 await operations.stopScheduleRealtime();
+const hyroxRealtime = await operations.startHyroxRealtime(() => {});
+assert.equal(hyroxRealtime?.name, "itc-hyrox");
+assert.deepEqual(hyroxRealtime.handlers.map((handler) => handler.filter.table), [
+  "operational_hyrox_cycles",
+  "operational_hyrox_queue_entries",
+  "operational_bookings",
+  "operational_booking_replacement_requests",
+  "operational_booking_replacement_audit",
+], "HYROX realtime must subscribe only to HYROX-owned tables");
+await operations.stopHyroxRealtime();
 const cachedScheduleReadsBefore = operationalTableReadCounts.get("operational_sessions") || 0;
 await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });
 await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });

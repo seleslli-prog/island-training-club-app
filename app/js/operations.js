@@ -66,6 +66,7 @@ const liveCache = {
 const listeners = new Set();
 let subscription = null;
 let scheduleSubscription = null;
+let hyroxSubscription = null;
 
 function notifyListeners() {
   for (const fn of listeners) {
@@ -776,6 +777,26 @@ export async function stopScheduleRealtime() {
   if (!scheduleSubscription || !supabase) return;
   try { await supabase.removeChannel(scheduleSubscription); } catch {}
   scheduleSubscription = null;
+}
+
+export async function startHyroxRealtime(onChange = () => {}) {
+  if (!isLive() || !supabase || hyroxSubscription) return hyroxSubscription;
+  if (typeof supabase.channel !== "function") return null;
+  const channel = supabase.channel("itc-hyrox")
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_cycles" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_queue_entries" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_bookings" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_booking_replacement_requests" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_booking_replacement_audit" }, onChange)
+    .subscribe();
+  hyroxSubscription = channel;
+  return channel;
+}
+
+export async function stopHyroxRealtime() {
+  if (!hyroxSubscription || !supabase) return;
+  try { await supabase.removeChannel(hyroxSubscription); } catch {}
+  hyroxSubscription = null;
 }
 
 export async function startOperationalRealtime() {
