@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
+import { isRsvpOccurrence } from "./js/events-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -18,6 +19,8 @@ globalThis.localStorage = {
 const store = await import("./js/store.js");
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
+assert.equal(isRsvpOccurrence({ kind: "free", requiresRsvp: true, price: 0 }), true);
+assert.equal(isRsvpOccurrence({ kind: "paid", requiresRsvp: true, price: 180 }), false);
 const routeErrorHtml = views.viewRouteError();
 assert.match(routeErrorHtml, /data-route-error/,
   "route failures must render a route-local error panel");
