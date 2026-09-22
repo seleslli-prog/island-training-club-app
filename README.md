@@ -53,7 +53,7 @@ The design review remains available at `http://127.0.0.1:4173/references/itc-mob
 - Private prayer requests use five scoped Supabase RPCs in live mode; preserved device-only prayer rows remain local-mode compatibility data and are never uploaded automatically. Apply and verify migration `20260921000001_prayer_requests.sql` before deploying its frontend; follow the [private prayer deployment, acceptance, and rollback procedure](docs/runbooks/live-auth.md#private-prayer-requests-deployment-acceptance-and-rollback).
 - Giving's `PGRST205` fallback keeps the member route reachable but does not enable donations. Functional Giving requires the ordered schema migrations and a real campaign published through **Admin Tools → Giving**; follow the [Giving schema and campaign recovery steps](docs/runbooks/live-auth.md#giving-schema-and-campaign). No fake campaign data is restored.
 - Administrative testing requires Supabase live mode or the historical `archive/demo` branch. The archive is demonstration-only and must not be used as a production source branch.
-- `app/smoke.mjs` is a headless regression check for the product rules (`node smoke.mjs` from `app/`).
+- `app/smoke.mjs` is a headless regression check for the product rules (`node smoke.mjs` from `app/`). `app/live-auth-smoke.mjs` covers Supabase-fake live contracts, and `app/performance-smoke.mjs` checks scoped hydration/realtime wiring.
 
 ### Deliberately not in the prototype
 
