@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { hyroxRegistrationProblem } from "./hyrox-workflow.js";
+import { hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -2424,11 +2424,8 @@ export function rejectHyroxCyclePayment(bookingId, reason, now = Date.now()) {
   const actor = requirePaymentAdminActor();
   const booking = getBooking(bookingId);
   const cleanReason = String(reason || "").trim();
-  if (!cleanReason) throw new Error("Payment rejection reason is required.");
-  if (!booking?.cycleId) throw new Error("Pooled HYROX booking not found.");
-  if (booking.status !== "reserved" || !booking.paymentMarkedAt) {
-    throw new Error("Booking has no pending payment claim.");
-  }
+  const paymentProblem = hyroxPaymentProblem({ reason: cleanReason, booking });
+  if (paymentProblem) throw new Error(paymentProblem);
   if (now < booking.payDeadlineAt) {
     booking.paymentMarkedAt = null;
     booking.paidMethod = null;

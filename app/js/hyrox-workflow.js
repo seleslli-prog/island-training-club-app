@@ -1,3 +1,12 @@
+export function hyroxPaymentProblem({ reason, booking }) {
+  if (!String(reason || "").trim()) return "Payment rejection reason is required.";
+  if (!booking?.cycleId) return "Pooled HYROX booking not found.";
+  if (booking.status !== "reserved" || !booking.paymentMarkedAt) {
+    return "Booking has no pending payment claim.";
+  }
+  return null;
+}
+
 export function hyroxRegistrationProblem({
   cycle,
   now = Date.now(),

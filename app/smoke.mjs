@@ -9,7 +9,7 @@ import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campaignTransitionProblem } from "./js/giving-workflow.js";
-import { hyroxCycleStatus, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
+import { hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
 import { isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 
 // --- localStorage shim ---
@@ -33,6 +33,8 @@ assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please 
 });
 assert.equal(isAdminRole("super_admin"), true);
 assert.equal(normalizeRole("super_admin"), "superadmin");
+assert.equal(hyroxPaymentProblem({ reason: "  " }), "Payment rejection reason is required.");
+assert.equal(hyroxPaymentProblem({ reason: "Unreadable reference", booking: { cycleId: "cycle-1", status: "reserved", paymentMarkedAt: 1 } }), null);
 assert.equal(hyroxRegistrationProblem({
   cycle: { registrationState: "open", registrationOpensAt: 0, paymentDeadlineAt: 100, capacity: 2 },
   now: 10, preference: "bft", fallbackAcknowledged: true, activeCount: 1, mode: "reserve",
