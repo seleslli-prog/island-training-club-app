@@ -11,7 +11,7 @@ import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, o
 import { campaignIsOpen, findActiveGivingCampaign, campaignRaisedFromDonations, campaignTransitionProblem, buildDonationRecord, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderGivingCampaigns, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxQueueGroups, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
-import { normalizeLocalNotification } from "./js/notification-workflow.js";
+import { normalizeLocalNotification, orderNotificationsForUser } from "./js/notification-workflow.js";
 import { applicationDecisionProblem, filterMembers, isAdminRole, normalizeRole, orderApprovalCandidates } from "./js/admin-workflow.js";
 import { decideReplacementProblem, replacementEligibility, replacementDuplicateForUser, replacementIsHyrox } from "./js/replacement-workflow.js";
 
@@ -102,6 +102,9 @@ assert.deepEqual(normalizeLocalNotification({ id: "n1", body: "Hello", createdAt
   id: "n1", body: "Hello", createdAt: "2026-08-01T00:00:00.000Z", read: false,
   read_at: null, destination: null, created_at: "2026-08-01T00:00:00.000Z",
 });
+assert.deepEqual(orderNotificationsForUser([
+  { id: "old", userId: "u1", createdAt: 1 }, { id: "new", userId: "u1", createdAt: 2 },
+], "u1").map((row) => row.id), ["new", "old"]);
 assert.equal(hyroxRegistrationProblem({
   cycle: { registrationState: "open", registrationOpensAt: 0, paymentDeadlineAt: 100, capacity: 2 },
   now: 10, preference: "bft", fallbackAcknowledged: true, activeCount: 1, mode: "reserve",

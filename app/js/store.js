@@ -34,7 +34,7 @@ import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campa
 import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
-import { normalizeLocalNotification } from "./notification-workflow.js";
+import { normalizeLocalNotification, orderNotificationsForUser } from "./notification-workflow.js";
 import { applicationDecisionProblem, orderApprovalCandidates } from "./admin-workflow.js";
 import { decideReplacementProblem, replacementDuplicateForUser, replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
@@ -1614,9 +1614,7 @@ function activeRsvpNotificationRecipients(sessionId) {
 }
 
 export function notificationsFor(userId) {
-  return state.notifications
-    .filter((n) => n.userId === userId)
-    .sort((a, b) => b.createdAt - a.createdAt);
+  return orderNotificationsForUser(state.notifications, userId);
 }
 
 export function heldBookingsForSession(sessionId) {
