@@ -575,7 +575,7 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
   };
 }
 
-async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false } = {}) {
+async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {
     try {
@@ -604,9 +604,11 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
     skipHyrox
       ? supabase.from("operational_bookings").select("*").is("hyrox_cycle_id", null)
       : supabase.from("operational_bookings").select("*"),
-    supabase.from("operational_queue_entries").select("*")
-      .or("status.eq.active,status.eq.promoted,status.eq.dissolved")
-      .order("joined_at"),
+    skipQueues
+      ? Promise.resolve({ data: [], error: null })
+      : supabase.from("operational_queue_entries").select("*")
+        .or("status.eq.active,status.eq.promoted,status.eq.dissolved")
+        .order("joined_at"),
     skipReceipts
       ? Promise.resolve({ data: [], error: null })
       : supabase.from("operational_receipts").select("*").order("issued_at", { ascending: false }),
@@ -680,7 +682,7 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
       hyroxQueues: (hyroxQueues.data || []).map(buildHyroxQueueRow),
     }),
     bookings: (bookings.data || []).map((row) => buildBookingRow(row, sessionsById)),
-    queues: (queues.data || []).map(buildQueueRow),
+    ...(skipQueues ? {} : { queues: (queues.data || []).map(buildQueueRow) }),
     ...(skipReceipts ? {} : { receipts: (receipts.data || []).map(buildReceiptRow) }),
     assignments: (assignments.data || []).map(buildAssignmentRow),
     payouts: [...payoutRowsByProfile.values()].map(buildPayoutRow),
@@ -711,7 +713,7 @@ export async function ensureLiveSessionWindow() {
   return null;
 }
 
-export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false } = {}) {
+export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (liveCache.loaded && !force) return liveCache;
   if (hydrationPromise) {
@@ -723,7 +725,7 @@ export async function hydrateOperationalState({ force = false, authenticated, sk
   }
   liveCache.loading = Promise.resolve().then(async () => {
     try {
-      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts });
+      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts, skipQueues });
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
@@ -1084,6 +1086,18 @@ export async function liveAttendeeNamesForSession(sessionId) {
   return (data || [])
     .map((row) => String(row.display_name || "").trim())
     .filter(Boolean);
+}
+
+export async function ensureLiveQueueForSession(sessionId) {
+  if (!isLive() || !supabase) return liveQueueForSession(sessionId);
+  const result = await supabase
+    .from("operational_queue_entries")
+    .select("*")
+    .eq("session_id", sessionId);
+  if (result.error) throw operationalProblem(result.error);
+  const rows = (result.data || []).map(buildQueueRow);
+  liveCache.queues = mergeLiveRows(liveCache.queues, rows);
+  return liveQueueForSession(sessionId);
 }
 
 export function liveQueueForSession(sessionId) {

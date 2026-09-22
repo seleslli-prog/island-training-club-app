@@ -533,6 +533,7 @@ async function render(generation = renderGeneration) {
       break;
     }
     case "activity": {
+      await store.ensureQueueData(arg);
       const session = store.getSession(arg);
       const viewer = store.currentUser();
       let attendeeNames;
