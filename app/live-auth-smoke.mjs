@@ -1527,6 +1527,12 @@ assert.deepEqual(hyroxRealtime.handlers.map((handler) => handler.filter.table), 
   "operational_booking_replacement_requests",
   "operational_booking_replacement_audit",
 ], "HYROX realtime must subscribe only to HYROX-owned tables");
+const scopedCycleRow = structuredClone(operationalTableRows.operational_hyrox_cycles[0]);
+scopedCycleRow.id = "scoped-realtime-cycle";
+hyroxRealtime.handlers[0].handler({ eventType: "INSERT", new: scopedCycleRow, old: null });
+assert.equal(operations.getLiveHyroxCycle(scopedCycleRow.id)?.id, scopedCycleRow.id);
+hyroxRealtime.handlers[0].handler({ eventType: "DELETE", new: null, old: scopedCycleRow });
+assert.equal(operations.getLiveHyroxCycle(scopedCycleRow.id), null);
 await operations.stopHyroxRealtime();
 const cachedScheduleReadsBefore = operationalTableReadCounts.get("operational_sessions") || 0;
 await store.scheduleWindow({ startDate: new Date("2026-08-09T00:00:00"), days: 7, viewer: { id: authUser.id, status: "approved" } });

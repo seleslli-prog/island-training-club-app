@@ -780,15 +780,53 @@ export async function stopScheduleRealtime() {
   scheduleSubscription = null;
 }
 
+function reconcileHyroxRealtime(table, payload, onChange) {
+  const row = payload?.new || payload?.old || null;
+  const deleted = payload?.eventType === "DELETE";
+  if (table === "operational_hyrox_cycles" && row?.id) {
+    if (deleted) liveCache.hyroxCycles.delete(row.id);
+    else liveCache.hyroxCycles.set(row.id, buildHyroxCycleRow(row));
+  }
+  if (table === "operational_hyrox_queue_entries" && row?.id) {
+    const index = liveCache.hyroxQueues.findIndex((entry) => entry.id === row.id);
+    if (deleted) {
+      if (index >= 0) liveCache.hyroxQueues.splice(index, 1);
+    } else {
+      const next = buildHyroxQueueRow(row);
+      if (index >= 0) liveCache.hyroxQueues[index] = next;
+      else liveCache.hyroxQueues.push(next);
+    }
+  }
+  if (table === "operational_bookings" && row?.id) {
+    const index = liveCache.bookings.findIndex((booking) => booking.id === row.id);
+    if (deleted) {
+      if (index >= 0) liveCache.bookings.splice(index, 1);
+    } else {
+      const next = buildBookingRow(row);
+      if (index >= 0) liveCache.bookings[index] = next;
+      else liveCache.bookings.push(next);
+    }
+  }
+  if (table === "operational_booking_replacement_requests" && row?.id) {
+    if (deleted) {
+      liveCache.replacementRequests = liveCache.replacementRequests
+        .filter((request) => request.requestId !== row.id);
+    } else {
+      cacheReplacementRequest(row);
+    }
+  }
+  onChange(payload);
+}
+
 export async function startHyroxRealtime(onChange = () => {}) {
   if (!isLive() || !supabase || hyroxSubscription) return hyroxSubscription;
   if (typeof supabase.channel !== "function") return null;
   const channel = supabase.channel("itc-hyrox")
-    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_cycles" }, onChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_queue_entries" }, onChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "operational_bookings" }, onChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "operational_booking_replacement_requests" }, onChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "operational_booking_replacement_audit" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_cycles" }, (payload) => reconcileHyroxRealtime("operational_hyrox_cycles", payload, onChange))
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_hyrox_queue_entries" }, (payload) => reconcileHyroxRealtime("operational_hyrox_queue_entries", payload, onChange))
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_bookings" }, (payload) => reconcileHyroxRealtime("operational_bookings", payload, onChange))
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_booking_replacement_requests" }, (payload) => reconcileHyroxRealtime("operational_booking_replacement_requests", payload, onChange))
+    .on("postgres_changes", { event: "*", schema: "public", table: "operational_booking_replacement_audit" }, (payload) => onChange(payload))
     .subscribe();
   hyroxSubscription = channel;
   return channel;
