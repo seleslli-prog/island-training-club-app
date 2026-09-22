@@ -29,6 +29,7 @@ import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
+import { isRsvpOccurrence } from "./events-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -3421,7 +3422,7 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
   requireAuthorizedPaymentOwner(userId);
   const session = getSession(sessionId);
   if (!session) throw new Error("Unknown session");
-  if (!sessionRequiresRsvp(session) || Number(session.price ?? 0) > 0) {
+  if (!isRsvpOccurrence(session)) {
     throw new Error("Session is not an RSVP event");
   }
   if (session.cancelled) throw new Error("Session is cancelled");
@@ -3466,7 +3467,7 @@ export async function withdrawRsvp(bookingId, now = Date.now()) {
   if (!booking || booking.status !== "confirmed") return null;
   const session = getSession(booking.sessionId);
   if (!session) throw new Error("Session not found.");
-  if (!sessionRequiresRsvp(session) || Number(booking.snapshot?.price) > 0) return null;
+  if (!isRsvpOccurrence({ ...session, price: booking.snapshot?.price })) return null;
   requireAuthorizedPaymentOwner(booking.userId);
   const startsAt = hktEventStartMs(session.dateISO, session.time);
   if (!Number.isFinite(startsAt) || startsAt <= now) {
