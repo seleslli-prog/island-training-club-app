@@ -8,6 +8,23 @@ export function campaignTransitionProblem(campaign, fromStatus, toStatus) {
   return null;
 }
 
+export function buildDonationRecord({ id, userId, input = {}, campaign, now = Date.now() }) {
+  return {
+    id,
+    userId,
+    name: String(input.name).trim(),
+    amount: Math.round(Number(input.amount)),
+    currency: "HKD",
+    campaignId: campaign.id,
+    campaignTitle: campaign.title,
+    method: "FPS",
+    ref: String(input.ref || "").trim(),
+    note: String(input.note ?? "").trim(),
+    status: "pending",
+    createdAt: now,
+  };
+}
+
 export function donationForReference(donations, campaignId, reference) {
   if (!campaignId || !reference) return null;
   return (donations || []).find((donation) => donation.campaignId === campaignId

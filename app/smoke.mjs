@@ -8,7 +8,7 @@ import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
-import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
+import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, buildDonationRecord, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxQueueGroups, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
@@ -114,6 +114,9 @@ assert.equal(donationOwnerProblem({ user: null }), "Approved member access requi
 assert.equal(donationCampaignProblem({ campaign: null }), "No active Giving campaign");
 assert.equal(donationCampaignProblem({ campaign: { status: "published" } }), null);
 assert.equal(donationForReference([{ id: "d1", campaignId: "c1", ref: "FPS-1" }], "c1", "FPS-1")?.id, "d1");
+assert.deepEqual(buildDonationRecord({ id: "d1", userId: "u1", input: { name: " Ada ", amount: "25", ref: "FPS-1", note: " Thanks " }, campaign: { id: "c1", title: "Appeal" }, now: 10 }), {
+  id: "d1", userId: "u1", name: "Ada", amount: 25, currency: "HKD", campaignId: "c1", campaignTitle: "Appeal", method: "FPS", ref: "FPS-1", note: "Thanks", status: "pending", createdAt: 10,
+});
 assert.deepEqual(orderDonationsForUser([
   { id: "old", userId: "u1", createdAt: 1 }, { id: "new", userId: "u1", createdAt: 2 },
 ], "u1").map((row) => row.id), ["new", "old"]);
