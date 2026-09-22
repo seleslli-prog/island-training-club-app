@@ -123,6 +123,7 @@ function localScheduleWindow(startISO, endISO, viewer = null) {
   return { sessions, cycles, viewerBookings, heldBookingCounts, rsvpCounts };
 }
 
+let stopScheduleOperationsSubscription = null;
 const liveScheduleWindows = createLiveResource((key) => {
   const { startISO, endISO, viewerId } = JSON.parse(key);
   return liveOps.liveScheduleWindow(startISO, endISO, viewerId);
@@ -265,6 +266,9 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
   if (authenticated) await liveOps.liveSweepHyroxDeadlines({ refresh: false });
   await liveOps.hydrateOperationalState({ force, authenticated });
   await liveOps.startOperationalRealtime();
+  if (!stopScheduleOperationsSubscription) {
+    stopScheduleOperationsSubscription = liveOps.subscribeOperationalState(() => invalidateScheduleWindows());
+  }
   return liveOps.operationalStateStatus();
 }
 
@@ -4412,6 +4416,8 @@ export async function getCurrentUser() {
     clearAvatarCache();
     liveApplications.clear();
     liveScheduleWindows.clear();
+    stopScheduleOperationsSubscription?.();
+    stopScheduleOperationsSubscription = null;
     liveSessionCache.clear();
     return null;
   }
@@ -4420,6 +4426,8 @@ export async function getCurrentUser() {
     clearAvatarCache();
     liveApplications.clear();
     liveScheduleWindows.clear();
+    stopScheduleOperationsSubscription?.();
+    stopScheduleOperationsSubscription = null;
     liveSessionCache.clear();
   }
   let liveProfile = liveSessionCache.profile();
@@ -4486,6 +4494,8 @@ export async function signOutLive() {
   clearAvatarCache();
   liveApplications.clear();
   liveScheduleWindows.clear();
+  stopScheduleOperationsSubscription?.();
+  stopScheduleOperationsSubscription = null;
   liveSessionCache.clear();
   livePaymentDirectory = new Map();
   const { error } = await supabase.auth.signOut();
