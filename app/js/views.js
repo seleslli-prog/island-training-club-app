@@ -7,7 +7,6 @@
 
 import * as store from "./store.js";
 import { isLive } from "./config.js";
-import * as liveOps from "./operations.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
 import { projectHomeWeek } from "./home-workflow.js";
@@ -2353,9 +2352,7 @@ export async function viewReplacementInvite(token) {
 
   let request = null;
   try {
-    request = isLive()
-      ? await liveOps.liveReplacementInvite(await liveOps.hashReplacementToken(inviteToken))
-      : store.replacementInviteForToken(inviteToken);
+    request = await store.replacementInvite(inviteToken);
   } catch {
     request = null;
   }

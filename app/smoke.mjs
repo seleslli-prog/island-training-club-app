@@ -8264,6 +8264,8 @@ const replacementRequest = await store.createReplacementRequest(replacementBooki
 assert.equal(replacementRequest.status, "pending");
 assert.ok(replacementRequest.inviteToken);
 assert.equal(store.replacementInviteForToken(replacementRequest.inviteToken).inviteToken, undefined);
+assert.equal((await store.replacementInvite(replacementRequest.inviteToken)).inviteToken, undefined,
+  "replacement invite reads must use the Store workflow facade");
 const pendingBookingHtml = views.viewBooking(replacementBooking.id);
 assert.match(pendingBookingHtml, /Share via WhatsApp/);
 assert.match(pendingBookingHtml, /wa\.me/);

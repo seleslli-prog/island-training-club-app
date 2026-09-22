@@ -1356,6 +1356,14 @@ export function replacementInviteForToken(token) {
   return redacted;
 }
 
+export async function replacementInvite(token) {
+  if (isLive()) {
+    const hash = await liveOps.hashReplacementToken(token);
+    return liveOps.liveReplacementInvite(hash);
+  }
+  return replacementInviteForToken(token);
+}
+
 export function replacementAuditForRequest(requestId) {
   if (isLive()) return [];
   return state.replacementAudit.filter((entry) => entry.requestId === requestId);
