@@ -9,6 +9,7 @@ import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields } from "./js/giving-workflow.js";
+import { hyroxCycleStatus } from "./js/hyrox-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -26,6 +27,10 @@ assert.throws(() => validatePrayerText(""), /between 1 and 2,000/);
 assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please pray", status: "prayed_for" }), {
   id: "prayer-1", request: "Please pray", anonymousToLeaders: false, status: "prayed_for",
   createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,
+});
+assert.deepEqual(hyroxCycleStatus({ registrationState: "cancelled" }, 0), { label: "Cancelled", className: "danger" });
+assert.deepEqual(hyroxCycleStatus({ registrationState: "open", registrationOpensAt: 100 }, 0), {
+  label: "Sign up opens Monday at 6 PM HKT", compactLabel: "Opens Mon · 6 PM", className: "neutral",
 });
 assert.equal(campaignIsOpen({ status: "published" }), true);
 assert.deepEqual(validateCampaignFields({ title: "  Appeal ", description: " Help ", goalHKD: "1200", fpsId: "FPS-1", fpsPayee: "ITC" }), {
