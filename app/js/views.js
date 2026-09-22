@@ -2620,11 +2620,11 @@ export function viewNotFound(msg = "Page not found.") {
   </div></div>`;
 }
 
-export function viewRouteError() {
+export function viewRouteError(action = "retry-route") {
   return `<section class="card" data-route-error><div class="card-body">
     <p class="kicker">Unable to load</p>
     <h1 class="display">We couldn’t load this page. Please try again.</h1>
-    <button class="btn mt16" type="button" data-action="retry-route">Retry</button>
+    <button class="btn mt16" type="button" data-action="${esc(action)}">Retry</button>
   </div></section>`;
 }
 

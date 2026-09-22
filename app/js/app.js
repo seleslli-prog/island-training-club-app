@@ -443,7 +443,8 @@ function renderNotificationChrome(user, active, generation, rowsPromise = null) 
 function commitRouteError() {
   const [page] = parseHash();
   const user = store.currentUser();
-  viewEl.innerHTML = views.viewRouteError();
+  const retryAction = ["home", "schedule"].includes(page) ? "retry-schedule-window" : "retry-route";
+  viewEl.innerHTML = views.viewRouteError(retryAction);
   navEl.innerHTML = views.navHTML(NAV_FOR[page] ?? "home", user);
   avatarEl.classList.toggle("is-empty", !user);
   avatarEl.innerHTML = views.avatarHTML(user);
@@ -840,6 +841,7 @@ document.addEventListener("click", async (e) => {
 
   switch (action) {
     case "retry-route":
+    case "retry-schedule-window":
       try {
         await withBusyControl(el, "Retrying…", () => renderWithFeedback());
       } catch {

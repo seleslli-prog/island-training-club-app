@@ -2248,6 +2248,8 @@ try {
 }
 
 const appSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
+assert.match(appSource, /retry-schedule-window/,
+  "Home and Schedule route failures must expose a dedicated schedule-window retry action");
 assert.match(appSource, /form\.dataset\.form === "apply"/);
 assert.match(appSource, /payload\.waiver = !!fd\.get\("waiver"\)/);
 assert.match(appSource, /await store\.saveMyApplication\(payload\)/);
