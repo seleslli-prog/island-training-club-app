@@ -30,6 +30,13 @@ export function createSessionCache() {
       viewer = nextViewer;
       fetchedAt = nextFetchedAt;
     },
+    setProfile(nextProfile, nextFetchedAt = Date.now()) {
+      profile = nextProfile;
+      fetchedAt = nextFetchedAt;
+    },
+    setViewer(nextViewer) {
+      viewer = nextViewer;
+    },
     clear() {
       profile = null;
       viewer = null;

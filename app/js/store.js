@@ -28,7 +28,7 @@ import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
-import { normalizeLiveViewer } from "./session-workflow.js";
+import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -66,9 +66,7 @@ const RESTORABLE_ROUTE_PATTERNS = [
 // Live-mode (Supabase) session cache. Avoids hammering the DB on every
 // page load. The TTL is short so role flips and welcome notifications
 // surface promptly after the admin takes an action.
-let liveProfile = null;
-let liveUser = null;
-let liveProfileFetchedAt = 0;
+const liveSessionCache = createSessionCache();
 let liveGivingCampaign = null;
 // Supabase remains the identity directory. Payment Ops caches live profiles
 // in memory only; device-local persistence stores UUID-keyed operations.
@@ -753,7 +751,7 @@ export function attendanceWindowForSession(session, now = Date.now()) {
 // --- Session / auth ----------------------------------------------------------
 
 export function currentUser() {
-  if (isLive()) return liveUser;
+  if (isLive()) return liveSessionCache.currentUser();
   if (!state.sessionUserId) return null;
   return state.users.find((u) => u.id === state.sessionUserId) ?? null;
 }
@@ -4442,17 +4440,17 @@ export async function getCurrentUser() {
   if (sessErr || !sessData.session) {
     clearAvatarCache();
     liveApplications.clear();
-    liveUser = null;
+    liveSessionCache.clear();
     return null;
   }
   const authUser = sessData.session.user;
-  if (liveUser?.id && liveUser.id !== authUser.id) {
+  if (liveSessionCache.currentUser()?.id && liveSessionCache.currentUser().id !== authUser.id) {
     clearAvatarCache();
     liveApplications.clear();
-    liveProfile = null;
-    liveProfileFetchedAt = 0;
+    liveSessionCache.clear();
   }
-  if (!liveProfile || Date.now() - liveProfileFetchedAt > LIVE_PROFILE_TTL_MS) {
+  let liveProfile = liveSessionCache.profile();
+  if (!liveProfile || Date.now() - liveSessionCache.fetchedAt() > LIVE_PROFILE_TTL_MS) {
     const { data: prof, error: profErr } = await supabase
       .from("profiles")
       .select("*")
@@ -4471,9 +4469,10 @@ export async function getCurrentUser() {
       avatar_url: authUser.user_metadata?.avatar_url || null,
       role: "pending",
     };
-    liveProfileFetchedAt = Date.now();
+    liveSessionCache.setProfile(liveProfile);
   }
-  liveUser = normalizeLiveViewer(liveProfile);
+  const liveUser = normalizeLiveViewer(liveProfile);
+  liveSessionCache.setViewer(liveUser);
   livePaymentDirectory.set(liveUser.id, normalizePaymentUser(liveUser));
   if (liveUser.status !== "approved") clearAvatarCache();
   return liveUser;
@@ -4513,9 +4512,7 @@ export async function signOutLive() {
   if (!isLive() || !supabase) return signOut();
   clearAvatarCache();
   liveApplications.clear();
-  liveProfile = null;
-  liveUser = null;
-  liveProfileFetchedAt = 0;
+  liveSessionCache.clear();
   livePaymentDirectory = new Map();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
@@ -4756,8 +4753,7 @@ export async function saveMyApplication(form) {
     .single();
   if (profileError) throw profileError;
   if (!savedProfile) throw new Error("Unable to save your full name");
-  liveProfile = savedProfile;
-  liveProfileFetchedAt = Date.now();
+  liveSessionCache.setProfile(savedProfile);
   await getCurrentUser();
 
   const { error } = await supabase.from("applications").upsert(row);
