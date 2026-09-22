@@ -34,6 +34,7 @@ import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, val
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
 import { paymentStateForBooking } from "./payment-workflow.js";
+import { normalizeLocalNotification } from "./notification-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -4934,18 +4935,6 @@ export async function decideApplication(profileId, decision) {
 }
 
 
-
-function normalizeLocalNotification(notification) {
-  const created = new Date(notification?.createdAt);
-  const createdAt = Number.isNaN(created.getTime()) ? null : created.toISOString();
-  return {
-    ...notification,
-    body: notification?.body ?? notification?.message ?? "",
-    read_at: notification?.read ? (createdAt || new Date(0).toISOString()) : null,
-    destination: notification?.link ?? notification?.destination ?? null,
-    created_at: createdAt,
-  };
-}
 
 export async function listMyNotifications() {
   if (!isLive() || !supabase) {

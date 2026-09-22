@@ -11,6 +11,7 @@ import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from 
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campaignTransitionProblem } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
 import { paymentStateForBooking } from "./js/payment-workflow.js";
+import { normalizeLocalNotification } from "./js/notification-workflow.js";
 import { isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 
 // --- localStorage shim ---
@@ -42,6 +43,10 @@ assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart - 15 
 assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart).state, "open");
 assert.equal(paymentStateForBooking({ status: "reserved", paymentMarkedAt: null }), "payment_due");
 assert.equal(paymentStateForBooking({ status: "reserved", paymentMarkedAt: 1 }), "awaiting_confirmation");
+assert.deepEqual(normalizeLocalNotification({ id: "n1", body: "Hello", createdAt: "2026-08-01T00:00:00.000Z", read: false }), {
+  id: "n1", body: "Hello", createdAt: "2026-08-01T00:00:00.000Z", read: false,
+  read_at: null, destination: null, created_at: "2026-08-01T00:00:00.000Z",
+});
 assert.equal(hyroxRegistrationProblem({
   cycle: { registrationState: "open", registrationOpensAt: 0, paymentDeadlineAt: 100, capacity: 2 },
   now: 10, preference: "bft", fallbackAcknowledged: true, activeCount: 1, mode: "reserve",
