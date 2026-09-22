@@ -534,6 +534,7 @@ async function render(generation = renderGeneration) {
     }
     case "activity": {
       await store.ensureQueueData(arg);
+      await store.ensureCollectorData(arg);
       const session = store.getSession(arg);
       const viewer = store.currentUser();
       let attendeeNames;
@@ -590,6 +591,7 @@ async function render(generation = renderGeneration) {
       break;
     case "pay": {
       const booking = await store.ensureBookingData(arg);
+      await store.ensureCollectorData(booking?.sessionId);
       if (isLive() && routeUser?.status === "approved" && !booking?.cycleId) {
         await store.hydrateLiveOperations({ force: true });
       }

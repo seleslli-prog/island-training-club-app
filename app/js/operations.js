@@ -381,10 +381,10 @@ function replaceState(payload) {
   if (payload.bookings) liveCache.bookings = payload.bookings;
   if (payload.queues) liveCache.queues = payload.queues;
   if (payload.receipts) liveCache.receipts = payload.receipts;
-  liveCache.assignments = new Map(
+  if (payload.assignments) liveCache.assignments = new Map(
     payload.assignments.map((row) => [row.saturdayISO, row])
   );
-  liveCache.payout = new Map(
+  if (payload.payouts) liveCache.payout = new Map(
     payload.payouts.map((row) => [row.profileId, row])
   );
   liveCache.venueOverrides = new Map(
@@ -575,7 +575,7 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
   };
 }
 
-async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false } = {}) {
+async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {
     try {
@@ -612,9 +612,9 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
     skipReceipts
       ? Promise.resolve({ data: [], error: null })
       : supabase.from("operational_receipts").select("*").order("issued_at", { ascending: false }),
-    supabase.from("collector_assignments").select("*"),
-    supabase.from("collector_payout_profiles").select("*"),
-    fetchAssignedPayoutRows(),
+    skipCollectorOps ? Promise.resolve({ data: [], error: null }) : supabase.from("collector_assignments").select("*"),
+    skipCollectorOps ? Promise.resolve({ data: [], error: null }) : supabase.from("collector_payout_profiles").select("*"),
+    skipCollectorOps ? Promise.resolve({ rows: [], error: null }) : fetchAssignedPayoutRows(),
     supabase.from("operational_activity_templates").select("*").order("activity_id"),
     supabase.from("operational_session_venue_overrides").select("*"),
     fetchRsvpCounts(),
@@ -684,9 +684,11 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
     bookings: (bookings.data || []).map((row) => buildBookingRow(row, sessionsById)),
     ...(skipQueues ? {} : { queues: (queues.data || []).map(buildQueueRow) }),
     ...(skipReceipts ? {} : { receipts: (receipts.data || []).map(buildReceiptRow) }),
-    assignments: (assignments.data || []).map(buildAssignmentRow),
-    payouts: [...payoutRowsByProfile.values()].map(buildPayoutRow),
-    payoutError: assignedPayouts.error,
+    ...(skipCollectorOps ? {} : {
+      assignments: (assignments.data || []).map(buildAssignmentRow),
+      payouts: [...payoutRowsByProfile.values()].map(buildPayoutRow),
+      payoutError: assignedPayouts.error,
+    }),
     venueOverrides: (venueOverrides.data || []).map(buildVenueOverrideRow),
     rsvpCounts: rsvpCounts.rows,
     rsvpCountError: rsvpCounts.error,
@@ -713,7 +715,7 @@ export async function ensureLiveSessionWindow() {
   return null;
 }
 
-export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false } = {}) {
+export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (liveCache.loaded && !force) return liveCache;
   if (hydrationPromise) {
@@ -725,7 +727,7 @@ export async function hydrateOperationalState({ force = false, authenticated, sk
   }
   liveCache.loading = Promise.resolve().then(async () => {
     try {
-      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts, skipQueues });
+      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps });
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
@@ -1108,6 +1110,39 @@ export function liveQueueForSession(sessionId) {
     .filter((q) => q.sessionId === sessionId && q.status === "active" && q.kind === "interest")
     .sort((a, b) => a.joinedAt - b.joinedAt);
   return { waitlist, interest };
+}
+
+export async function ensureLiveCollectorForSession(sessionId) {
+  if (!isLive() || !supabase) return null;
+  const session = liveCache.sessions.get(sessionId);
+  const saturdayISO = session?.dateISO || null;
+  if (!saturdayISO) return null;
+  if (!liveCache.assignments.has(saturdayISO)) {
+    const assignmentResult = await supabase
+      .from("collector_assignments")
+      .select("*")
+      .eq("week_start", saturdayISO)
+      .maybeSingle();
+    if (assignmentResult.error) throw operationalProblem(assignmentResult.error);
+    if (assignmentResult.data) {
+      const assignment = buildAssignmentRow(assignmentResult.data);
+      liveCache.assignments.set(assignment.saturdayISO, assignment);
+    }
+  }
+  const assignment = liveCache.assignments.get(saturdayISO);
+  if (assignment && !liveCache.payout.has(assignment.userId)) {
+    const payoutResult = await supabase
+      .from("collector_payout_profiles")
+      .select("*")
+      .eq("profile_id", assignment.userId)
+      .maybeSingle();
+    if (payoutResult.error) throw operationalProblem(payoutResult.error);
+    if (payoutResult.data) {
+      const payout = buildPayoutRow(payoutResult.data);
+      liveCache.payout.set(payout.profileId, payout);
+    }
+  }
+  return assignment || null;
 }
 
 export function liveAssigneeForWeek(saturdayISO) {

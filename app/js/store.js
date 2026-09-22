@@ -256,7 +256,7 @@ export function load() {
   return state;
 }
 
-export async function hydrateLiveOperations({ ensureWindow = false, force = false, skipHyrox = false, skipReceipts = false, skipQueues = false } = {}) {
+export async function hydrateLiveOperations({ ensureWindow = false, force = false, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false } = {}) {
   if (!isLive()) return null;
   if (ensureWindow) {
     try {
@@ -273,7 +273,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
     authenticated = false;
   }
   if (authenticated) await liveOps.liveSweepHyroxDeadlines({ refresh: false });
-  await liveOps.hydrateOperationalState({ force, authenticated, skipHyrox, skipReceipts, skipQueues });
+  await liveOps.hydrateOperationalState({ force, authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps });
   await liveOps.startHyroxRealtime(() => invalidateScheduleWindows());
   await liveOps.startOperationalRealtime();
   if (!stopScheduleOperationsSubscription) {
@@ -284,7 +284,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
 
 export async function warmOperationalState() {
   try {
-    await hydrateLiveOperations({ ensureWindow: true, skipHyrox: true, skipReceipts: true, skipQueues: true });
+    await hydrateLiveOperations({ ensureWindow: true, skipHyrox: true, skipReceipts: true, skipQueues: true, skipCollectorOps: true });
     return { ok: true, error: null };
   } catch (error) {
     return { ok: false, error };
@@ -1592,6 +1592,11 @@ export async function ensureBookingData(bookingId) {
 
 export async function ensureQueueData(sessionId) {
   if (isLive()) return liveOps.ensureLiveQueueForSession(sessionId);
+  return null;
+}
+
+export async function ensureCollectorData(sessionId) {
+  if (isLive()) return liveOps.ensureLiveCollectorForSession(sessionId);
   return null;
 }
 
