@@ -30,7 +30,7 @@
 | `app/js/live-resource.js` | Pure keyed asynchronous resource cache with explicit invalidation; no DOM, Supabase, localStorage, or workflow imports. |
 | `app/js/schedule-workflow.js` | Schedule-window interface and local/live adapter composition; returns only visible schedule rows and viewer booking display state. |
 | `app/js/operations.js` | Narrow live Schedule read adapter and its row normalization, without invoking global cache hydration. |
-| `app/js/store.js` | Compatibility facade: application cache invalidation, cached avatar read, and Schedule workflow construction/export. |
+| `app/js/store.js` | Compatibility facade: application cache invalidation and Schedule workflow construction/export. |
 | `app/js/views.js` | Home/Schedule consume the Schedule facade only; no direct `liveOps` import. |
 | `app/js/app.js` | Route timing marks, non-blocking startup work, route-local Schedule error/retry state, and no unconditional application/avatar waits on ordinary navigation. |
 | `app/smoke.mjs` | Local workflow and Home/Schedule regression coverage. |
@@ -151,20 +151,22 @@ git add app/js/live-resource.js app/live-auth-smoke.mjs
 git commit -m "feat: add keyed live resource cache"
 ```
 
-## Task 2: Cache Membership application and avatar reads behind Store compatibility functions
+## Task 2: Cache Membership application reads behind the Store compatibility facade
 
 **Files:**
-- Modify: `app/js/store.js: live auth/profile/application helpers and avatar getters`
+- Modify: `app/js/store.js: live auth/profile/application helpers`
+- Modify: `app/js/app.js: ordinary route pre-render hydration`
 - Modify: `app/live-auth-smoke.mjs`
 
 **Interfaces:**
-- Consumes: `createLiveResource`, the existing `fetchApplicationForUser(user)`, `getOwnAvatar()`, application/profile mutation functions, and live auth transitions.
-- Produces: unchanged `fetchApplicationForUser(user, options?)` and `getOwnAvatar(options?)`; add `invalidateLiveApplication(profileId?)` and `invalidateOwnAvatar()` for Store-internal callers.
-- Mutation rule: successful application/profile/avatar writes invalidate their corresponding cached resource before the next read; sign-out clears both resources.
+- Consumes: `createLiveResource`, the existing `fetchApplicationForUser(user)`, application/profile mutation functions, and live auth transitions.
+- Produces: unchanged `fetchApplicationForUser(user, options?)`; add `invalidateLiveApplication(profileId?)` for Store-internal callers.
+- Mutation rule: successful application/profile writes invalidate their corresponding cached application before the next read; sign-out clears the application resource.
+- Existing avatar cache and avatar rendering behaviour remain unchanged in this slice.
 
-- [ ] **Step 1: Add failing application/own-avatar cache tests**
+- [ ] **Step 1: Add a failing application cache test**
 
-In the existing fake Supabase setup, count `applications` and avatar-table selects. Make three sequential `store.fetchApplicationForUser(authUser)` calls and assert one select occurs. Call the existing membership-details save path, then call `fetchApplicationForUser(authUser)` again and assert a second select occurs.
+In the existing fake Supabase setup, count `applications` selects. Make three sequential `store.fetchApplicationForUser(authUser)` calls and assert one select occurs. Call the existing membership-details save path, then call `fetchApplicationForUser(authUser)` again and assert a second select occurs.
 
 Use this assertion shape:
 
@@ -180,8 +182,6 @@ await store.fetchApplicationForUser(authUser);
 assert.equal(applicationSelectCount - applicationReadsBefore, 2,
   "a successful membership update must invalidate cached application data");
 ```
-
-Add the equivalent own-avatar assertion: two unchanged reads issue one select, while a successful avatar save or removal makes the next read issue one additional select.
 
 - [ ] **Step 2: Run the targeted live smoke assertions and verify they fail**
 
@@ -219,13 +219,12 @@ for local mode, missing user, and no application.
 Implement `invalidateLiveApplication(profileId)` and call it immediately after
 successful `saveMyApplication`, `updateMyMembershipDetails`,
 `updateMyPrivacyPreferences`, acceptance writes that update application fields,
-and role/session transitions that make the old viewer invalid. Apply the same
-pattern to the existing avatar reader and its successful mutation paths.
+and role/session transitions that make the old viewer invalid.
 
-Do not cache rejected responses. Do not write these live resources to
-localStorage.
+Do not cache rejected responses. Do not write this live resource to
+localStorage. Do not modify the existing avatar cache or avatar rendering.
 
-- [ ] **Step 4: Remove unconditional application/avatar waits from ordinary route commits**
+- [ ] **Step 4: Remove unconditional application waits from ordinary route commits**
 
 In `app.js`, preserve application reads only for routes that render application
 fields (`apply`, `account`, Admin approvals) or immediately follow a successful
@@ -242,10 +241,8 @@ with identity refresh only:
 await store.getCurrentUser();
 ```
 
-Do not remove route-specific reads inside the Membership views. Replace the
-unconditional post-render `await store.getOwnAvatar()` with cached `peek` data
-for the current route, then request avatar refresh only after avatar mutation or
-session change.
+Do not remove route-specific reads inside the Membership views. Preserve the
+existing post-render avatar read and its cache/rendering behaviour.
 
 - [ ] **Step 5: Run both regression suites**
 
@@ -260,12 +257,12 @@ node app/live-auth-smoke.mjs
 Expected: PASS. The live suite must prove no application query occurs during an
 unchanged Home → Schedule → Community → Account navigation sequence.
 
-- [ ] **Step 6: Commit application/avatar cache isolation**
+- [ ] **Step 6: Commit application cache isolation**
 
 ```sh
 cd .worktrees/main
 git add app/js/store.js app/js/app.js app/live-auth-smoke.mjs
-git commit -m "perf: cache route membership resources"
+git commit -m "perf: cache route membership application"
 ```
 
 ## Task 3: Add a narrow Schedule-window workflow and remove view-level operational reads
