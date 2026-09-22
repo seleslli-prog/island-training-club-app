@@ -142,6 +142,13 @@ export function invalidateScheduleWindows() {
   liveScheduleWindows.clear();
 }
 
+function afterScheduleMutation(promise) {
+  return promise.then((result) => {
+    invalidateScheduleWindows();
+    return result;
+  });
+}
+
 export function scheduleWindow(options) {
   return scheduleWorkflow.loadWindow(options);
 }
@@ -1732,7 +1739,7 @@ function snapshotFor(session) {
 export function reserveSession(userId, sessionOrId, now = Date.now()) {
   if (isLive()) {
     const sessionId = typeof sessionOrId === "string" ? sessionOrId : sessionOrId?.id;
-    return liveOps.liveReserveSession(sessionId);
+    return afterScheduleMutation(liveOps.liveReserveSession(sessionId));
   }
   requireAuthorizedPaymentOwner(userId);
   return reserveApprovedSession(userId, sessionOrId, now);
@@ -1791,7 +1798,7 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
 export function markBookingPaid(bookingId, method, ref, now = Date.now()) {
   if (isLive()) {
     const normalized = method === "FPS" ? "fps" : "payme";
-    return liveOps.liveMarkBookingPaid(bookingId, normalized, ref);
+    return afterScheduleMutation(liveOps.liveMarkBookingPaid(bookingId, normalized, ref));
   }
   const b = getBooking(bookingId);
   if (!b || b.status !== "reserved" || b.paymentMarkedAt) return null;
@@ -1825,7 +1832,7 @@ export function markBookingPaid(bookingId, method, ref, now = Date.now()) {
 // HYROX venue hold the member had for the same Saturday is released.
 export function confirmBookingPayment(bookingId, now = Date.now()) {
   if (isLive()) {
-    return liveOps.liveApproveBookingPayment(bookingId);
+    return afterScheduleMutation(liveOps.liveApproveBookingPayment(bookingId));
   }
   const b = getBooking(bookingId);
   if (!b || b.status !== "reserved" || !b.paymentMarkedAt) return null;
@@ -1895,7 +1902,7 @@ export function confirmBookingPayment(bookingId, now = Date.now()) {
 // cancellation/refund remains an Admin operation while policy is unresolved.
 export function releaseReservation(bookingId, now = Date.now()) {
   if (isLive()) {
-    return liveOps.liveReleaseReservation(bookingId);
+    return afterScheduleMutation(liveOps.liveReleaseReservation(bookingId));
   }
   const booking = getBooking(bookingId);
   if (!booking || booking.status !== "reserved" || booking.paymentMarkedAt) return null;
@@ -3422,7 +3429,7 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
   const sessionId = typeof sessionOrId === "string" ? sessionOrId : sessionOrId?.id;
   if (isLive()) {
     // The reserve RPC branches on price_hkd = 0 and confirms immediately.
-    return liveOps.liveReserveSession(sessionId);
+    return afterScheduleMutation(liveOps.liveReserveSession(sessionId));
   }
   requireAuthorizedPaymentOwner(userId);
   const session = getSession(sessionId);
@@ -3466,7 +3473,7 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
 // admin involvement is needed (unlike paid confirmed bookings).
 export async function withdrawRsvp(bookingId, now = Date.now()) {
   if (isLive()) {
-    return liveOps.liveWithdrawRsvp(bookingId);
+    return afterScheduleMutation(liveOps.liveWithdrawRsvp(bookingId));
   }
   const booking = getBooking(bookingId);
   if (!booking || booking.status !== "confirmed") return null;
@@ -3541,7 +3548,7 @@ export async function repostRsvpEvent(sessionId) {
   }
   if (sessionStarted(source)) throw new Error("The RSVP event has already started.");
   if (isLive()) {
-    return liveOps.liveReopenRsvp(sessionId);
+    return afterScheduleMutation(liveOps.liveReopenRsvp(sessionId));
   }
   const override = state.sessionOverrides[sessionId];
   const cancelledAt = override.cancelledAt;
@@ -3583,7 +3590,7 @@ export async function deleteOneOffEvent(sessionId) {
 
 export function cancelSessionWeek(sessionId, reason, now = Date.now()) {
   if (isLive()) {
-    return liveOps.liveCancelSession(sessionId, reason);
+    return afterScheduleMutation(liveOps.liveCancelSession(sessionId, reason));
   }
   requirePaymentAdminActor();
   const cancellationReason = String(reason || "").trim();
