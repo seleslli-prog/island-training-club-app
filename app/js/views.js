@@ -1385,8 +1385,10 @@ export async function viewAccount(section, sub) {
     case "privacy/edit":
       return await accountPrivacyEdit(user);
     case "bookings":
+      if (isLive()) await store.ensureHistoryData(user.id);
       return accountBookings(user, sub === "attended" ? "attended" : "all");
     case "history":
+      if (isLive()) await store.ensureHistoryData(user.id);
       return accountBookings(user, "all");
     default:
       return viewNotFound();

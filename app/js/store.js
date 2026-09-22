@@ -1615,6 +1615,11 @@ export async function ensureVenueData(sessionId) {
   return getSession(sessionId);
 }
 
+export async function ensureHistoryData(userId) {
+  if (isLive()) return liveOps.ensureLiveHistoryForUser(userId);
+  return bookingsForUser(userId);
+}
+
 export async function ensurePaymentData(userId) {
   if (isLive()) {
     await Promise.all([

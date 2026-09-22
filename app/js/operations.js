@@ -1079,6 +1079,29 @@ export async function ensureLiveBookingsForUser(userId) {
   return bookings;
 }
 
+export async function ensureLiveHistoryForUser(userId) {
+  const bookings = await ensureLiveBookingsForUser(userId);
+  if (!isLive() || !supabase) return bookings;
+  const sessionIds = [...new Set(bookings.map((booking) => booking.sessionId).filter(Boolean))];
+  if (!sessionIds.length) return bookings;
+  const sessionsResult = await supabase
+    .from("operational_sessions")
+    .select("*")
+    .in("id", sessionIds);
+  if (sessionsResult.error) throw operationalProblem(sessionsResult.error);
+  const activityIds = [...new Set((sessionsResult.data || []).map((row) => row.activity_id).filter(Boolean))];
+  const templatesResult = activityIds.length
+    ? await supabase.from("operational_activity_templates").select("*").in("activity_id", activityIds)
+    : { data: [], error: null };
+  if (templatesResult.error) throw operationalProblem(templatesResult.error);
+  const templates = new Map((templatesResult.data || [])
+    .map(buildTemplateRow)
+    .map((template) => [template.activity_id, template]));
+  const sessions = (sessionsResult.data || []).map((row) => buildSessionRow(row, templates));
+  liveCache.sessions = new Map([...liveCache.sessions, ...sessions].map((session) => [session.id, session]));
+  return bookings;
+}
+
 export async function ensureLiveReceiptsForUser(userId) {
   if (!isLive() || !supabase) return [];
   const result = await supabase
