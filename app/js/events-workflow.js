@@ -1,5 +1,10 @@
 import { hktEventStartMs, sessionStarted } from "./data.js";
 
+export function activeBookingRowsForSession(bookings, sessionId) {
+  return (bookings || []).filter((booking) => booking.sessionId === sessionId
+    && (booking.status === "confirmed" || booking.status === "attended"));
+}
+
 export function sessionRequiresRsvp(session) {
   return Boolean(session?.requiresRsvp || session?.kind === "rsvp");
 }

@@ -14,6 +14,7 @@
 import { SEED_ACTIVITIES } from "./data.js";
 import { isLive, supabase } from "./config.js";
 import { normalizeMeetingPoint } from "./venue.js";
+import { activeBookingRowsForSession } from "./events-workflow.js";
 import { hyroxQueueGroups } from "./hyrox-workflow.js";
 
 const LIVE_TABLES = [
@@ -944,9 +945,7 @@ export function liveHeldBookingsForSession(sessionId) {
 }
 
 export function liveConfirmedBookingsForSession(sessionId) {
-  return liveCache.bookings.filter(
-    (b) => b.sessionId === sessionId && (b.status === "confirmed" || b.status === "attended")
-  );
+  return activeBookingRowsForSession(liveCache.bookings, sessionId);
 }
 
 export function liveRsvpCountFor(sessionId) {
