@@ -1012,9 +1012,7 @@ export function applyForMembership(form) {
 }
 
 export function pendingApplicants() {
-  return state.users
-    .filter((u) => u.status === "pending")
-    .sort((a, b) => a.appliedAt - b.appliedAt);
+  return orderApprovalCandidates(state.users.filter((user) => user.status === "pending"));
 }
 
 export function approveApplicant(userId) {
