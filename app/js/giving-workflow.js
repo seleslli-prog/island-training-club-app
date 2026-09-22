@@ -50,6 +50,12 @@ export function campaignRaisedFromDonations(donations, campaignId) {
     .reduce((sum, donation) => sum + Number(donation.amount || 0), 0);
 }
 
+export function orderGivingCampaigns(campaigns) {
+  return (campaigns || []).sort((a, b) =>
+    String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? ""))
+  );
+}
+
 export function orderDonationsForUser(donations, userId) {
   return (donations || [])
     .filter((donation) => donation.userId === userId)

@@ -30,7 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { activeBookingRowsForSession, heldBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
-import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
+import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, orderGivingCampaigns, validateCampaignFields } from "./giving-workflow.js";
 import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerAdminTransition, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
@@ -3808,9 +3808,7 @@ function localCampaignById(id) {
 export async function listGivingCampaigns() {
   await requireCampaignAdmin();
   if (!isLive() || !supabase) {
-    return state.campaigns.map(normalizeGivingCampaign).sort((a, b) =>
-      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
-    );
+    return orderGivingCampaigns(state.campaigns.map(normalizeGivingCampaign));
   }
   const { data, error } = await supabase
     .from("giving_campaigns")
