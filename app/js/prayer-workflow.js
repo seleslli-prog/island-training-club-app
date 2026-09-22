@@ -1,5 +1,17 @@
 const PRAYER_STATUSES = new Set(["new", "prayed_for", "closed", "withdrawn"]);
 
+export function prayerActionProblem(status, action) {
+  if (action === "close") {
+    return ["new", "prayed_for"].includes(status)
+      ? null
+      : "Prayer request cannot be closed from its current state.";
+  }
+  if (action === "withdraw") {
+    return status === "withdrawn" ? "Prayer request is already withdrawn." : null;
+  }
+  return "Prayer request action must be close or withdraw.";
+}
+
 export function validatePrayerText(request) {
   const trimmed = String(request ?? "").trim();
   const length = Array.from(trimmed).length;

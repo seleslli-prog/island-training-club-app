@@ -31,7 +31,7 @@ import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
-import { normalizePrayerRequest, validatePrayerText } from "./prayer-workflow.js";
+import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -3078,14 +3078,14 @@ export async function setMyPrayerRequestState(requestId, action) {
   if (!prayer) throw new Error("Own prayer request not found.");
   const now = Date.now();
   if (action === "close") {
-    if (!["new", "prayed_for"].includes(prayer.status)) {
-      throw new Error("Prayer request cannot be closed from its current state.");
-    }
+    const actionProblem = prayerActionProblem(prayer.status, action);
+    if (actionProblem) throw new Error(actionProblem);
     prayer.status = "closed";
     prayer.closedAt = now;
     prayer.withdrawnAt = null;
   } else {
-    if (prayer.status === "withdrawn") throw new Error("Prayer request is already withdrawn.");
+    const actionProblem = prayerActionProblem(prayer.status, action);
+    if (actionProblem) throw new Error(actionProblem);
     prayer.status = "withdrawn";
     prayer.request = null;
     prayer.closedAt = null;
