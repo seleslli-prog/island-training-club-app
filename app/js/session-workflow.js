@@ -16,3 +16,24 @@ export function normalizeLiveViewer(profile) {
     profile,
   };
 }
+
+export function createSessionCache() {
+  let profile = null;
+  let viewer = null;
+  let fetchedAt = 0;
+  return {
+    currentUser: () => viewer,
+    profile: () => profile,
+    fetchedAt: () => fetchedAt,
+    set(nextProfile, nextViewer, nextFetchedAt = Date.now()) {
+      profile = nextProfile;
+      viewer = nextViewer;
+      fetchedAt = nextFetchedAt;
+    },
+    clear() {
+      profile = null;
+      viewer = null;
+      fetchedAt = 0;
+    },
+  };
+}

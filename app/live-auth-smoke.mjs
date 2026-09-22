@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizeLiveViewer } from "./js/session-workflow.js";
+import { normalizeLiveViewer, createSessionCache } from "./js/session-workflow.js";
 
 const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +35,11 @@ assert.deepEqual(normalizeLiveViewer({
   },
 }, "Session normalization must preserve the existing live viewer shape");
 console.log("ok  Session workflow normalizes live profiles");
+const sessionCache = createSessionCache();
+sessionCache.set({ id: "profile-1" }, { id: "profile-1" }, 1000);
+assert.equal(sessionCache.currentUser()?.id, "profile-1");
+sessionCache.clear();
+assert.equal(sessionCache.currentUser(), null, "Session cache clear must remove the viewer");
 
 const mem = new Map();
 globalThis.localStorage = {
