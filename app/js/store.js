@@ -1605,6 +1605,11 @@ export async function ensureCollectorData(sessionId) {
   return null;
 }
 
+export async function ensureSessionData(sessionId) {
+  if (isLive()) return liveOps.ensureLiveSession(sessionId);
+  return getSession(sessionId);
+}
+
 export async function ensureVenueData(sessionId) {
   if (isLive()) return liveOps.ensureLiveVenueForSession(sessionId);
   return getSession(sessionId);

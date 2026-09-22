@@ -944,6 +944,31 @@ function applyLiveVenueOverride(session) {
   return out;
 }
 
+export async function ensureLiveSession(sessionId) {
+  if (!sessionId) return null;
+  if (!isLive() || !supabase) return getLiveSession(sessionId);
+  const cached = getLiveSession(sessionId);
+  if (cached) return cached;
+  const result = await supabase
+    .from("operational_sessions")
+    .select("*")
+    .eq("id", sessionId);
+  if (result.error) throw operationalProblem(result.error);
+  const row = result.data?.[0] || null;
+  if (!row) return null;
+  const templateResult = await supabase
+    .from("operational_activity_templates")
+    .select("*")
+    .eq("activity_id", row.activity_id);
+  if (templateResult.error) throw operationalProblem(templateResult.error);
+  const templates = new Map((templateResult.data || [])
+    .map(buildTemplateRow)
+    .map((template) => [template.activity_id, template]));
+  const session = buildSessionRow(row, templates);
+  liveCache.sessions.set(session.id, session);
+  return applyLiveVenueOverride(session);
+}
+
 export async function ensureLiveVenueForSession(sessionId) {
   if (!isLive() || !supabase) return null;
   if (!liveCache.venueOverrides.has(sessionId)) {

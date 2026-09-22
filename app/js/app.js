@@ -533,6 +533,7 @@ async function render(generation = renderGeneration) {
       break;
     }
     case "activity": {
+      await store.ensureSessionData(arg);
       try { await store.ensureVenueData(arg); } catch (err) { console.warn("Unable to load session venue", err); }
       await store.ensureQueueData(arg);
       await store.ensureRsvpCountData(arg);
@@ -593,6 +594,7 @@ async function render(generation = renderGeneration) {
       break;
     case "pay": {
       const booking = await store.ensureBookingData(arg);
+      await store.ensureSessionData(booking?.sessionId);
       await store.ensureCollectorData(booking?.sessionId);
       if (isLive() && routeUser?.status === "approved" && !booking?.cycleId) {
         await store.hydrateLiveOperations({ force: true });
