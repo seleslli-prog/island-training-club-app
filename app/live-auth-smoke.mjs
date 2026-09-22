@@ -4300,6 +4300,8 @@ assert.deepEqual(await directMagicLink, { ok: true });
 
 window.addEventListener = (event, callback) => windowListeners.set(event, callback);
 window.scrollTo = () => {};
+const performanceMarks = [];
+globalThis.performance = { mark: (name) => performanceMarks.push(name) };
 let nextTimerId = 1;
 const delayedTimers = new Map();
 globalThis.setTimeout = (callback, delay) => {
@@ -4343,6 +4345,13 @@ const app = await import("./js/app.js?application-read-errors");
 await app.bootPromise;
 await new Promise(setImmediate);
 const toastStack = elements.get("toast-stack");
+const firstRouteMark = performanceMarks.indexOf("itc:first-route-commit");
+const operationsMark = performanceMarks.indexOf("itc:operations-ready");
+assert.ok(performanceMarks.indexOf("itc:shell-start") >= 0);
+assert.ok(performanceMarks.indexOf("itc:viewer-ready") >= 0);
+assert.ok(firstRouteMark >= 0);
+assert.ok(operationsMark > firstRouteMark,
+  "operational warm-up must complete after the first route commits");
 if (escapedRejections.length || toastStack.children.length !== 0) {
   throw new Error("Boot should let the Account fallback contain an application-read failure without a preload toast");
 }
