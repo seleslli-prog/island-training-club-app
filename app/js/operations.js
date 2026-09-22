@@ -601,7 +601,9 @@ async function fetchOperationalState({ authenticated, skipHyrox = false } = {}) 
     hyroxQueues,
   ] = await Promise.all([
     supabase.from("operational_sessions").select("*").gte("session_date", since).order("session_date"),
-    supabase.from("operational_bookings").select("*"),
+    skipHyrox
+      ? supabase.from("operational_bookings").select("*").is("hyrox_cycle_id", null)
+      : supabase.from("operational_bookings").select("*"),
     supabase.from("operational_queue_entries").select("*")
       .or("status.eq.active,status.eq.promoted,status.eq.dissolved")
       .order("joined_at"),
@@ -978,6 +980,22 @@ export function liveActivityTemplates() {
 
 export function listLiveBookings(filter = () => true) {
   return liveCache.bookings.filter(filter);
+}
+
+export async function ensureLiveBooking(bookingId) {
+  if (!isLive() || !supabase) return null;
+  const cached = liveCache.bookings.find((booking) => booking.id === bookingId);
+  if (cached) return cached;
+  const result = await supabase
+    .from("operational_bookings")
+    .select("*")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (result.error) throw operationalProblem(result.error);
+  if (!result.data) return null;
+  const booking = buildBookingRow(result.data);
+  liveCache.bookings.push(booking);
+  return booking;
 }
 
 export function liveBookingsForUser(userId) {

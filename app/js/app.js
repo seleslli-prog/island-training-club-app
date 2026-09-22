@@ -587,13 +587,16 @@ async function render(generation = renderGeneration) {
     case "checkout":
       out = views.viewCheckout(arg);
       break;
-    case "pay":
-      if (isLive() && routeUser?.status === "approved") {
+    case "pay": {
+      const booking = await store.ensureBookingData(arg);
+      if (isLive() && routeUser?.status === "approved" && !booking?.cycleId) {
         await store.hydrateLiveOperations({ force: true });
       }
       out = views.viewPay(arg);
       break;
+    }
     case "booking":
+      await store.ensureBookingData(arg);
       out = views.viewBooking(arg);
       break;
     case "replacement":
