@@ -30,6 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence } from "./events-workflow.js";
+import { campaignIsOpen, normalizeGivingCampaign } from "./giving-workflow.js";
 import { normalizePrayerRequest } from "./prayer-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
@@ -3848,29 +3849,11 @@ export function campaigns() {
 }
 
 export function activeGivingCampaign() {
-  return state.campaigns.find((campaign) => campaign.status === "published") ?? null;
+  return state.campaigns.find(campaignIsOpen) ?? null;
 }
 
 const ADMIN_CAMPAIGN_ROLES = new Set(["admin", "superadmin", "super_admin"]);
 const campaignColumns = "id, title, description, goal_hkd, fps_id, fps_payee, status, creator_profile_id, created_at, updated_at, published_at, closed_at";
-
-function normalizeGivingCampaign(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    goalHKD: Number(row.goal_hkd ?? row.goalHKD),
-    fpsId: row.fps_id ?? row.fpsId,
-    fpsPayee: row.fps_payee ?? row.fpsPayee,
-    status: String(row.status || "").toLowerCase(),
-    creatorProfileId: row.creator_profile_id ?? row.creatorProfileId ?? null,
-    createdAt: row.created_at ?? row.createdAt ?? null,
-    updatedAt: row.updated_at ?? row.updatedAt ?? null,
-    publishedAt: row.published_at ?? row.publishedAt ?? null,
-    closedAt: row.closed_at ?? row.closedAt ?? null,
-  };
-}
 
 function validatedCampaignFields(draft) {
   const title = String(draft?.title || "").trim();
@@ -4067,7 +4050,7 @@ export function recordDonation(input = {}) {
   }
   const { name, amount, note, ref, campaignId } = input;
   const campaign = campaignId
-    ? state.campaigns.find((item) => item.id === campaignId && item.status === "published") ||
+    ? state.campaigns.find((item) => item.id === campaignId && campaignIsOpen(item)) ||
       (isLive() && liveGivingCampaign?.id === campaignId ? liveGivingCampaign : null)
     : activeGivingCampaign() || (isLive() ? liveGivingCampaign : null);
   if (!campaign) throw new Error("No active Giving campaign");
