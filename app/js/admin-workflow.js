@@ -1,6 +1,13 @@
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin"]);
 const SUPER_ROLES = new Set(["superadmin", "super_admin"]);
 
+export function applicationDecisionProblem({ candidate, decision, requireSubmitted = false }) {
+  if (!["member", "declined"].includes(decision)) return "Invalid application decision.";
+  if (!candidate) return "Pending application not found.";
+  if (requireSubmitted && !candidate.applicationSubmitted) return "Application not submitted.";
+  return null;
+}
+
 export function filterMembers(members, { query = "", status = "all", role = "all" } = {}) {
   const normalizedQuery = String(query).trim().toLocaleLowerCase();
   return (members || []).filter((member) => {

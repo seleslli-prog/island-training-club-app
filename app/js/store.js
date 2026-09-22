@@ -35,6 +35,7 @@ import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequ
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
+import { applicationDecisionProblem } from "./admin-workflow.js";
 import { decideReplacementProblem, replacementDuplicateForUser, replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
@@ -4880,19 +4881,17 @@ export async function listApprovalCandidates() {
 }
 
 export async function decideApplication(profileId, decision) {
-  if (!new Set(["member", "declined"]).has(decision)) {
-    throw new Error("Invalid application decision.");
-  }
   if (!isLive() || !supabase) {
     const candidate = pendingApplicants().find((user) => user.id === profileId);
-    if (!candidate) throw new Error("Pending application not found.");
+    const problem = applicationDecisionProblem({ candidate, decision });
+    if (problem) throw new Error(problem);
     if (decision === "member") approveApplicant(profileId);
     else declineApplicant(profileId);
     return;
   }
   const candidate = (await listApprovalCandidates()).find((item) => item.id === profileId);
-  if (!candidate) throw new Error("Pending application not found.");
-  if (!candidate.applicationSubmitted) throw new Error("Application not submitted.");
+  const problem = applicationDecisionProblem({ candidate, decision, requireSubmitted: true });
+  if (problem) throw new Error(problem);
   await updateProfileRole(profileId, decision, undefined, "pending");
 }
 

@@ -12,7 +12,7 @@ import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem,
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
-import { filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
+import { applicationDecisionProblem, filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 import { decideReplacementProblem, replacementEligibility, replacementDuplicateForUser, replacementIsHyrox } from "./js/replacement-workflow.js";
 
 // --- localStorage shim ---
@@ -42,6 +42,8 @@ assert.deepEqual(orderAdminPrayerRequests([
 ]).map((row) => row.id), ["new", "closed"]);
 assert.equal(isAdminRole("super_admin"), true);
 assert.equal(normalizeRole("super_admin"), "superadmin");
+assert.equal(applicationDecisionProblem({ candidate: { status: "pending", applicationSubmitted: true }, decision: "member" }), null);
+assert.equal(applicationDecisionProblem({ candidate: null, decision: "member" }), "Pending application not found.");
 assert.deepEqual(filterMembers([
   { id: "a", fullName: "Ada Runner", email: "ada@example.com", status: "approved", role: "member" },
   { id: "b", fullName: "Ben Admin", email: "ben@example.com", status: "approved", role: "admin" },
