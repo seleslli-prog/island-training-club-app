@@ -533,6 +533,7 @@ async function render(generation = renderGeneration) {
       break;
     }
     case "activity": {
+      try { await store.ensureVenueData(arg); } catch (err) { console.warn("Unable to load session venue", err); }
       await store.ensureQueueData(arg);
       await store.ensureRsvpCountData(arg);
       await store.ensureCollectorData(arg);

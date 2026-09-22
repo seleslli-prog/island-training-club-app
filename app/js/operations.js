@@ -537,7 +537,16 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
     .map(buildTemplateRow)
     .map((template) => [template.activity_id, template]));
   const sessions = sessionRows.map((row) => buildSessionRow(row, templatesById));
-  const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+  const overrideResult = sessionRows.length
+    ? await supabase.from("operational_session_venue_overrides").select("*").in("session_id", sessionRows.map((row) => row.id))
+    : { data: [], error: null };
+  if (overrideResult.error) throw operationalProblem(overrideResult.error);
+  for (const row of overrideResult.data || []) {
+    const override = buildVenueOverrideRow(row);
+    liveCache.venueOverrides.set(override.sessionId, override);
+  }
+  const visibleSessions = sessions.map(applyLiveVenueOverride);
+  const sessionsById = new Map(visibleSessions.map((session) => [session.id, session]));
 
   let viewerBookings = [];
   const heldBookingCounts = {};
@@ -569,7 +578,7 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
 
   const rsvpCounts = await fetchRsvpCounts();
   return {
-    sessions,
+    sessions: visibleSessions,
     cycles: cycleRows.map(buildHyroxCycleRow),
     viewerBookings,
     heldBookingCounts,
@@ -577,7 +586,7 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
   };
 }
 
-async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false } = {}) {
+async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false, skipVenueOverrides = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {
     try {
@@ -618,7 +627,9 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
     skipCollectorOps ? Promise.resolve({ data: [], error: null }) : supabase.from("collector_payout_profiles").select("*"),
     skipCollectorOps ? Promise.resolve({ rows: [], error: null }) : fetchAssignedPayoutRows(),
     supabase.from("operational_activity_templates").select("*").order("activity_id"),
-    supabase.from("operational_session_venue_overrides").select("*"),
+    skipVenueOverrides
+      ? Promise.resolve({ data: [], error: null })
+      : supabase.from("operational_session_venue_overrides").select("*"),
     skipRsvpCounts ? Promise.resolve({ rows: [], error: null }) : fetchRsvpCounts(),
     skipHyrox
       ? Promise.resolve({ data: [], error: null })
@@ -691,7 +702,7 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
       payouts: [...payoutRowsByProfile.values()].map(buildPayoutRow),
       payoutError: assignedPayouts.error,
     }),
-    venueOverrides: (venueOverrides.data || []).map(buildVenueOverrideRow),
+    ...(skipVenueOverrides ? {} : { venueOverrides: (venueOverrides.data || []).map(buildVenueOverrideRow) }),
     ...(skipRsvpCounts ? {} : {
       rsvpCounts: rsvpCounts.rows,
       rsvpCountError: rsvpCounts.error,
@@ -719,7 +730,7 @@ export async function ensureLiveSessionWindow() {
   return null;
 }
 
-export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false } = {}) {
+export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false, skipVenueOverrides = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (liveCache.loaded && !force) return liveCache;
   if (hydrationPromise) {
@@ -731,7 +742,7 @@ export async function hydrateOperationalState({ force = false, authenticated, sk
   }
   liveCache.loading = Promise.resolve().then(async () => {
     try {
-      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps, skipRsvpCounts });
+      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps, skipRsvpCounts, skipVenueOverrides });
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
@@ -931,6 +942,23 @@ function applyLiveVenueOverride(session) {
     out.venueTBC = false;
   }
   return out;
+}
+
+export async function ensureLiveVenueForSession(sessionId) {
+  if (!isLive() || !supabase) return null;
+  if (!liveCache.venueOverrides.has(sessionId)) {
+    const result = await supabase
+      .from("operational_session_venue_overrides")
+      .select("*")
+      .eq("session_id", sessionId);
+    if (result.error) throw operationalProblem(result.error);
+    const row = result.data?.[0] || null;
+    if (row) {
+      const override = buildVenueOverrideRow(row);
+      liveCache.venueOverrides.set(override.sessionId, override);
+    }
+  }
+  return applyLiveVenueOverride(liveCache.sessions.get(sessionId)) || null;
 }
 
 export function getLiveSession(id) {

@@ -256,7 +256,7 @@ export function load() {
   return state;
 }
 
-export async function hydrateLiveOperations({ ensureWindow = false, force = false, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false } = {}) {
+export async function hydrateLiveOperations({ ensureWindow = false, force = false, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false, skipVenueOverrides = false } = {}) {
   if (!isLive()) return null;
   if (ensureWindow) {
     try {
@@ -273,7 +273,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
     authenticated = false;
   }
   if (authenticated) await liveOps.liveSweepHyroxDeadlines({ refresh: false });
-  await liveOps.hydrateOperationalState({ force, authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps, skipRsvpCounts });
+  await liveOps.hydrateOperationalState({ force, authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps, skipRsvpCounts, skipVenueOverrides });
   await liveOps.startHyroxRealtime(() => invalidateScheduleWindows());
   await liveOps.startOperationalRealtime();
   if (!stopScheduleOperationsSubscription) {
@@ -284,7 +284,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
 
 export async function warmOperationalState() {
   try {
-    await hydrateLiveOperations({ ensureWindow: true, skipHyrox: true, skipReceipts: true, skipQueues: true, skipCollectorOps: true, skipRsvpCounts: true });
+    await hydrateLiveOperations({ ensureWindow: true, skipHyrox: true, skipReceipts: true, skipQueues: true, skipCollectorOps: true, skipRsvpCounts: true, skipVenueOverrides: true });
     return { ok: true, error: null };
   } catch (error) {
     return { ok: false, error };
@@ -1603,6 +1603,11 @@ export async function ensureRsvpCountData(sessionId) {
 export async function ensureCollectorData(sessionId) {
   if (isLive()) return liveOps.ensureLiveCollectorForSession(sessionId);
   return null;
+}
+
+export async function ensureVenueData(sessionId) {
+  if (isLive()) return liveOps.ensureLiveVenueForSession(sessionId);
+  return getSession(sessionId);
 }
 
 export async function ensurePaymentData(userId) {
