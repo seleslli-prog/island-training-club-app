@@ -1581,6 +1581,11 @@ export function getHyroxCycle(id) {
   return hyroxCycleById(id);
 }
 
+export async function ensureHyroxCycleData(cycleId) {
+  if (isLive()) return liveOps.ensureLiveHyroxCycle(cycleId);
+  return hyroxCycleById(cycleId);
+}
+
 export function hyroxCycleBookings(cycleId) {
   if (isLive()) return liveOps.listLiveBookings((booking) => booking.cycleId === cycleId);
   return state.bookings.filter((booking) => booking.cycleId === cycleId);

@@ -563,6 +563,7 @@ async function render(generation = renderGeneration) {
       break;
     }
     case "hyrox":
+      await store.ensureHyroxCycleData(arg);
       out = arg2 === "register" ? views.viewHyroxRegistration(arg) : views.viewHyroxCycle(arg);
       break;
     case "community":

@@ -911,6 +911,37 @@ export function getLiveHyroxCycle(id) {
   return liveCache.hyroxCycles.get(id) || null;
 }
 
+export async function ensureLiveHyroxCycle(cycleId) {
+  if (!isLive() || !supabase) return null;
+  const cached = liveCache.hyroxCycles.get(cycleId);
+  if (cached) return cached;
+  const cycleResult = await supabase
+    .from("operational_hyrox_cycles")
+    .select("*")
+    .eq("id", cycleId)
+    .maybeSingle();
+  if (cycleResult.error) throw operationalProblem(cycleResult.error);
+  if (!cycleResult.data) return null;
+  const cycle = buildHyroxCycleRow(cycleResult.data);
+  liveCache.hyroxCycles.set(cycle.id, cycle);
+
+  const [bookingResult, queueResult] = await Promise.all([
+    supabase.from("operational_bookings").select("*").eq("hyrox_cycle_id", cycleId),
+    supabase.from("operational_hyrox_queue_entries").select("*").eq("cycle_id", cycleId),
+  ]);
+  if (bookingResult.error) throw operationalProblem(bookingResult.error);
+  if (queueResult.error) throw operationalProblem(queueResult.error);
+  const bookingRows = (bookingResult.data || []).map((row) => buildBookingRow(row));
+  const bookingIds = new Set(bookingRows.map((row) => row.id));
+  liveCache.bookings = liveCache.bookings.filter((row) => !bookingIds.has(row.id));
+  liveCache.bookings.push(...bookingRows);
+  const queueRows = (queueResult.data || []).map(buildHyroxQueueRow);
+  const queueIds = new Set(queueRows.map((row) => row.id));
+  liveCache.hyroxQueues = liveCache.hyroxQueues.filter((row) => !queueIds.has(row.id));
+  liveCache.hyroxQueues.push(...queueRows);
+  return cycle;
+}
+
 export function liveHyroxQueuesForCycle(id) {
   return hyroxQueueGroups(liveCache.hyroxQueues.filter((row) => row.cycleId === id));
 }
