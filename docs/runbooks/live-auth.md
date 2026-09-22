@@ -86,6 +86,13 @@ local, uncommitted copy.
    query on unchanged navigation.
 4. Block one Schedule request. Confirm only that route shows its retry panel
    while Home and Account remain usable.
+5. Open a direct HYROX route and confirm the requested cycle/booking loads
+   without requiring a full operational refresh.
+6. Open Activity Details, Payments & Receipts, and Booking History. Confirm
+   their Network requests are session/member scoped rather than broad
+   operational-table reads.
+7. Open Admin Activities or Admin Payments and confirm explicit operational
+   hydration occurs only after entering the Admin route.
 
 Do not use a fixed network threshold. Compare `itc:first-route-commit` and
 `itc:operations-ready` on the same browser and connection; this prototype has
