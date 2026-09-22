@@ -390,16 +390,18 @@ function replaceState(payload) {
   liveCache.venueOverrides = new Map(
     (payload.venueOverrides || []).map((row) => [row.sessionId, row])
   );
-  liveCache.rsvpCounts = new Map();
-  liveCache.rsvpCountError = payload.rsvpCountError || null;
-  if (!liveCache.rsvpCountError) {
-    for (const session of payload.sessions) {
-      if (session.requiresRsvp) liveCache.rsvpCounts.set(session.id, 0);
-    }
-    for (const row of payload.rsvpCounts || []) {
-      const count = Number(row.going_count);
-      if (row.session_id && Number.isInteger(count) && count >= 0) {
-        liveCache.rsvpCounts.set(row.session_id, count);
+  if (payload.rsvpCounts) {
+    liveCache.rsvpCounts = new Map();
+    liveCache.rsvpCountError = payload.rsvpCountError || null;
+    if (!liveCache.rsvpCountError) {
+      for (const session of payload.sessions) {
+        if (session.requiresRsvp) liveCache.rsvpCounts.set(session.id, 0);
+      }
+      for (const row of payload.rsvpCounts) {
+        const count = Number(row.going_count);
+        if (row.session_id && Number.isInteger(count) && count >= 0) {
+          liveCache.rsvpCounts.set(row.session_id, count);
+        }
       }
     }
   }
@@ -575,7 +577,7 @@ export async function liveScheduleWindow(startISO, endISO, viewerId = null) {
   };
 }
 
-async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false } = {}) {
+async function fetchOperationalState({ authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {
     try {
@@ -617,7 +619,7 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
     skipCollectorOps ? Promise.resolve({ rows: [], error: null }) : fetchAssignedPayoutRows(),
     supabase.from("operational_activity_templates").select("*").order("activity_id"),
     supabase.from("operational_session_venue_overrides").select("*"),
-    fetchRsvpCounts(),
+    skipRsvpCounts ? Promise.resolve({ rows: [], error: null }) : fetchRsvpCounts(),
     skipHyrox
       ? Promise.resolve({ data: [], error: null })
       : supabase.from("operational_hyrox_cycles").select("*").order("session_date"),
@@ -690,8 +692,10 @@ async function fetchOperationalState({ authenticated, skipHyrox = false, skipRec
       payoutError: assignedPayouts.error,
     }),
     venueOverrides: (venueOverrides.data || []).map(buildVenueOverrideRow),
-    rsvpCounts: rsvpCounts.rows,
-    rsvpCountError: rsvpCounts.error,
+    ...(skipRsvpCounts ? {} : {
+      rsvpCounts: rsvpCounts.rows,
+      rsvpCountError: rsvpCounts.error,
+    }),
   };
 }
 
@@ -715,7 +719,7 @@ export async function ensureLiveSessionWindow() {
   return null;
 }
 
-export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false } = {}) {
+export async function hydrateOperationalState({ force = false, authenticated, skipHyrox = false, skipReceipts = false, skipQueues = false, skipCollectorOps = false, skipRsvpCounts = false } = {}) {
   if (!isLive() || !supabase) return null;
   if (liveCache.loaded && !force) return liveCache;
   if (hydrationPromise) {
@@ -727,7 +731,7 @@ export async function hydrateOperationalState({ force = false, authenticated, sk
   }
   liveCache.loading = Promise.resolve().then(async () => {
     try {
-      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps });
+      const payload = await fetchOperationalState({ authenticated, skipHyrox, skipReceipts, skipQueues, skipCollectorOps, skipRsvpCounts });
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
@@ -1071,6 +1075,16 @@ export function liveHeldBookingsForSession(sessionId) {
 
 export function liveConfirmedBookingsForSession(sessionId) {
   return activeBookingRowsForSession(liveCache.bookings, sessionId);
+}
+
+export async function ensureLiveRsvpCountForSession(sessionId) {
+  if (!isLive() || !supabase) return liveRsvpCountFor(sessionId);
+  const result = await fetchRsvpCounts();
+  if (result.error) throw result.error;
+  for (const row of result.rows) {
+    liveCache.rsvpCounts.set(row.session_id, Number(row.going_count) || 0);
+  }
+  return liveRsvpCountFor(sessionId);
 }
 
 export function liveRsvpCountFor(sessionId) {

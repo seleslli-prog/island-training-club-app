@@ -534,6 +534,7 @@ async function render(generation = renderGeneration) {
     }
     case "activity": {
       await store.ensureQueueData(arg);
+      await store.ensureRsvpCountData(arg);
       await store.ensureCollectorData(arg);
       const session = store.getSession(arg);
       const viewer = store.currentUser();
