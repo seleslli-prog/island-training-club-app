@@ -33,6 +33,7 @@ import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
+import { paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -47,7 +48,7 @@ import {
   HYROX_POOL_CAPACITY,
 } from "./hyrox-cycle.js";
 
-export { attendanceWindowForSession };
+export { attendanceWindowForSession, paymentStateForBooking };
 
 const STORAGE_KEY = "itc.prototype.v1";
 const APPLY_DEVICE_KEY = "itc.device.id";
@@ -756,14 +757,6 @@ function save() {
 export function resetLocalData() {
   localStorage.removeItem(STORAGE_KEY);
   return load();
-}
-
-export function paymentStateForBooking(booking) {
-  if (!booking) return null;
-  if (booking.status === "reserved") {
-    return booking.paymentMarkedAt != null ? "awaiting_confirmation" : "payment_due";
-  }
-  return booking.status === "confirmed" || booking.status === "attended" ? "paid" : null;
 }
 
 // --- Session / auth ----------------------------------------------------------

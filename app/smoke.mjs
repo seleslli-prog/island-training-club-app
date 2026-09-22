@@ -10,6 +10,7 @@ import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campaignTransitionProblem } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
+import { paymentStateForBooking } from "./js/payment-workflow.js";
 import { isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 
 // --- localStorage shim ---
@@ -39,6 +40,8 @@ const attendanceSession = { dateISO: "2026-08-08", time: "10:00", durationMin: 6
 const attendanceStart = data.hktEventStartMs(attendanceSession.dateISO, attendanceSession.time);
 assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart - 15 * 60_000 - 1).state, "upcoming");
 assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart).state, "open");
+assert.equal(paymentStateForBooking({ status: "reserved", paymentMarkedAt: null }), "payment_due");
+assert.equal(paymentStateForBooking({ status: "reserved", paymentMarkedAt: 1 }), "awaiting_confirmation");
 assert.equal(hyroxRegistrationProblem({
   cycle: { registrationState: "open", registrationOpensAt: 0, paymentDeadlineAt: 100, capacity: 2 },
   now: 10, preference: "bft", fallbackAcknowledged: true, activeCount: 1, mode: "reserve",
