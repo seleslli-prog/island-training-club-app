@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -46,6 +46,8 @@ import {
   allocateHyroxVenues,
   HYROX_POOL_CAPACITY,
 } from "./hyrox-cycle.js";
+
+export { attendanceWindowForSession };
 
 const STORAGE_KEY = "itc.prototype.v1";
 const APPLY_DEVICE_KEY = "itc.device.id";
@@ -762,17 +764,6 @@ export function paymentStateForBooking(booking) {
     return booking.paymentMarkedAt != null ? "awaiting_confirmation" : "payment_due";
   }
   return booking.status === "confirmed" || booking.status === "attended" ? "paid" : null;
-}
-
-export function attendanceWindowForSession(session, now = Date.now()) {
-  const start = hktEventStartMs(session.dateISO, session.time);
-  const opensAt = start - 15 * 60_000;
-  const closesAt = start + Number(session.durationMin) * 60_000 + 24 * 60 * 60_000;
-  return {
-    opensAt,
-    closesAt,
-    state: now < opensAt ? "upcoming" : now <= closesAt ? "open" : "locked",
-  };
 }
 
 // --- Session / auth ----------------------------------------------------------

@@ -9,7 +9,7 @@ import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campaignTransitionProblem } from "./js/giving-workflow.js";
-import { hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
 import { isAdminRole, normalizeRole } from "./js/admin-workflow.js";
 
 // --- localStorage shim ---
@@ -35,6 +35,10 @@ assert.equal(isAdminRole("super_admin"), true);
 assert.equal(normalizeRole("super_admin"), "superadmin");
 assert.equal(hyroxPaymentProblem({ reason: "  " }), "Payment rejection reason is required.");
 assert.equal(hyroxPaymentProblem({ reason: "Unreadable reference", booking: { cycleId: "cycle-1", status: "reserved", paymentMarkedAt: 1 } }), null);
+const attendanceSession = { dateISO: "2026-08-08", time: "10:00", durationMin: 60 };
+const attendanceStart = data.hktEventStartMs(attendanceSession.dateISO, attendanceSession.time);
+assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart - 15 * 60_000 - 1).state, "upcoming");
+assert.equal(attendanceWindowForSession(attendanceSession, attendanceStart).state, "open");
 assert.equal(hyroxRegistrationProblem({
   cycle: { registrationState: "open", registrationOpensAt: 0, paymentDeadlineAt: 100, capacity: 2 },
   now: 10, preference: "bft", fallbackAcknowledged: true, activeCount: 1, mode: "reserve",

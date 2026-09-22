@@ -1,3 +1,16 @@
+import { hktEventStartMs } from "./data.js";
+
+export function attendanceWindowForSession(session, now = Date.now()) {
+  const start = hktEventStartMs(session.dateISO, session.time);
+  const opensAt = start - 15 * 60_000;
+  const closesAt = start + Number(session.durationMin) * 60_000 + 24 * 60 * 60_000;
+  return {
+    opensAt,
+    closesAt,
+    state: now < opensAt ? "upcoming" : now <= closesAt ? "open" : "locked",
+  };
+}
+
 export function hyroxPaymentProblem({ reason, booking }) {
   if (!String(reason || "").trim()) return "Payment rejection reason is required.";
   if (!booking?.cycleId) return "Pooled HYROX booking not found.";
