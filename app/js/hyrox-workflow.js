@@ -20,6 +20,18 @@ export function hyroxVenueSwitchProblem({ booking, cycle, now = Date.now() }) {
   return null;
 }
 
+export function hyroxQueuePositionForEntries(entries, userId, {
+  kind = "weekly_waitlist",
+  targetSessionId = null,
+} = {}) {
+  const queue = (entries || [])
+    .filter((entry) => entry.status === "active" && entry.kind === kind
+      && (targetSessionId == null || entry.targetSessionId === targetSessionId))
+    .sort((a, b) => (a.joinedAt - b.joinedAt) || String(a.id).localeCompare(String(b.id)));
+  const index = queue.findIndex((entry) => entry.userId === userId);
+  return index < 0 ? null : index + 1;
+}
+
 export function hyroxVenueChoiceProblem({ mode, currentSessionId, targetSessionId, targetFull = false }) {
   if (mode === "queue" && currentSessionId === targetSessionId) {
     return "Choose the other venue in this HYROX cycle.";

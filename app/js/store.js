@@ -32,7 +32,7 @@ import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
-import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxPaymentProblem, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
 import { applicationDecisionProblem } from "./admin-workflow.js";
@@ -2155,10 +2155,10 @@ export function hyroxCycleQueues(cycleId) {
 }
 
 export function hyroxCycleQueuePosition(userId, cycleId, kind = "weekly_waitlist", targetSessionId = null) {
-  const queue = hyroxCycleQueues(cycleId)[kind === "venue_switch" ? "venueSwitches" : "weeklyWaitlist"]
-    .filter((entry) => targetSessionId == null || entry.targetSessionId === targetSessionId);
-  const index = queue.findIndex((entry) => entry.userId === userId);
-  return index < 0 ? null : index + 1;
+  const queues = hyroxCycleQueues(cycleId);
+  return hyroxQueuePositionForEntries([
+    ...(queues.weeklyWaitlist || []), ...(queues.venueSwitches || []),
+  ], userId, { kind, targetSessionId });
 }
 
 export function sweepHyroxCycleDeadlines(now = Date.now()) {

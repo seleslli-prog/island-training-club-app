@@ -9,7 +9,7 @@ import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./js/events-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./js/giving-workflow.js";
-import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
+import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxQueuePositionForEntries, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./js/hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./js/payment-workflow.js";
 import { normalizeLocalNotification } from "./js/notification-workflow.js";
 import { applicationDecisionProblem, filterMembers, isAdminRole, normalizeRole } from "./js/admin-workflow.js";
@@ -54,6 +54,10 @@ assert.equal(hyroxVenueSwitchProblem({ cycle: { venuePlan: "both", venueChoiceDe
 assert.equal(hyroxVenueTargetProblem({ bftSessionId: "bft", midtownSessionId: "midtown" }, "other"), "Target venue is not part of this HYROX cycle.");
 assert.equal(hyroxVenueChoiceProblem({ mode: "select", currentSessionId: "bft", targetFull: true }), "Target venue is full.");
 assert.equal(hyroxVenueChoiceProblem({ mode: "queue", currentSessionId: "bft", targetSessionId: "bft", targetFull: true }), "Choose the other venue in this HYROX cycle.");
+assert.equal(hyroxQueuePositionForEntries([
+  { id: "q2", userId: "u2", status: "active", kind: "weekly_waitlist", joinedAt: 2 },
+  { id: "q1", userId: "u1", status: "active", kind: "weekly_waitlist", joinedAt: 1 },
+], "u1"), 1);
 assert.equal(replacementEligibility({ userId: "u1", status: "confirmed", snapshot: { kind: "paid", name: "HYROX", dateISO: "2099-01-01", time: "10:00" }, sessionId: "hyrox-bft" }, { now: 0 }).ok, true);
 assert.equal(decideReplacementProblem({ request: { status: "accepted", expiresAt: 100 }, confirm: true, now: 10, bookingAvailable: true }), null);
 assert.equal(decideReplacementProblem({ request: { status: "pending" }, confirm: true, now: 10, bookingAvailable: true }), "Only an accepted replacement can be confirmed.");
