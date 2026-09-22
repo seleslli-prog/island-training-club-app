@@ -30,7 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./events-workflow.js";
-import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
+import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
 import { paymentStateForBooking } from "./payment-workflow.js";
@@ -4005,16 +4005,11 @@ export function closeGivingCampaign(id) {
 
 export function campaignRaised(campaign = activeGivingCampaign()) {
   const campaignId = typeof campaign === "string" ? campaign : campaign?.id;
-  if (!campaignId) return 0;
-  return state.donations
-    .filter((donation) => donation.campaignId === campaignId)
-    .reduce((sum, donation) => sum + Number(donation.amount || 0), 0);
+  return campaignRaisedFromDonations(state.donations, campaignId);
 }
 
 export function donationsForUser(userId) {
-  return state.donations
-    .filter((d) => d.userId === userId)
-    .sort((a, b) => b.createdAt - a.createdAt);
+  return orderDonationsForUser(state.donations, userId);
 }
 
 export function recordDonation(input = {}) {

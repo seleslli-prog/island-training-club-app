@@ -8,6 +8,19 @@ export function campaignTransitionProblem(campaign, fromStatus, toStatus) {
   return null;
 }
 
+export function campaignRaisedFromDonations(donations, campaignId) {
+  if (!campaignId) return 0;
+  return (donations || [])
+    .filter((donation) => donation.campaignId === campaignId)
+    .reduce((sum, donation) => sum + Number(donation.amount || 0), 0);
+}
+
+export function orderDonationsForUser(donations, userId) {
+  return (donations || [])
+    .filter((donation) => donation.userId === userId)
+    .sort((a, b) => Number(b.createdAt ?? b.created_at) - Number(a.createdAt ?? a.created_at));
+}
+
 export function validateCampaignFields(draft) {
   const title = String(draft?.title || "").trim();
   const description = String(draft?.description || "").trim();
