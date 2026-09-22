@@ -29,7 +29,7 @@ import { normalizeAvatarPresentation } from "./avatar.js";
 import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
-import { isRsvpOccurrence } from "./events-workflow.js";
+import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign } from "./giving-workflow.js";
 import { normalizePrayerRequest } from "./prayer-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
@@ -3433,15 +3433,13 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
   }
   requireAuthorizedPaymentOwner(userId);
   const session = getSession(sessionId);
-  if (!session) throw new Error("Unknown session");
-  if (!isRsvpOccurrence(session)) {
-    throw new Error("Session is not an RSVP event");
-  }
-  if (session.cancelled) throw new Error("Session is cancelled");
-  if (sessionStarted(session)) throw new Error("Session has already started");
-  const spots = spotsLeft(session);
-  if (spots !== null && spots <= 0) throw new Error("Session is full");
-  if (userBookingFor(userId, session.id)) throw new Error("Already booked");
+  const spots = session ? spotsLeft(session) : null;
+  const problem = rsvpJoinProblem({
+    session,
+    spots,
+    alreadyBooked: session ? Boolean(userBookingFor(userId, session.id)) : false,
+  });
+  if (problem) throw new Error(problem);
   const booking = {
     id: uid("b"),
     userId,

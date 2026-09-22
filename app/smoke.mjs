@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
-import { isRsvpOccurrence } from "./js/events-workflow.js";
+import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign } from "./js/giving-workflow.js";
 
@@ -32,6 +32,16 @@ assert.deepEqual(normalizeGivingCampaign({ id: "campaign-1", goal_hkd: "1200", f
   createdAt: null, updatedAt: null, publishedAt: null, closedAt: null,
 });
 assert.equal(isRsvpOccurrence({ kind: "free", requiresRsvp: true, price: 0 }), true);
+assert.equal(rsvpJoinProblem({
+  session: { kind: "rsvp", requiresRsvp: true, price: 0, cancelled: false },
+  alreadyBooked: false,
+  spots: 2,
+}), null);
+assert.equal(rsvpJoinProblem({
+  session: { kind: "rsvp", requiresRsvp: true, price: 0, cancelled: false },
+  alreadyBooked: true,
+  spots: 2,
+}), "Already booked");
 assert.equal(isRsvpOccurrence({ kind: "paid", requiresRsvp: true, price: 180 }), false);
 const routeErrorHtml = views.viewRouteError();
 assert.match(routeErrorHtml, /data-route-error/,
