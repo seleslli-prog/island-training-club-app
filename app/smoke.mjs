@@ -7,7 +7,7 @@ import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./js/events-workflow.js";
-import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
+import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./js/prayer-workflow.js";
 import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields, campaignTransitionProblem } from "./js/giving-workflow.js";
 import { attendanceWindowForSession, hyroxCycleStatus, hyroxPaymentProblem, hyroxRegistrationProblem } from "./js/hyrox-workflow.js";
 import { paymentStateForBooking } from "./js/payment-workflow.js";
@@ -33,6 +33,12 @@ assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please 
   id: "prayer-1", request: "Please pray", anonymousToLeaders: false, status: "prayed_for",
   createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,
 });
+assert.deepEqual(orderMemberPrayerRequests([
+  { id: "old", ownerId: "u1", createdAt: 1 }, { id: "new", ownerId: "u1", createdAt: 2 },
+], "u1").map((row) => row.id), ["new", "old"]);
+assert.deepEqual(orderAdminPrayerRequests([
+  { id: "closed", status: "closed", createdAt: 3 }, { id: "new", status: "new", createdAt: 1 },
+]).map((row) => row.id), ["new", "closed"]);
 assert.equal(isAdminRole("super_admin"), true);
 assert.equal(normalizeRole("super_admin"), "superadmin");
 assert.deepEqual(filterMembers([

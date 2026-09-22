@@ -31,7 +31,7 @@ import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./events-workflow.js";
 import { campaignIsOpen, campaignTransitionProblem, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
-import { normalizePrayerRequest, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
+import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem } from "./hyrox-workflow.js";
 import { paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
@@ -3037,11 +3037,8 @@ export async function listMyPrayerRequests() {
   }
 
   const actor = requireApprovedPrayerActor();
-  return state.prayers
-    .map((row, index) => ({ row, index }))
-    .filter(({ row }) => prayerOwnerId(row) === actor.id)
-    .sort((a, b) => Number(b.row.createdAt) - Number(a.row.createdAt) || b.index - a.index)
-    .map(({ row }) => memberPrayerRow(row));
+  return orderMemberPrayerRequests(state.prayers, actor.id)
+    .map((row) => memberPrayerRow(row));
 }
 
 export async function setMyPrayerRequestState(requestId, action) {
@@ -3089,17 +3086,7 @@ export async function listAdminPrayerRequests() {
   }
 
   requirePrayerAdminActor();
-  const order = { new: 1, prayed_for: 2, closed: 3 };
-  return state.prayers
-    .filter((row) => row.status !== "withdrawn")
-    .sort((a, b) => {
-      const statusOrder = (order[a.status] || 4) - (order[b.status] || 4);
-      if (statusOrder) return statusOrder;
-      const createdOrder = a.status === "closed"
-        ? Number(b.createdAt) - Number(a.createdAt)
-        : Number(a.createdAt) - Number(b.createdAt);
-      return createdOrder || String(a.id).localeCompare(String(b.id));
-    })
+  return orderAdminPrayerRequests(state.prayers)
     .map(localAdminPrayerRow);
 }
 

@@ -21,6 +21,29 @@ export function validatePrayerText(request) {
   return trimmed;
 }
 
+export function orderMemberPrayerRequests(rows, ownerId) {
+  return (rows || [])
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => (row?.ownerId ?? row?.owner_id ?? row?.userId) === ownerId)
+    .sort((a, b) => Number(b.row.createdAt ?? b.row.created_at) - Number(a.row.createdAt ?? a.row.created_at)
+      || b.index - a.index)
+    .map(({ row }) => row);
+}
+
+export function orderAdminPrayerRequests(rows) {
+  const order = { new: 1, prayed_for: 2, closed: 3 };
+  return (rows || [])
+    .filter((row) => row.status !== "withdrawn")
+    .sort((a, b) => {
+      const statusOrder = (order[a.status] || 4) - (order[b.status] || 4);
+      if (statusOrder) return statusOrder;
+      const createdA = Number(a.createdAt ?? a.created_at);
+      const createdB = Number(b.createdAt ?? b.created_at);
+      const createdOrder = a.status === "closed" ? createdB - createdA : createdA - createdB;
+      return createdOrder || String(a.id).localeCompare(String(b.id));
+    });
+}
+
 export function normalizePrayerRequest(row) {
   const field = (camel, snake) => row?.[snake] !== undefined ? row[snake] : row?.[camel];
   return {
