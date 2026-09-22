@@ -8,6 +8,7 @@ import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence } from "./js/events-workflow.js";
 import { normalizePrayerRequest } from "./js/prayer-workflow.js";
+import { campaignIsOpen } from "./js/giving-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -24,6 +25,7 @@ assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please 
   id: "prayer-1", request: "Please pray", anonymousToLeaders: false, status: "prayed_for",
   createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,
 });
+assert.equal(campaignIsOpen({ status: "published" }), true);
 assert.equal(isRsvpOccurrence({ kind: "free", requiresRsvp: true, price: 0 }), true);
 assert.equal(isRsvpOccurrence({ kind: "paid", requiresRsvp: true, price: 180 }), false);
 const routeErrorHtml = views.viewRouteError();
