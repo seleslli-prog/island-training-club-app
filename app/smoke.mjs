@@ -7,6 +7,7 @@ import { assertFpsCopyBindings } from "./test-html.mjs";
 import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence } from "./js/events-workflow.js";
+import { normalizePrayerRequest } from "./js/prayer-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -19,6 +20,10 @@ globalThis.localStorage = {
 const store = await import("./js/store.js");
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
+assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please pray", status: "prayed_for" }), {
+  id: "prayer-1", request: "Please pray", anonymousToLeaders: false, status: "prayed_for",
+  createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,
+});
 assert.equal(isRsvpOccurrence({ kind: "free", requiresRsvp: true, price: 0 }), true);
 assert.equal(isRsvpOccurrence({ kind: "paid", requiresRsvp: true, price: 180 }), false);
 const routeErrorHtml = views.viewRouteError();

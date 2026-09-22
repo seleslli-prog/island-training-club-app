@@ -30,6 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence } from "./events-workflow.js";
+import { normalizePrayerRequest } from "./prayer-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -2921,16 +2922,7 @@ const normalizedPrayerRole = (role) => role === "superadmin" ? "super_admin" : r
 const prayerOwnerId = (row) => row?.ownerId ?? row?.userId ?? null;
 const prayerField = (row, camel, snake) => row?.[snake] !== undefined ? row[snake] : row?.[camel];
 
-const memberPrayerRow = (row) => ({
-  id: row?.id ?? null,
-  request: prayerField(row, "request", "request_text") ?? null,
-  anonymousToLeaders: prayerField(row, "anonymousToLeaders", "anonymous_to_leaders") === true,
-  status: PRAYER_STATUSES.has(row?.status) ? row.status : "new",
-  createdAt: prayerField(row, "createdAt", "created_at") ?? null,
-  updatedAt: prayerField(row, "updatedAt", "updated_at") ?? null,
-  closedAt: prayerField(row, "closedAt", "closed_at") ?? null,
-  withdrawnAt: prayerField(row, "withdrawnAt", "withdrawn_at") ?? null,
-});
+const memberPrayerRow = normalizePrayerRequest;
 
 const adminPrayerRow = (row) => ({
   ...memberPrayerRow(row),
