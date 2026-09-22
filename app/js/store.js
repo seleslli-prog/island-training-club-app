@@ -31,7 +31,7 @@ import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { activeBookingRowsForSession, isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem, sessionRequiresRsvp } from "./events-workflow.js";
 import { buildDonationRecord, campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, donationCampaignProblem, donationForReference, donationOwnerProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
-import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
+import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, prayerTransition, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
@@ -3024,21 +3024,9 @@ export async function setMyPrayerRequestState(requestId, action) {
   );
   if (!prayer) throw new Error("Own prayer request not found.");
   const now = Date.now();
-  if (action === "close") {
-    const actionProblem = prayerActionProblem(prayer.status, action);
-    if (actionProblem) throw new Error(actionProblem);
-    prayer.status = "closed";
-    prayer.closedAt = now;
-    prayer.withdrawnAt = null;
-  } else {
-    const actionProblem = prayerActionProblem(prayer.status, action);
-    if (actionProblem) throw new Error(actionProblem);
-    prayer.status = "withdrawn";
-    prayer.request = null;
-    prayer.closedAt = null;
-    prayer.withdrawnAt = now;
-  }
-  prayer.updatedAt = now;
+  const transition = prayerTransition(prayer, action, now);
+  if (transition.error) throw new Error(transition.error);
+  Object.assign(prayer, transition.value);
   save();
   return memberPrayerRow(prayer);
 }

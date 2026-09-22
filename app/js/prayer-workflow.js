@@ -21,6 +21,21 @@ export function validatePrayerText(request) {
   return trimmed;
 }
 
+export function prayerTransition(prayer, action, now = Date.now()) {
+  const problem = prayerActionProblem(prayer?.status, action);
+  if (problem) return { error: problem };
+  return {
+    value: {
+      ...prayer,
+      status: action === "close" ? "closed" : "withdrawn",
+      request: action === "withdraw" ? null : prayer.request,
+      closedAt: action === "close" ? now : null,
+      withdrawnAt: action === "withdraw" ? now : null,
+      updatedAt: now,
+    },
+  };
+}
+
 export function buildPrayerRequest({ id, ownerId, request, anonymousToLeaders = false, now = Date.now() }) {
   return {
     id,
