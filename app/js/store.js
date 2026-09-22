@@ -33,7 +33,7 @@ import { isRsvpOccurrence, rsvpJoinProblem, rsvpWithdrawProblem } from "./events
 import { campaignIsOpen, campaignRaisedFromDonations, campaignTransitionProblem, normalizeGivingCampaign, orderDonationsForUser, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, orderAdminPrayerRequests, orderMemberPrayerRequests, prayerActionProblem, validatePrayerText } from "./prayer-workflow.js";
 import { attendanceWindowForSession, hyroxPaymentProblem, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
-import { paymentStateForBooking } from "./payment-workflow.js";
+import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
 import { decideReplacementProblem, replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
@@ -50,7 +50,7 @@ import {
   HYROX_POOL_CAPACITY,
 } from "./hyrox-cycle.js";
 
-export { attendanceWindowForSession, paymentStateForBooking };
+export { attendanceWindowForSession, effectiveAttendeeId, paymentStateForBooking };
 
 const STORAGE_KEY = "itc.prototype.v1";
 const APPLY_DEVICE_KEY = "itc.device.id";
@@ -1313,10 +1313,6 @@ export function replacementRequestByToken(token) {
   if (!value) return null;
   if (isLive()) return liveOps.liveReplacementRequestByToken?.(value) ?? null;
   return state.replacementRequests.find((request) => request.inviteToken === value) ?? null;
-}
-
-export function effectiveAttendeeId(booking) {
-  return booking?.replacementUserId || booking?.userId || null;
 }
 
 export function replacementEligible(booking, now = Date.now()) {
