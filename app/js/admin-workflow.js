@@ -1,6 +1,10 @@
 const ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin"]);
 const SUPER_ROLES = new Set(["superadmin", "super_admin"]);
 
+export function orderApprovalCandidates(candidates) {
+  return (candidates || []).sort((a, b) => new Date(a.appliedAt) - new Date(b.appliedAt));
+}
+
 export function applicationDecisionProblem({ candidate, decision, requireSubmitted = false }) {
   if (!["member", "declined"].includes(decision)) return "Invalid application decision.";
   if (!candidate) return "Pending application not found.";

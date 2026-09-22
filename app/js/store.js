@@ -35,7 +35,7 @@ import { buildPrayerRequest, normalizePrayerRequest, orderAdminPrayerRequests, o
 import { attendanceWindowForSession, hyroxActiveBookingRows, hyroxActiveQueueEntryForUser, hyroxPaymentProblem, hyroxQueueGroups, hyroxQueuePositionForEntries, hyroxRegistrationProblem, hyroxVenueChoiceProblem, hyroxVenueSwitchProblem, hyroxVenueTargetProblem } from "./hyrox-workflow.js";
 import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.js";
 import { normalizeLocalNotification } from "./notification-workflow.js";
-import { applicationDecisionProblem } from "./admin-workflow.js";
+import { applicationDecisionProblem, orderApprovalCandidates } from "./admin-workflow.js";
 import { decideReplacementProblem, replacementDuplicateForUser, replacementEligibility } from "./replacement-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
@@ -4819,7 +4819,7 @@ export async function listApprovalCandidates() {
     listPendingApplications(),
   ]);
   const applicationByProfile = new Map(applications.map((item) => [item.id, item]));
-  return profiles
+  return orderApprovalCandidates(profiles
     .filter((profile) => profile.role === "pending")
     .map((profile) => {
       const application = applicationByProfile.get(profile.id);
@@ -4832,8 +4832,7 @@ export async function listApprovalCandidates() {
             appliedAt: profile.created_at,
             applicationSubmitted: false,
           };
-    })
-    .sort((a, b) => new Date(a.appliedAt) - new Date(b.appliedAt));
+    }));
 }
 
 export async function decideApplication(profileId, decision) {
