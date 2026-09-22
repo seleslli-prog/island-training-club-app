@@ -8,7 +8,7 @@ import { createScheduleWorkflow } from "./js/schedule-workflow.js";
 import { projectHomeWeek } from "./js/home-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./js/events-workflow.js";
 import { normalizePrayerRequest, validatePrayerText } from "./js/prayer-workflow.js";
-import { campaignIsOpen, normalizeGivingCampaign } from "./js/giving-workflow.js";
+import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields } from "./js/giving-workflow.js";
 
 // --- localStorage shim ---
 const mem = new Map();
@@ -28,6 +28,9 @@ assert.deepEqual(normalizePrayerRequest({ id: "prayer-1", request_text: "Please 
   createdAt: null, updatedAt: null, closedAt: null, withdrawnAt: null,
 });
 assert.equal(campaignIsOpen({ status: "published" }), true);
+assert.deepEqual(validateCampaignFields({ title: "  Appeal ", description: " Help ", goalHKD: "1200", fpsId: "FPS-1", fpsPayee: "ITC" }), {
+  title: "Appeal", description: "Help", goalHKD: 1200, fpsId: "FPS-1", fpsPayee: "ITC",
+});
 assert.deepEqual(normalizeGivingCampaign({ id: "campaign-1", goal_hkd: "1200", fps_id: "FPS-1", status: "PUBLISHED" }), {
   id: "campaign-1", title: undefined, description: undefined, goalHKD: 1200,
   fpsId: "FPS-1", fpsPayee: undefined, status: "published", creatorProfileId: null,

@@ -30,7 +30,7 @@ import { createLiveResource } from "./live-resource.js";
 import { createScheduleWorkflow } from "./schedule-workflow.js";
 import { createSessionCache, normalizeLiveViewer } from "./session-workflow.js";
 import { isRsvpOccurrence, rsvpJoinProblem } from "./events-workflow.js";
-import { campaignIsOpen, normalizeGivingCampaign } from "./giving-workflow.js";
+import { campaignIsOpen, normalizeGivingCampaign, validateCampaignFields } from "./giving-workflow.js";
 import { normalizePrayerRequest, validatePrayerText } from "./prayer-workflow.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
@@ -3865,22 +3865,7 @@ export function activeGivingCampaign() {
 const ADMIN_CAMPAIGN_ROLES = new Set(["admin", "superadmin", "super_admin"]);
 const campaignColumns = "id, title, description, goal_hkd, fps_id, fps_payee, status, creator_profile_id, created_at, updated_at, published_at, closed_at";
 
-function validatedCampaignFields(draft) {
-  const title = String(draft?.title || "").trim();
-  const description = String(draft?.description || "").trim();
-  const rawGoal = draft?.goalHKD ?? draft?.goal_hkd;
-  const goalHKD = Number(rawGoal);
-  const fpsId = String(draft?.fpsId ?? draft?.fps_id ?? "").trim();
-  const fpsPayee = String(draft?.fpsPayee ?? draft?.fps_payee ?? "").trim();
-  if (!title) throw new Error("Enter a campaign title.");
-  if (!description) throw new Error("Enter a campaign description.");
-  if (!Number.isInteger(goalHKD) || goalHKD <= 0) {
-    throw new Error("Enter a positive whole-HKD goal.");
-  }
-  if (!fpsId) throw new Error("Enter the FPS ID.");
-  if (!fpsPayee) throw new Error("Enter the FPS payee.");
-  return { title, description, goalHKD, fpsId, fpsPayee };
-}
+const validatedCampaignFields = validateCampaignFields;
 
 async function requireCampaignAdmin() {
   const user = isLive() ? await getCurrentUser() : currentUser();

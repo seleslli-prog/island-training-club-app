@@ -2,6 +2,21 @@ export function campaignIsOpen(campaign) {
   return campaign?.status === "published";
 }
 
+export function validateCampaignFields(draft) {
+  const title = String(draft?.title || "").trim();
+  const description = String(draft?.description || "").trim();
+  const rawGoal = draft?.goalHKD ?? draft?.goal_hkd;
+  const goalHKD = Number(rawGoal);
+  const fpsId = String(draft?.fpsId ?? draft?.fps_id ?? "").trim();
+  const fpsPayee = String(draft?.fpsPayee ?? draft?.fps_payee ?? "").trim();
+  if (!title) throw new Error("Enter a campaign title.");
+  if (!description) throw new Error("Enter a campaign description.");
+  if (!Number.isInteger(goalHKD) || goalHKD <= 0) throw new Error("Enter a positive whole-HKD goal.");
+  if (!fpsId) throw new Error("Enter the FPS ID.");
+  if (!fpsPayee) throw new Error("Enter the FPS payee.");
+  return { title, description, goalHKD, fpsId, fpsPayee };
+}
+
 export function normalizeGivingCampaign(row) {
   if (!row) return null;
   return {
