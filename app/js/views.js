@@ -1124,8 +1124,7 @@ function communityFellowship() {
       <h3>First-timers</h3>
       <p>New to church entirely? Say so at any session and a leader will happily walk you through what to expect — zero pressure, zero jargon.</p>
     </div></div>
-    <button class="btn mt16" type="button" data-action="connect-interest" data-topic="fellowship groups">I’m interested — tell me more</button>
-    <p class="muted small mt16 center">Draft content — fellowship details to be confirmed with ITC leadership.</p>`;
+    <button class="btn mt16" type="button" data-action="connect-interest" data-topic="fellowship groups">I’m interested — tell me more</button>`;
 }
 
 function communityAnnouncements() {

@@ -2563,6 +2563,8 @@ assert.ok(fellowship.includes("service starts 9:30 AM"),
   "fellowship copy must show the 9:30 AM Sunday service start");
 assert.ok(!fellowship.includes("service starts 10:30 AM"),
   "fellowship copy must not retain the old 10:30 AM service start");
+assert.ok(!fellowship.includes("Draft content — fellowship details to be confirmed with ITC leadership."),
+  "fellowship page must not show internal draft-status copy");
 console.log("ok  fellowship service time is 9:30 AM");
 
 const ics = data.buildICS({
