@@ -282,6 +282,23 @@ assert.deepEqual(
   ["09:15", "10:30", "12:45"],
   "Saturday sessions must render chronologically so lunch follows both HYROX slots"
 );
+assert.deepEqual(
+  [
+    data.SEED_ACTIVITIES.find((activity) => activity.id === "lunch"),
+    quarryBaySeed,
+    quarryBayEarlySeed,
+    data.SEED_ACTIVITIES.find((activity) => activity.id === "wnt"),
+    data.SEED_ACTIVITIES.find((activity) => activity.id === "run"),
+  ].sort(data.compareActivitiesByWeekday).map((activity) => `${activity.id}:${activity.time}`),
+  [
+    "run:19:30",
+    "wnt:19:30",
+    "hyrox-quarry-bay-early:09:15",
+    "hyrox-quarry-bay:10:30",
+    "lunch:12:45",
+  ],
+  "recurring activity templates must sort by weekday, then start time"
+);
 assert.equal(data.fmtMoney(180), "HK$180",
   "consumer-facing Hong Kong prices should use the standard HK$ symbol");
 const historicalBftActivity = {
@@ -7443,6 +7460,18 @@ if (!(activitiesHtml.indexOf("Recurring Activity Defaults") < weeklyControlsStar
     || !/aria-labelledby="paid-sessions-title">[\s\S]*<\/section>\s*<\/details>\s*<details class="admin-section mt24">\s*<summary><h2>One-off Events<\/h2>/.test(activitiesHtml)) {
   throw new Error("One-off Events must remain a separate section after Weekly Event Controls");
 }
+const recurringDefaultsHtml = activitiesHtml.slice(
+  activitiesHtml.indexOf("Recurring Activity Defaults"),
+  weeklyControlsStart === -1 ? undefined : weeklyControlsStart,
+);
+const recurringDayTimes = [...recurringDefaultsHtml.matchAll(
+  /<time>(Sun|Mon|Tue|Wed|Thu|Fri|Sat)<small>(\d{2}:\d{2})<\/small><\/time>/g
+)].map((match) => `${match[1]} ${match[2]}`);
+assert.deepEqual(
+  recurringDayTimes,
+  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 09:15", "Sat 10:30", "Sat 12:45"],
+  "Recurring Activity Defaults must sort by weekday, then start time"
+);
 if (!activitiesHtml.includes("Admin Tools") || activitiesHtml.includes("Club Operations")) {
   throw new Error("Admin heading must read Admin Tools");
 }

@@ -345,6 +345,14 @@ export function compareSessionsByStart(a, b) {
     || String(a?.id || "").localeCompare(String(b?.id || ""));
 }
 
+// Recurring activity templates have a weekday (0=Sun … 6=Sat) and clock time,
+// but no dated occurrence. Sort week-day first, then start time, then id.
+export function compareActivitiesByWeekday(a, b) {
+  return (Number(a?.weekday) || 0) - (Number(b?.weekday) || 0)
+    || String(a?.time || "").localeCompare(String(b?.time || ""))
+    || String(a?.id || "").localeCompare(String(b?.id || ""));
+}
+
 export function sessionsInRange(activities, fromDate, days) {
   const out = [];
   const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());

@@ -22,6 +22,7 @@ import {
   CULTURE,
   ANNOUNCEMENTS,
   ISLAND_ECC_HYROX_ACTIVITY_IDS,
+  compareActivitiesByWeekday,
   compareSessionsByStart,
   findSession,
   sessionStarted,
@@ -3331,7 +3332,7 @@ function adminOneOffEvents() {
 }
 
 function adminActivities() {
-  const acts = store.activities();
+  const acts = store.activities().slice().sort(compareActivitiesByWeekday);
   const activityRows = acts
     .map(
       (a) => `
