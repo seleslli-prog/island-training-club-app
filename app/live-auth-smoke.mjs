@@ -2814,6 +2814,12 @@ const liveApplyHtml = await views.viewApply();
 assert.match(liveApplyHtml, /data-form="apply"/);
 assert.match(liveApplyHtml, /name="full_name"[^>]*required/);
 assert.match(liveApplyHtml, /name="full_name"[^>]*autocomplete="name"/);
+assert.match(liveApplyHtml, /name="preferred_name"/);
+assert.ok(
+  liveApplyHtml.indexOf('name="full_name"') < liveApplyHtml.indexOf('name="preferred_name"')
+    && liveApplyHtml.indexOf('name="preferred_name"') < liveApplyHtml.indexOf('name="mobile"'),
+  "live apply must place preferred name after full name and before mobile"
+);
 assert.match(liveApplyHtml, /name="mobile"/);
 assert.match(liveApplyHtml, /name="age_over_18"/);
 for (const name of ["emergency_relationship", "waiver_signature_text", "waiver_signed_at"]) {

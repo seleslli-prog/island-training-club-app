@@ -2025,6 +2025,7 @@ function applyFormHtml(cu, draft) {
       </div>` : ""}
       <form data-form="apply" class="form-grid mt16">
         ${applyField("text", "full_name", "Full name", true, fullName, 'autocomplete="name" maxlength="120"')}
+        ${applyField("text", "preferred_name", "Preferred name (optional)", false, fields.preferred_name)}
         ${applyField("text", "mobile", "Mobile / WhatsApp number", true, fields.mobile)}
         ${ageStatusField(savedAge)}
         <div data-minor-only ${savedAge === true ? "" : "hidden"}>
@@ -2036,7 +2037,6 @@ function applyFormHtml(cu, draft) {
         ${applyField("text", "emergency_phone", "Emergency contact phone", true, fields.emergency_phone)}
         ${applySelect("heard_source", "How did you hear about ITC?", ["friend", "family", "search", "social", "event", "other"], true, fields.heard_source)}
         ${applyField("text", "heard_detail", "Detail (optional)", false, fields.heard_detail)}
-        ${applyField("text", "preferred_name", "Preferred name (optional)", false, fields.preferred_name)}
         <label class="check"><input type="checkbox" name="photo_consent" ${checked("photo_consent")} required> I consent to photos/videos of me being used on ITC channels. *</label>
         <p class="muted small">Please contact ITC Committee if you have any questions/concerns about this.</p>
         <div data-doc-accept="privacy">
