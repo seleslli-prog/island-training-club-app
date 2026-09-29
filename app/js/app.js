@@ -50,6 +50,49 @@ export function commitOwnAvatarPresentation(presentation) {
 const canManageOwnAvatar = (user) => user?.status === "approved"
   && ["member", "admin", "superadmin", "super_admin"].includes(user.role);
 
+function rosterRowMatchesViewer(row, viewer) {
+  if (!row || !viewer) return false;
+  if (row.profileId && row.profileId === viewer.id) return true;
+  const label = String(row.displayName || "").trim().toLowerCase();
+  if (!label) return false;
+  const full = String(viewer.fullName || "").trim().toLowerCase();
+  const preferred = String(viewer.preferredName || "").trim().toLowerCase();
+  if (full && label === full) return true;
+  if (preferred && label === preferred) return true;
+  if (preferred && full) {
+    const parts = full.split(/\s+/).filter(Boolean);
+    const last = parts[parts.length - 1] || "";
+    if (last && label === `${preferred} ${last[0]}.`) return true;
+  }
+  return false;
+}
+
+async function applyOwnAvatarToRoster(rows, viewer) {
+  if (!Array.isArray(rows) || !rows.length || !canManageOwnAvatar(viewer)) return rows;
+  const own = await store.getOwnAvatar().catch(() => null);
+  if (!own?.url) return rows;
+  return rows.map((row) => {
+    if (!rosterRowMatchesViewer(row, viewer)) return row;
+    return {
+      ...row,
+      profileId: row.profileId || viewer.id,
+      url: own.url,
+      source: own.source,
+      state: own.state || "active",
+      expiresAt: own.expiresAt ?? null,
+    };
+  });
+}
+
+function initialsRosterFromNames(attendeeNames) {
+  return attendeeNames.map((displayName) => ({
+    displayName,
+    url: null,
+    source: "initials",
+    state: "active",
+  }));
+}
+
 export async function openOwnAvatarManager(openManager = openAvatarManager) {
   const user = store.currentUser();
   if (!canManageOwnAvatar(user)) {
@@ -527,12 +570,7 @@ async function render(generation = renderGeneration) {
             avatarRows = await store.getSessionAvatars(arg);
             if (Array.isArray(attendeeNames) && attendeeNames.length) {
               if (!Array.isArray(avatarRows) || !avatarRows.length) {
-                avatarRows = attendeeNames.map((displayName) => ({
-                  displayName,
-                  url: null,
-                  source: "initials",
-                  state: "active",
-                }));
+                avatarRows = initialsRosterFromNames(attendeeNames);
               } else {
                 avatarRows = avatarRows.map((row, index) => ({
                   ...row,
@@ -541,7 +579,14 @@ async function render(generation = renderGeneration) {
               }
             }
           } catch {
-            avatarRows = null;
+            avatarRows = Array.isArray(attendeeNames) && attendeeNames.length
+              ? initialsRosterFromNames(attendeeNames)
+              : null;
+          }
+          // Session avatar resolver can omit photos for RSVP rosters; keep the
+          // viewer's header photo on their own Who's coming row.
+          if (Array.isArray(avatarRows) && avatarRows.length) {
+            avatarRows = await applyOwnAvatarToRoster(avatarRows, viewer);
           }
         }
       }

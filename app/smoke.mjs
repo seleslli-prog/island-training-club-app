@@ -2353,6 +2353,8 @@ assert.doesNotMatch(
   "Unguarded querySelector on arbitrary hash hrefs would throw SyntaxError for route links");
 assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPrivacyPreferences\(/,
   "Privacy & Notifications must persist reminder preferences through the form delegate");
+assert.match(integratedAppSource, /applyOwnAvatarToRoster/,
+  "Activity Who's coming must overlay the viewer's own profile photo onto their roster row");
 assert.equal(typeof store.attendeeCountFor, "function",
   "store must export attendeeCountFor for identity-independent RSVP counts");
 assert.equal((integratedViewSource.match(/store\.attendeeCountFor\([^)]*\)/g) || []).length, 4,
