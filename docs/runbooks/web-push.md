@@ -4,9 +4,10 @@ Browser Web Push for operational booking / payment / venue notifications.
 
 ## Prerequisites
 
-- Migrations applied through `20260927000002_web_push_settings_table.sql` (and earlier pref + delivery migrations).
+- Migrations applied through `20260929000002_web_push_payload_snapshot.sql` (and earlier pref + delivery + settings migrations).
 - App served over **HTTPS** (or localhost). Canonical production root is `/` (not `/app/`); `vercel.json` rewrites `/push-sw.js` → `/app/push-sw.js` so root-scope registration works.
 - Desktop Chrome/Firefox/Edge, or Android Chrome. **iOS** requires Add to Home Screen (installed PWA) on a recent iOS version.
+- If Invocations return `skipped: missing_notification`, the trigger body is still id-only or the Edge Function is stale — apply the snapshot migration and redeploy `send-web-push`.
 
 ## One-time secrets
 

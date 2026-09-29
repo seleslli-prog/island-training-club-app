@@ -1163,6 +1163,30 @@ console.log("ok  web push ops preference migration is phase-1 column only");
       `web push settings migration missing ${marker}`,
     );
   }
+  const webPushSnapshotMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20260929000002_web_push_payload_snapshot.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "profile_id",
+    "destination",
+    "notification snapshot",
+    "request_web_push_delivery",
+  ]) {
+    assert.ok(
+      webPushSnapshotMigration.includes(marker),
+      `web push payload snapshot migration missing ${marker}`,
+    );
+  }
+  const sendWebPushSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/functions/send-web-push/index.ts"),
+    "utf8",
+  );
+  assert.ok(
+    sendWebPushSource.includes("notificationFromPayload")
+      && sendWebPushSource.includes("missing_notification"),
+    "send-web-push must accept trigger payload snapshots to avoid commit races",
+  );
   assert.equal(
     /alter database\s+postgres\s+set/i.test(webPushSettingsMigration),
     false,

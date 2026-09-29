@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-web-push-secret',
 };
 
+type NotificationRow = {
+  id: string;
+  profile_id: string;
+  kind: string;
+  title: string | null;
+  body: string | null;
+  destination: string | null;
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -17,6 +26,46 @@ function requireEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`Missing ${name}`);
   return value;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function notificationFromPayload(payload: Record<string, unknown>, notificationId: string): NotificationRow | null {
+  const profileId = String(payload?.profile_id || '').trim();
+  const kind = String(payload?.kind || '').trim();
+  if (!profileId || !kind) return null;
+  return {
+    id: notificationId,
+    profile_id: profileId,
+    kind,
+    title: payload?.title == null ? null : String(payload.title),
+    body: payload?.body == null ? null : String(payload.body),
+    destination: payload?.destination == null ? null : String(payload.destination),
+  };
+}
+
+async function loadNotification(
+  admin: ReturnType<typeof createClient>,
+  notificationId: string,
+  payload: Record<string, unknown>,
+): Promise<NotificationRow | null> {
+  const fromPayload = notificationFromPayload(payload, notificationId);
+  if (fromPayload) return fromPayload;
+
+  // Retry briefly: pg_net can beat the inserting transaction's visibility.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (attempt > 0) await sleep(150 * attempt);
+    const { data, error } = await admin
+      .from('notifications')
+      .select('id, profile_id, kind, title, body, destination')
+      .eq('id', notificationId)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as NotificationRow;
+  }
+  return null;
 }
 
 Deno.serve(async (request) => {
@@ -34,7 +83,7 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    const payload = await request.json().catch(() => ({}));
+    const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
     const notificationId = String(payload?.notification_id || '').trim();
     if (!notificationId) {
       return jsonResponse({ error: 'notification_id required' }, 400);
@@ -52,12 +101,7 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data: notification, error: noteError } = await admin
-      .from('notifications')
-      .select('id, profile_id, kind, title, body, destination')
-      .eq('id', notificationId)
-      .maybeSingle();
-    if (noteError) throw noteError;
+    const notification = await loadNotification(admin, notificationId, payload);
     if (!notification) return jsonResponse({ ok: true, skipped: 'missing_notification' });
 
     const { data: application, error: appError } = await admin
