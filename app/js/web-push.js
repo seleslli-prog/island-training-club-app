@@ -8,8 +8,18 @@ function vapidPublicKey() {
   return String(window.VAPID_PUBLIC_KEY || "").trim();
 }
 
-/** Resolve /app/ whether the page is /app/, /app/index.html, or app served at /. */
+/** Resolve push-sw URL + registration scope for live (/) and local /app/ layouts. */
 function appPaths() {
+  // Live Vercel: canonical URL is "/" ( /app/ redirects home ). The SW file lives
+  // at /app/push-sw.js and vercel.json rewrites /push-sw.js → that file so the
+  // worker can register with root scope from pages at "/#/…".
+  if (isLive()) {
+    const basePath = "/";
+    const swUrl = new URL("/push-sw.js", location.origin).href;
+    const scope = new URL(basePath, location.origin).href;
+    return { basePath, swUrl, scope };
+  }
+
   const path = String(location.pathname || "/");
   let basePath = "/app/";
   if (path.includes("/app/")) {

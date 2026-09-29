@@ -1181,6 +1181,10 @@ console.log("ok  web push ops preference migration is phase-1 column only");
   assert.ok(webPushClient.includes("push-sw.js"), "web-push client must resolve push-sw.js");
   assert.ok(webPushClient.includes("__itcSyncWebPush"), "web-push debug helper missing");
   assert.ok(
+    webPushClient.includes("if (isLive())") && webPushClient.includes('new URL("/push-sw.js"'),
+    "live web-push path helper must register /push-sw.js for canonical root pages",
+  );
+  assert.ok(
     readFileSync(resolve(__dirnameSmoke, "index.html"), "utf8").includes("VAPID_PUBLIC_KEY"),
     "index.html must expose VAPID_PUBLIC_KEY",
   );
@@ -2231,8 +2235,10 @@ for (const assetReference of [
   assert.ok(appIndexSource.includes(assetReference),
     `canonical-root document must use explicit static asset URL ${assetReference}`);
 }
-assert.deepEqual(vercelConfig.rewrites, [{ source: "/", destination: "/app/index.html" }],
-  "the canonical production root must serve the app without exposing /app/");
+assert.deepEqual(vercelConfig.rewrites, [
+  { source: "/", destination: "/app/index.html" },
+  { source: "/push-sw.js", destination: "/app/push-sw.js" },
+], "canonical root must serve the app and expose push-sw.js at / for root-scope registration");
 const legacyProductionHosts = [
   "island-training-club-app-island-training-club.vercel.app",
   "island-training-club-app.vercel.app",

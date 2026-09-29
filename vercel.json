@@ -87,6 +87,10 @@
     {
       "source": "/",
       "destination": "/app/index.html"
+    },
+    {
+      "source": "/push-sw.js",
+      "destination": "/app/push-sw.js"
     }
   ]
 }

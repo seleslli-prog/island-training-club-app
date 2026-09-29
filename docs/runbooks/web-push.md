@@ -4,8 +4,8 @@ Browser Web Push for operational booking / payment / venue notifications.
 
 ## Prerequisites
 
-- Migrations applied through `20260927000001_web_push_delivery.sql` (and earlier `web_push_ops` pref).
-- App served over **HTTPS** (or localhost).
+- Migrations applied through `20260927000002_web_push_settings_table.sql` (and earlier pref + delivery migrations).
+- App served over **HTTPS** (or localhost). Canonical production root is `/` (not `/app/`); `vercel.json` rewrites `/push-sw.js` → `/app/push-sw.js` so root-scope registration works.
 - Desktop Chrome/Firefox/Edge, or Android Chrome. **iOS** requires Add to Home Screen (installed PWA) on a recent iOS version.
 
 ## One-time secrets
