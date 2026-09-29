@@ -2558,6 +2558,13 @@ if (!prayer.id || prayer.request !== "Smoke test request") throw new Error("pray
 console.log("ok  prayer request records locally");
 
 // --- ICS generation ---
+const fellowship = views.viewCommunity("fellowship");
+assert.ok(fellowship.includes("service starts 9:30 AM"),
+  "fellowship copy must show the 9:30 AM Sunday service start");
+assert.ok(!fellowship.includes("service starts 10:30 AM"),
+  "fellowship copy must not retain the old 10:30 AM service start");
+console.log("ok  fellowship service time is 9:30 AM");
+
 const ics = data.buildICS({
   ...free,
   id: "calendar-test",

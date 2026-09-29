@@ -1120,7 +1120,7 @@ function communityFellowship() {
       <h3>Small groups</h3>
       <p>Midweek groups meet around the city — a short reflection, honest conversation and prayer for anyone who wants it. No Bible knowledge required.</p>
       <h3>Sundays at IECC</h3>
-      <p>Many of us worship at Island Evangelical Community Church on Sunday mornings. Come along and sit with the ITC crowd — service starts 10:30 AM.</p>
+      <p>Many of us worship at Island Evangelical Community Church on Sunday mornings. Come along and sit with the ITC crowd — service starts 9:30 AM.</p>
       <h3>First-timers</h3>
       <p>New to church entirely? Say so at any session and a leader will happily walk you through what to expect — zero pressure, zero jargon.</p>
     </div></div>
