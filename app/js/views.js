@@ -174,6 +174,36 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
     </a>`;
 }
 
+// Home week list: group by day so stacked times do not read as one day.
+function homeWeekListHtml(rows) {
+  if (!rows.length) return "";
+  const groups = [];
+  for (const session of rows) {
+    const dateISO = session.dateISO || (session.snapshot && session.snapshot.dateISO) || "";
+    const last = groups[groups.length - 1];
+    if (!last || last.dateISO !== dateISO) {
+      groups.push({ dateISO, sessions: [session] });
+    } else {
+      last.sessions.push(session);
+    }
+  }
+  let rowIndex = 0;
+  return groups.map((group) => {
+    const headDate = group.sessions[0].date || (group.dateISO ? parseISO(group.dateISO) : null);
+    const head = headDate ? fmtDate(headDate) : "Date TBC";
+    const body = group.sessions.map((session) => {
+      const html = sessionRow(session, { highlight: rowIndex === 0, showDate: false });
+      rowIndex += 1;
+      return html;
+    }).join("");
+    return `
+      <div class="week-day-group">
+        <div class="week-day-head">${esc(head)}</div>
+        ${body}
+      </div>`;
+  }).join("");
+}
+
 function pendingBanner() {
   return `
     <div class="banner warn mt16">
@@ -346,7 +376,7 @@ export function viewHome() {
     </div>
     <div class="session-list">
       ${rows.length
-        ? rows.map((item, i) => sessionRow(item, { highlight: i === 0 })).join("")
+        ? homeWeekListHtml(rows)
         : `<div class="empty">${emptyMsg}</div>`}
     </div>
     <div class="section-head"><h2>The Club</h2><a href="#/community">More →</a></div>

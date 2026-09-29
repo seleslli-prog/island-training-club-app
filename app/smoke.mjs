@@ -2679,6 +2679,27 @@ if (!localVisitorHome.includes("<h2>This week — open to all</h2>")) {
 if (localVisitorHome.includes("My Week")) {
   throw new Error("visitor Home must not show My Week");
 }
+{
+  const weekStart = data.mondayOf(data.todayLocal());
+  const weekEnd = data.addDays(weekStart, 6);
+  const freeInWeek = allUpcoming.filter((session) => {
+    if (session.kind !== "free") return false;
+    const iso = session.dateISO || (session.snapshot && session.snapshot.dateISO);
+    if (!iso) return false;
+    const t = data.parseISO(iso).getTime();
+    return t >= weekStart.getTime() && t <= weekEnd.getTime();
+  });
+  const distinctDays = new Set(freeInWeek.map((session) => session.dateISO));
+  if (freeInWeek.length) {
+    if (!localVisitorHome.includes('class="week-day-head"')) {
+      throw new Error("visitor Home week list must group sessions under day headers");
+    }
+    const headCount = (localVisitorHome.match(/class="week-day-head"/g) || []).length;
+    if (headCount !== distinctDays.size) {
+      throw new Error(`visitor Home must render one day head per distinct day (${distinctDays.size}), got ${headCount}`);
+    }
+  }
+}
 const assertRenderedActivityLinksAreFree = (html, label) => {
   const linkedIds = [...html.matchAll(/href="#\/activity\/([^"]+)"/g)].map((match) => match[1]);
   if (!linkedIds.length) {
@@ -4377,6 +4398,11 @@ if (!homeBooked.includes("Booked") || !homeBooked.includes("Island ECC")) {
   failures++;
   console.error('FAIL home "My week" does not show the booked session');
 } else console.log('ok  home "My week" shows the booked session');
+const bookedDayLabel = data.fmtDate(data.parseISO(booking.snapshot.dateISO));
+if (!homeBooked.includes('class="week-day-head"') || !homeBooked.includes(bookedDayLabel)) {
+  failures++;
+  console.error('FAIL home "My week" must show a day header for the booked session');
+} else console.log('ok  home "My week" groups the booked session under a day header');
 if (homeBooked.includes("BFT Causeway Bay") || homeBooked.includes("Midtown28 Fitness") || homeBooked.includes("Just show up")) {
   failures++;
   console.error('FAIL home "My week" shows sessions the member has not booked');

@@ -721,6 +721,19 @@ a.profile-row:hover .pr-text strong { color: var(--accent); }
 
 .session-list { border-top: 1px solid var(--line); margin-top: 16px; }
 
+.week-day-group + .week-day-group { margin-top: 18px; }
+
+.week-day-head {
+  padding: 12px 2px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.week-day-group:first-child .week-day-head { padding-top: 10px; }
+
 .session-row {
   display: grid;
   grid-template-columns: 52px 1fr auto;
