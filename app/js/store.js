@@ -43,8 +43,10 @@ import * as liveOps from "./operations.js";
 
 const STORAGE_KEY = "itc.prototype.v1";
 const APPLY_DEVICE_KEY = "itc.device.id";
-const APPLY_DRAFT_KEY = "itc.apply.draft.v1";
-const APPLY_DRAFT_VERSION = 1;
+const APPLY_DRAFT_KEY = "itc.apply.draft.v1"; // legacy single-draft key
+const APPLY_DRAFTS_KEY = "itc.apply.drafts.v2";
+const APPLY_DRAFT_VERSION = 2;
+const UNCLAIMED_DRAFT_OWNER = "__unclaimed__";
 const LAST_ROUTE_KEY = "itc.last-route.v1";
 const LAST_ROUTE_VERSION = 1;
 const STATE_VERSION = 27;
@@ -1065,42 +1067,79 @@ export function getApplyDeviceId() {
   }
 }
 
-function readApplyDraft() {
+function isValidApplyDraft(draft, deviceId) {
+  return !!draft
+    && [1, APPLY_DRAFT_VERSION].includes(draft.version)
+    && draft.deviceId === deviceId
+    && Number.isFinite(draft.savedAt)
+    && draft.fields
+    && typeof draft.fields === "object"
+    && !Array.isArray(draft.fields);
+}
+
+function draftOwnerKey(profileId) {
+  return profileId == null || profileId === ""
+    ? UNCLAIMED_DRAFT_OWNER
+    : String(profileId);
+}
+
+function readApplyDraftMap() {
+  const deviceId = getApplyDeviceId();
+  if (!deviceId) return {};
   try {
-    const raw = localStorage.getItem(APPLY_DRAFT_KEY);
-    if (!raw) return null;
-    const draft = JSON.parse(raw);
-    const deviceId = getApplyDeviceId();
-    const valid = draft?.version === APPLY_DRAFT_VERSION
-      && draft?.deviceId === deviceId
-      && Number.isFinite(draft?.savedAt)
-      && draft?.fields
-      && typeof draft.fields === "object"
-      && !Array.isArray(draft.fields);
-    if (!valid) {
-      localStorage.removeItem(APPLY_DRAFT_KEY);
-      return null;
+    const raw = localStorage.getItem(APPLY_DRAFTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const out = {};
+        for (const [key, draft] of Object.entries(parsed)) {
+          if (!isValidApplyDraft(draft, deviceId)) continue;
+          out[key] = { ...draft, version: APPLY_DRAFT_VERSION, profileId: key === UNCLAIMED_DRAFT_OWNER ? null : key };
+        }
+        return out;
+      }
     }
-    return draft;
+  } catch {
+    try { localStorage.removeItem(APPLY_DRAFTS_KEY); } catch {}
+  }
+
+  // Migrate the legacy single-draft key into the per-account map once.
+  try {
+    const legacyRaw = localStorage.getItem(APPLY_DRAFT_KEY);
+    if (!legacyRaw) return {};
+    const legacy = JSON.parse(legacyRaw);
+    localStorage.removeItem(APPLY_DRAFT_KEY);
+    if (!isValidApplyDraft(legacy, deviceId)) return {};
+    const key = draftOwnerKey(legacy.profileId);
+    const map = {
+      [key]: {
+        ...legacy,
+        version: APPLY_DRAFT_VERSION,
+        profileId: key === UNCLAIMED_DRAFT_OWNER ? null : key,
+      },
+    };
+    localStorage.setItem(APPLY_DRAFTS_KEY, JSON.stringify(map));
+    return map;
   } catch {
     try { localStorage.removeItem(APPLY_DRAFT_KEY); } catch {}
-    return null;
+    return {};
   }
 }
 
-export function getApplyDraft({ profileId = null } = {}) {
-  const draft = readApplyDraft();
-  if (!draft) return null;
-  const ownerId = draft.profileId == null ? null : String(draft.profileId);
-  const wantedId = profileId == null ? null : String(profileId);
-  // Account-scoped reads only resume a draft owned by that profile, or an
-  // unclaimed draft the pending member is about to continue after sign-in.
-  if (wantedId && ownerId && ownerId !== wantedId) return null;
-  if (wantedId && !ownerId) {
-    draft.profileId = wantedId;
-    try { localStorage.setItem(APPLY_DRAFT_KEY, JSON.stringify(draft)); } catch {}
+function writeApplyDraftMap(map) {
+  const keys = Object.keys(map);
+  if (!keys.length) {
+    try { localStorage.removeItem(APPLY_DRAFTS_KEY); } catch {}
+    try { localStorage.removeItem(APPLY_DRAFT_KEY); } catch {}
+    return;
   }
-  return draft;
+  localStorage.setItem(APPLY_DRAFTS_KEY, JSON.stringify(map));
+  try { localStorage.removeItem(APPLY_DRAFT_KEY); } catch {}
+}
+
+export function getApplyDraft({ profileId = null } = {}) {
+  const map = readApplyDraftMap();
+  return map[draftOwnerKey(profileId)] || null;
 }
 
 export function saveApplyDraft({ fields = {}, profileId = null } = {}) {
@@ -1108,22 +1147,18 @@ export function saveApplyDraft({ fields = {}, profileId = null } = {}) {
     const deviceId = getApplyDeviceId();
     if (!deviceId) return null;
     const actorId = profileId || currentUser()?.id || null;
-    const existing = readApplyDraft();
-    const ownerId = existing?.profileId == null ? null : String(existing.profileId);
-    if (actorId && ownerId && ownerId !== String(actorId)) return null;
+    const key = draftOwnerKey(actorId);
+    const map = readApplyDraftMap();
+    const existing = map[key];
     const draft = {
       version: APPLY_DRAFT_VERSION,
       deviceId,
-      profileId: actorId || ownerId || null,
+      profileId: actorId || null,
       savedAt: Date.now(),
-      fields: {
-        ...((!ownerId || !actorId || ownerId === String(actorId))
-          ? (existing?.fields || {})
-          : {}),
-        ...fields,
-      },
+      fields: { ...(existing?.fields || {}), ...fields },
     };
-    localStorage.setItem(APPLY_DRAFT_KEY, JSON.stringify(draft));
+    map[key] = draft;
+    writeApplyDraftMap(map);
     return draft;
   } catch {
     return null;
@@ -1132,14 +1167,16 @@ export function saveApplyDraft({ fields = {}, profileId = null } = {}) {
 
 export function clearApplyDraft({ profileId = null } = {}) {
   try {
-    if (profileId) {
-      const draft = readApplyDraft();
-      if (!draft) return;
-      const ownerId = draft.profileId == null ? null : String(draft.profileId);
-      // Remove only this account's draft, or an unclaimed leftover after sign-in.
-      if (ownerId && ownerId !== String(profileId)) return;
+    if (profileId == null) {
+      writeApplyDraftMap({});
+      return;
     }
-    localStorage.removeItem(APPLY_DRAFT_KEY);
+    const map = readApplyDraftMap();
+    delete map[String(profileId)];
+    // Unclaimed leftovers are browser-shared and unsafe next to a signed-in
+    // account, so drop them whenever that account cleans up its own draft.
+    delete map[UNCLAIMED_DRAFT_OWNER];
+    writeApplyDraftMap(map);
   } catch {}
 }
 
@@ -4482,7 +4519,7 @@ export async function saveMyApplication(form) {
 
   const { error } = await supabase.from("applications").upsert(row);
   if (error) throw error;
-  clearApplyDraft();
+  clearApplyDraft({ profileId: cu.id });
 }
 
 export async function updateMyMembershipDetails(form) {

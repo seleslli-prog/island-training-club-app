@@ -1954,7 +1954,11 @@ export async function viewApplyLive() {
         <p class="muted">Your application was submitted on ${fmtDate(existing.submitted_at)}. An admin will review it shortly.</p>
       </section>`;
   }
-  return applyFormHtml(cu, store.getApplyDraft({ profileId: cu.id }));
+  const ownedDraft = store.getApplyDraft({ profileId: cu.id });
+  // Drop unclaimed leftovers so a later save cannot merge another person's
+  // form into this pending account.
+  if (!ownedDraft) store.clearApplyDraft({ profileId: cu.id });
+  return applyFormHtml(cu, ownedDraft);
 }
 
 function heardSourceLabel(value) {

@@ -3323,13 +3323,14 @@ for (const [label, field] of [
 {
   localStorage.removeItem("itc.device.id");
   localStorage.removeItem("itc.apply.draft.v1");
+  localStorage.removeItem("itc.apply.drafts.v2");
 
   if (store.getApplyDraft() !== null) {
     throw new Error("fresh application draft should be null");
   }
 
   const first = store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
-  if (!first?.deviceId || first.version !== 1 || first.fields.mobile !== "+852 6123 4567") {
+  if (!first?.deviceId || first.version !== 2 || first.fields.mobile !== "+852 6123 4567") {
     throw new Error("application draft should persist its device, version and fields");
   }
 
@@ -3338,19 +3339,42 @@ for (const [label, field] of [
     throw new Error("application draft saves should merge fields");
   }
 
+  localStorage.setItem("itc.apply.drafts.v2", JSON.stringify({
+    __unclaimed__: {
+      version: 99,
+      deviceId: first.deviceId,
+      savedAt: Date.now(),
+      fields: { mobile: "stale" },
+    },
+  }));
+  if (store.getApplyDraft() !== null) {
+    throw new Error("incompatible application draft should be discarded");
+  }
+
+  localStorage.removeItem("itc.apply.drafts.v2");
   localStorage.setItem("itc.apply.draft.v1", JSON.stringify({
-    version: 99,
+    version: 1,
     deviceId: first.deviceId,
     savedAt: Date.now(),
-    fields: { mobile: "stale" },
+    fields: { mobile: "+852 1111 1111" },
   }));
-  if (store.getApplyDraft() !== null || localStorage.getItem("itc.apply.draft.v1") !== null) {
-    throw new Error("incompatible application draft should be discarded");
+  const migrated = store.getApplyDraft();
+  if (migrated?.fields?.mobile !== "+852 1111 1111" || localStorage.getItem("itc.apply.draft.v1") !== null) {
+    throw new Error("legacy single-draft storage should migrate into the per-account map");
+  }
+
+  store.saveApplyDraft({ profileId: "account-a", fields: { full_name: "Account A" } });
+  store.saveApplyDraft({ profileId: "account-b", fields: { full_name: "Account B" } });
+  if (store.getApplyDraft({ profileId: "account-a" })?.fields?.full_name !== "Account A"
+      || store.getApplyDraft({ profileId: "account-b" })?.fields?.full_name !== "Account B") {
+    throw new Error("application drafts must remain isolated per account on one device");
   }
 
   store.saveApplyDraft({ fields: { mobile: "+852 6999 0000" } });
   store.clearApplyDraft();
-  if (store.getApplyDraft() !== null) {
+  if (store.getApplyDraft() !== null
+      || store.getApplyDraft({ profileId: "account-a" }) !== null
+      || store.getApplyDraft({ profileId: "account-b" }) !== null) {
     throw new Error("clearApplyDraft should remove the application draft");
   }
   console.log("ok  application drafts persist, merge, version and clear");

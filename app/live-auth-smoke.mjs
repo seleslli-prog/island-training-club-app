@@ -2840,8 +2840,70 @@ assert.doesNotMatch(
   /Other Person|data-draft-resume/,
   "live apply must not resume another account's unfinished form"
 );
-store.clearApplyDraft();
-store.saveApplyDraft({ fields: {
+assert.equal(
+  store.getApplyDraft({ profileId: "someone-else" })?.fields?.full_name,
+  "Other Person",
+  "opening apply as one account must not delete another account's owned draft"
+);
+store.clearApplyDraft({ profileId: "someone-else" });
+localStorage.setItem("itc.apply.drafts.v2", JSON.stringify({
+  __unclaimed__: {
+    version: 2,
+    deviceId: store.getApplyDeviceId(),
+    profileId: null,
+    savedAt: Date.now(),
+    fields: { full_name: "Unclaimed Leftover", mobile: "+852 1111 2222" },
+  },
+  "ops-admin": {
+    version: 2,
+    deviceId: store.getApplyDeviceId(),
+    profileId: "ops-admin",
+    savedAt: Date.now(),
+    fields: { full_name: "Ops Admin Draft", mobile: "+852 3333 4444" },
+  },
+}));
+assert.equal(
+  store.getApplyDraft({ profileId: authUser.id }),
+  null,
+  "an unclaimed browser draft must never be claimed by the next signed-in account"
+);
+assert.doesNotMatch(
+  await views.viewApply(),
+  /Unclaimed Leftover|Ops Admin Draft|data-draft-resume/,
+  "live apply must ignore unclaimed leftovers and other accounts' drafts on this device"
+);
+assert.equal(
+  store.getApplyDraft(),
+  null,
+  "opening live apply must clear unclaimed leftovers so they cannot merge later"
+);
+assert.equal(
+  store.getApplyDraft({ profileId: "ops-admin" })?.fields?.full_name,
+  "Ops Admin Draft",
+  "another Google account's owned draft must remain untouched on the same device"
+);
+const inherited = store.saveApplyDraft({
+  profileId: authUser.id,
+  fields: { preferred_name: "Riley" },
+});
+assert.equal(inherited?.fields?.full_name, undefined,
+  "signed-in saves must not inherit fields from a cleared unclaimed leftover");
+assert.equal(inherited?.fields?.preferred_name, "Riley");
+assert.equal(
+  store.getApplyDraft({ profileId: "ops-admin" })?.fields?.full_name,
+  "Ops Admin Draft",
+  "saving one account's draft must not overwrite another account's draft"
+);
+store.clearApplyDraft({ profileId: authUser.id });
+assert.equal(
+  store.getApplyDraft({ profileId: "ops-admin" })?.fields?.full_name,
+  "Ops Admin Draft",
+  "clearing one account's draft must not remove another account's draft"
+);
+store.clearApplyDraft({ profileId: "ops-admin" });
+store.saveApplyDraft({
+  profileId: authUser.id,
+  fields: {
   full_name: "Riley Magic",
   mobile: "+852 6123 4567",
   age_over_18: "yes",
