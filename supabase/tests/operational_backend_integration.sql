@@ -303,7 +303,7 @@ begin
     select 1 from public.operational_activity_templates
     where activity_id = 'hyrox-quarry-bay'
       and weekday = 6
-      and start_time = '11:00'::time
+      and start_time = '10:30'::time
       and duration_minutes = 60
       and capacity = 30
       and price_hkd = 180
@@ -312,15 +312,31 @@ begin
       and venue = '10/F, Island ECC, Quarry Bay'
       and maps_query = 'Island ECC, Quarry Bay, Hong Kong'
   ) then
-    raise notice 'FAIL: IA-37 Quarry Bay HYROX activity template seed missing';
+    raise notice 'FAIL: later Island ECC HYROX activity template seed missing';
+    failures := failures + 1;
+  end if;
+  if not exists (
+    select 1 from public.operational_activity_templates
+    where activity_id = 'hyrox-quarry-bay-early'
+      and weekday = 6
+      and start_time = '09:15'::time
+      and duration_minutes = 60
+      and capacity = 30
+      and price_hkd = 180
+      and default_open
+      and active
+      and venue = '10/F, Island ECC, Quarry Bay'
+      and maps_query = 'Island ECC, Quarry Bay, Hong Kong'
+  ) then
+    raise notice 'FAIL: early Island ECC HYROX activity template seed missing';
     failures := failures + 1;
   end if;
   if exists (
     select 1 from public.operational_sessions
-    where activity_id = 'hyrox-quarry-bay'
+    where activity_id in ('hyrox-quarry-bay-early', 'hyrox-quarry-bay')
       and capacity <> 30
   ) then
-    raise notice 'FAIL: every Quarry Bay HYROX session must have capacity 30';
+    raise notice 'FAIL: every Island ECC HYROX session must have capacity 30';
     failures := failures + 1;
   end if;
   perform 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -1844,6 +1860,7 @@ declare
   v_cycle_id text;
   v_bft_session text;
   v_midtown_session text;
+  v_quarry_early_session text;
   v_quarry_session text;
   v_booking public.operational_bookings;
   v_queue public.operational_hyrox_queue_entries;
@@ -1852,6 +1869,7 @@ begin
   v_cycle_id := 'hyrox-pool-' || v_date::text;
   v_bft_session := 'hyrox-bft-' || v_date::text;
   v_midtown_session := 'hyrox-midtown-' || v_date::text;
+  v_quarry_early_session := 'hyrox-quarry-bay-early-' || v_date::text;
   v_quarry_session := 'hyrox-quarry-bay-' || v_date::text;
 
   insert into auth.users (id, email, raw_user_meta_data)
@@ -1987,6 +2005,20 @@ begin
   perform set_config('request.jwt.claim.sub', v_quarry_member::text, true);
   set local role authenticated;
   perform public.reserve_operational_session(v_quarry_session);
+  begin
+    perform public.reserve_operational_session(v_quarry_early_session);
+    raise exception 'same-date Island ECC slot bookings should conflict';
+  exception when others then
+    v_error := sqlerrm;
+    if v_error not like '%Choose one Island ECC HYROX slot per Saturday.%' then raise; end if;
+  end;
+  begin
+    perform public.join_operational_queue(v_quarry_early_session, 'waitlist');
+    raise exception 'same-date Island ECC booking and queue should conflict';
+  exception when others then
+    v_error := sqlerrm;
+    if v_error not like '%Choose one Island ECC HYROX slot per Saturday.%' then raise; end if;
+  end;
   begin
     perform public.reserve_hyrox_cycle(v_cycle_id, 'either', true);
     raise exception 'same-date Quarry and pooled bookings should conflict';

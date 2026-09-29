@@ -1,6 +1,6 @@
 # Operational Backend Deployment Runbook
 
-This is the current runbook for the live Supabase operational backend. Island ECC is the sole active HYROX session and keeps the direct paid-session reservation, waitlist, payment, receipt, attendance, replacement, collector, and venue-confirmation paths.
+This is the current runbook for the live Supabase operational backend. Island ECC is the sole active HYROX venue, with 9:15 AM and 10:30 AM Saturday sessions. Both keep the direct paid-session reservation, waitlist, payment, receipt, attendance, replacement, collector, and venue-confirmation paths.
 
 The former BFT Causeway Bay/Midtown28 shared pool is retired. Retained BFT/Midtown pool test records are hidden from browser roles, not deleted. They remain available only to trusted database operators for audit. Retirement does not cancel bookings, move members to Island ECC, delete rows, or send notifications.
 
@@ -10,7 +10,7 @@ Known retired HYROX deep links render `This session is no longer available.`; un
 
 Supabase is authoritative in configured live mode. Browser reads are constrained by RLS and browser mutations use scoped security-definer RPCs. The retirement migration:
 
-- deactivates exactly `hyrox-bft` and `hyrox-midtown` while preserving `hyrox-quarry-bay`;
+- deactivates exactly `hyrox-bft` and `hyrox-midtown` while preserving both `hyrox-quarry-bay-early` and `hyrox-quarry-bay`;
 - removes browser access to pool cycles and cycle queues;
 - filters retired sessions, bookings, queues, receipts, replacements, and notifications;
 - revokes pool-only RPCs and guards shared direct-session RPCs before side effects;
@@ -27,14 +27,21 @@ For a **clean disposable database only**, replay every repository migration once
 2. `20260808000002_operational_member_rpcs.sql`
 3. `20260808000003_operational_admin_rpcs.sql`
 4. `20260808000004_operational_realtime_seed.sql`
-5. all later migrations in filename order, including the historical pool schema/RPC migrations `20260903000001`–`20260904000002`, attendance `20260909000001`, replacement migrations `20260910000001`–`20260910000006`, free-event migration `20260920000001`, prayer migration `20260921000001`, and decision repair `20260921000002`;
-6. `20260922000001_retire_bft_midtown_hyrox_pool.sql`;
-7. `20260922000002_harden_retired_hyrox_boundary.sql`;
-8. `20260922000003_reassert_retired_hyrox_pool_acls.sql` last.
+5. all later migrations in filename order, including the historical pool schema/RPC migrations `20260903000001`–`20260904000002`, attendance `20260909000001`, replacement migrations `20260910000001`–`20260910000006`, free-event migration `20260920000001`, prayer migration `20260921000001`, decision repair `20260921000002`, the immutable retirement boundary `20260922000001`–`20260922000003`, and all subsequent forward migrations;
+6. `20260929000001_island_ecc_hyrox_slots.sql` last.
 
-Do not skip or rewrite historical files in a clean replay: the final retirement migration depends on the schema they created and then closes its browser boundary.
+Do not skip or rewrite historical files in a clean replay: the retirement migrations depend on the schema they close, and later forward migrations depend on that closed browser boundary.
 
-The shared target is already migrated, recovered and accepted on Testing. Do **not** replay this clean-disposable chain, use unqualified `supabase db push`, use `--include-all`, or repair applied history on that target. Never edit, replay, reapply, or repair `00001`, `00002`, or `00003`. Use the authoritative post-application path below.
+The shared target is already migrated through the accepted retirement boundary. Do **not** replay this clean-disposable chain, use unqualified `supabase db push`, use `--include-all`, or repair applied history on that target. Never edit, replay, reapply, or repair `00001`, `00002`, or `00003`. Apply the Island ECC dual-slot change only as the new forward migration described below.
+
+## Island ECC dual-slot deployment
+
+This change is backend-first. Do not promote a frontend that expects the 9:15 AM and 10:30 AM slots until `20260929000001_island_ecc_hyrox_slots.sql` is applied and verified on its target.
+
+1. Confirm the three immutable `20260922000001`–`20260922000003` retirement migrations and all intervening forward migrations are present exactly once. A mismatch blocks application; do not repair or replay history.
+2. Apply only `20260929000001_island_ecc_hyrox_slots.sql` through the reviewed migration process.
+3. Verify read-only that both active Island ECC templates exist with start times 09:15 and 10:30, duration 60, capacity 30 and price HK$180; future generated sessions match; and no future exact-default 11:00 Island ECC session remains.
+4. Verify the one-slot-per-Saturday guards for reservations, queues and confirmed replacements, then promote the matching frontend artifact.
 
 ## HYROX pool retirement: backend-first deployment
 
@@ -121,8 +128,9 @@ test -z "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' \
   -exec basename {} \; | cut -d_ -f1 | sort | uniq -d)"
 test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' \
   -exec basename {} \; | sort | tail -1)" = \
-  "20260922000003_reassert_retired_hyrox_pool_acls.sql"
+  "20260929000001_island_ecc_hyrox_slots.sql"
 shasum -a 256 supabase/migrations/20260922000003_reassert_retired_hyrox_pool_acls.sql
+shasum -a 256 supabase/migrations/20260929000001_island_ecc_hyrox_slots.sql
 bash supabase/tests/retire_hyrox_pool_safety.sh
 python3 supabase/tests/verify_retired_hyrox_correction.py
 python3 supabase/tests/verify_retired_hyrox_drift.py
@@ -168,7 +176,7 @@ Run the following in trusted read-only SQL. It deliberately emits canonical acti
 -- Canonical templates: these IDs are product identifiers, not member data.
 select activity_id, active, count(*) as row_count
   from public.operational_activity_templates
- where activity_id in ('hyrox-bft', 'hyrox-midtown', 'hyrox-quarry-bay')
+ where activity_id in ('hyrox-bft', 'hyrox-midtown', 'hyrox-quarry-bay-early', 'hyrox-quarry-bay')
  group by activity_id, active
  order by activity_id;
 
@@ -279,7 +287,7 @@ The `hyrox_replacement_review` branch mirrors the pre-migration relationship rul
 
 Generic `operational_payment_marked` and `operational_gym_finalized` producers initially use the same transaction timestamp as `payment_marked_at` and `gym_confirmed_at`. Any retired timestamp match hides (even with an active match). Payment timestamps are mutable: mark → reject clears the mark, and mark → reject → re-mark replaces it. Therefore the inventory and RLS classifier also recognize the durable exact pooled producer fingerprint: kind `operational_payment_marked`, title exactly `HYROX payment claim submitted`, destination exactly `#/admin/payments`, and body exactly `Review the payment claim for <cycle-date>.` where `<cycle-date>` is a retained `operational_hyrox_cycles.session_date::text`. Every prior claim stays hidden regardless of the current booking timestamp or status. A fingerprint match wins even if another active payment shares its timestamp.
 
-Direct Island ECC uses title `Payment marked for hyrox-quarry-bay` and body `A member marked payment on <session-date>.`; sharing a date with a retained cycle does not match the fingerprint. ECC-only timestamps and unrelated generic notices remain active. Near matches, missing retained dates, and arbitrary HYROX wording do not establish fingerprint provenance. This uses full-string equality to a known historical producer, never substring inference, free-text date parsing, or notification rewriting. Inventory output remains counts only—never title/body content.
+Direct Island ECC uses title `Payment marked for hyrox-quarry-bay` or `Payment marked for hyrox-quarry-bay-early` and body `A member marked payment on <session-date>.`; sharing a date with a retained cycle does not match the fingerprint. ECC-only timestamps and unrelated generic notices remain active. Near matches, missing retained dates, and arbitrary HYROX wording do not establish fingerprint provenance. This uses full-string equality to a known historical producer, never substring inference, free-text date parsing, or notification rewriting. Inventory output remains counts only—never title/body content.
 
 The policy adapter and revoked public classifier now take `(text, text, timestamptz, text, text)` in kind/destination/created_at/title/body order; SELECT and both UPDATE predicates pass the original row fields. The private adapter is executable only by authenticated policy evaluation, not anon/PUBLIC; the public classifier remains revoked from all browser roles. The applied `00001` defines only this signature, with no three-argument overload. The production review verified these policies and signatures; `00002` intentionally leaves them unchanged. Any different policy/signature state requires separate review, never reapplication of `00001`.
 
@@ -291,12 +299,12 @@ All three applied versions/hashes and the restored baseline must match the autho
 
 ### 4. Verify existing backend invariants (read-only)
 
-The template query must return BFT and Midtown inactive and Island ECC active:
+The template query must return BFT and Midtown inactive and both Island ECC slots active:
 
 ```sql
 select activity_id, active
   from public.operational_activity_templates
- where activity_id in ('hyrox-bft', 'hyrox-midtown', 'hyrox-quarry-bay')
+ where activity_id in ('hyrox-bft', 'hyrox-midtown', 'hyrox-quarry-bay-early', 'hyrox-quarry-bay')
  order by activity_id;
 ```
 
@@ -305,6 +313,7 @@ Expected:
 ```text
 hyrox-bft         false
 hyrox-midtown     false
+hyrox-quarry-bay-early  true
 hyrox-quarry-bay  true
 ```
 
@@ -385,11 +394,11 @@ select t.activity_id, t.active, t.venue, t.capacity, t.price_hkd,
        ) as current_and_future_sessions
   from public.operational_activity_templates t
   left join public.operational_sessions s using (activity_id)
- where t.activity_id = 'hyrox-quarry-bay'
+ where t.activity_id in ('hyrox-quarry-bay-early', 'hyrox-quarry-bay')
  group by t.activity_id, t.active, t.venue, t.capacity, t.price_hkd;
 ```
 
-Expected: one active `hyrox-quarry-bay` template at Island ECC, capacity 30, HK$180, with the expected current/future session window. Any failed check blocks frontend promotion; it does not authorize resolver redeployment.
+Expected: active `hyrox-quarry-bay-early` (9:15 AM) and `hyrox-quarry-bay` (10:30 AM) templates at Island ECC, each capacity 30 and HK$180, with the expected current/future session window. Any failed check blocks frontend promotion; it does not authorize resolver redeployment.
 
 Verify effective ACLs, not merely explicit migration statements: `service_role` may execute the session classifier only among retirement classifiers/adapters; activity, booking, notification classifiers and all three private policy adapters must deny it. All public classifiers deny PUBLIC/anon/authenticated. The preserved attendee implementation denies PUBLIC/anon/authenticated/service_role, is owned by postgres, stable SECURITY DEFINER with `search_path=public`, and its body must exactly match `20260910000002_operational_attendee_names_rsvp.sql` (body MD5 `64c519f7652df631b654191575a51680`, compare full reviewed source too). The public guarded wrapper and its authenticated grant remain unchanged. Prove BFT/Midtown empty rosters, ECC paid/replacement names without payer transfer, and free RSVP names in disposable local acceptance; use no fixture creation or mutating RPCs for read-only production verification.
 
@@ -503,7 +512,7 @@ The reviewed preview revision was deployed against the verified backend. The con
 
 The archived acceptance matrix below defined the reviewed surfaces and lifecycle requirements. Testing browser acceptance is now PASS; consult credited checks in the final controller-CORS-repaired report, not superseded failures or an assumed rerun. This matrix is retained as precedent, not an instruction to create more fixtures during promotion.
 
-1. Verify Home, Schedule, Profile/history/notifications, Admin Activities, and Admin Payments show Island ECC once, expose no active pool controls or indirect pool counts, and do not clip horizontally.
+1. Verify Home, Schedule, Profile/history/notifications, Admin Activities, and Admin Payments show both Island ECC slots chronologically, expose no active pool controls or indirect pool counts, and do not clip horizontally.
 2. Verify known retired Activity, pool, booking, payment, checkout, and receipt deep links show `This session is no longer available.` and keep the original URL without RPC/avatar calls. Unknown identifiers keep the safe not-found state. Neither redirects to Island ECC.
 3. Through the browser UI, complete the full Island ECC lifecycle: reserve → mark paid → Admin confirmation → receipt → attendance, plus waitlist behavior where applicable.
 4. Create and accept an Island ECC replacement invite, then confirm it as Admin. Verify only effective attendee ownership changes; payer/payment/receipt ownership remains unchanged.

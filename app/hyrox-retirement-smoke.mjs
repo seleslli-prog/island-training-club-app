@@ -17,6 +17,7 @@ assert.deepEqual([...RETIRED_HYROX_ACTIVITY_IDS], ["hyrox-bft", "hyrox-midtown"]
 assert.equal(isRetiredHyroxActivityId("hyrox-bft"), true);
 assert.equal(isRetiredHyroxActivityId("hyrox-midtown"), true);
 assert.equal(isRetiredHyroxActivityId("hyrox-quarry-bay"), false);
+assert.equal(isRetiredHyroxActivityId("hyrox-quarry-bay-early"), false);
 assert.equal(isRetiredHyroxActivityId("event-hyrox-bft-party"), false);
 assert.equal(isRetiredHyroxActivityId("HYROX-BFT"), false);
 assert.equal(isRetiredHyroxCycleId("hyrox-pool-2099-01-03"), true);
@@ -25,6 +26,7 @@ assert.equal(isRetiredHyroxCycleId("island-ecc-cycle-2099-01-03"), false);
 assert.equal(isRetiredHyroxSession({ activityId: "hyrox-bft" }), true);
 assert.equal(isRetiredHyroxSession({ activity_id: "hyrox-midtown" }), true);
 assert.equal(isRetiredHyroxSession({ activityId: "hyrox-quarry-bay" }), false);
+assert.equal(isRetiredHyroxSession({ activityId: "hyrox-quarry-bay-early" }), false);
 assert.equal(isRetiredHyroxSession({ id: "hyrox-bft-2099-01-03" }), false,
   "session IDs alone are not authoritative for hydrated records");
 
@@ -90,6 +92,7 @@ assert.equal(isRetiredHyroxLegacyRouteId("retired-pool-booking"), false,
   "arbitrary booking IDs require relationship-backed route tombstones");
 assert.equal(isRetiredHyroxLegacyRouteId("hyrox-pool-1"), false);
 assert.equal(isRetiredHyroxLegacyRouteId("hyrox-quarry-bay-2099-01-03"), false);
+assert.equal(isRetiredHyroxLegacyRouteId("hyrox-quarry-bay-early-2099-01-03"), false);
 assert.equal(isRetiredHyroxLegacyRouteId("event-hyrox-bft-party"), false);
 
 // Also prove callback composition independently of the fixture helpers above.

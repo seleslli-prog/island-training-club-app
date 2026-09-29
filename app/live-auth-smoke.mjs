@@ -281,7 +281,8 @@ const operationalTableRows = {
   operational_activity_templates: [
     { activity_id: "hyrox-bft", name: "ITC HYROX", venue: "BFT Causeway Bay", weekday: 6, start_time: "11:15:00", duration_minutes: 60, capacity: 20, price_hkd: 180, default_open: true, active: true, category: "HYROX", maps_query: null, requires_rsvp: false },
     { activity_id: "hyrox-midtown", name: "ITC HYROX", venue: "Midtown 28", weekday: 6, start_time: "11:00:00", duration_minutes: 60, capacity: 12, price_hkd: 180, default_open: false, active: true, category: "HYROX", maps_query: null, requires_rsvp: false },
-    { activity_id: "hyrox-quarry-bay", name: "ITC HYROX", venue: "10/F, Island ECC, Quarry Bay", weekday: 6, start_time: "11:00:00", duration_minutes: 60, capacity: 30, price_hkd: 180, default_open: true, active: true, category: "HYROX", maps_query: "Island ECC, Quarry Bay, Hong Kong", requires_rsvp: false },
+    { activity_id: "hyrox-quarry-bay-early", name: "ITC HYROX", venue: "10/F, Island ECC, Quarry Bay", weekday: 6, start_time: "09:15:00", duration_minutes: 60, capacity: 30, price_hkd: 180, default_open: true, active: true, category: "HYROX", maps_query: "Island ECC, Quarry Bay, Hong Kong", requires_rsvp: false },
+    { activity_id: "hyrox-quarry-bay", name: "ITC HYROX", venue: "10/F, Island ECC, Quarry Bay", weekday: 6, start_time: "10:30:00", duration_minutes: 60, capacity: 30, price_hkd: 180, default_open: true, active: true, category: "HYROX", maps_query: "Island ECC, Quarry Bay, Hong Kong", requires_rsvp: false },
     { activity_id: "wnt", name: "Wednesday Night Training", venue: "TBC", weekday: 3, start_time: "19:30:00", duration_minutes: 60, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Strength", maps_query: null, requires_rsvp: true },
     { activity_id: "run", name: "ITC Run Club", venue: "TBC", weekday: 1, start_time: "19:30:00", duration_minutes: 45, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Run", maps_query: null, requires_rsvp: true },
     { activity_id: "water", name: "ITC Swimming", venue: "TBC", weekday: 2, start_time: "19:30:00", duration_minutes: 90, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Water", maps_query: null, requires_rsvp: true },
@@ -950,7 +951,7 @@ for (let week = 0; normalWeeklyFixtureDates.length < 4; week += 1) {
     id: `hyrox-quarry-bay-${iso}`,
     activity_id: "hyrox-quarry-bay",
     session_date: iso,
-    start_time: "11:00:00",
+    start_time: "10:30:00",
     duration_minutes: 60,
     venue: "10/F, Island ECC, Quarry Bay",
     capacity: 30,
@@ -977,6 +978,28 @@ for (let week = 0; normalWeeklyFixtureDates.length < 4; week += 1) {
     venue: "TBC",
     capacity: null,
     price_hkd: 0,
+    is_open: true,
+    venue_tbc: false,
+    notice: null,
+    cancelled_at: null,
+    cancelled_by: null,
+    cancelled_source: null,
+    cancel_reason: null,
+    gym_confirmed_at: null,
+    gym_confirmed_by: null,
+    gym_note: null,
+    created_at: today.toISOString(),
+    updated_at: today.toISOString(),
+  });
+  operationalTableRows.operational_sessions.push({
+    id: `hyrox-quarry-bay-early-${iso}`,
+    activity_id: "hyrox-quarry-bay-early",
+    session_date: iso,
+    start_time: "09:15:00",
+    duration_minutes: 60,
+    venue: "10/F, Island ECC, Quarry Bay",
+    capacity: 30,
+    price_hkd: 180,
     is_open: true,
     venue_tbc: false,
     notice: null,
@@ -1074,6 +1097,7 @@ assert.equal(
 );
 
 const islandEccSessionId = `hyrox-quarry-bay-${normalWeeklyFixtureDates[0]}`;
+const islandEccEarlySessionId = `hyrox-quarry-bay-early-${normalWeeklyFixtureDates[0]}`;
 const retiredBftSessionId = `hyrox-bft-${normalWeeklyFixtureDates[0]}`;
 const retiredRouteBookingId = "booking-8f30c7a1";
 const retiredRouteReceiptId = "receipt-4d92be67";
@@ -1770,11 +1794,19 @@ assert.deepEqual(
   [...new Set(store.upcomingSessions(21)
     .filter((row) => row.category === "HYROX")
     .map((row) => row.activityId))],
-  ["hyrox-quarry-bay"],
-  "Island ECC must be the only HYROX activity admitted to the live session cache",
+  ["hyrox-quarry-bay-early", "hyrox-quarry-bay"],
+  "both Island ECC slots must be the only HYROX activities admitted to the live session cache",
 );
 assert.equal(store.getSession(retiredBftSessionId), null);
 assert.ok(store.getSession(islandEccSessionId), "Island ECC sessions must remain available");
+assert.ok(store.getSession(islandEccEarlySessionId), "the early Island ECC slot must remain available");
+assert.deepEqual(
+  store.upcomingSessions(21)
+    .filter((row) => row.dateISO === normalWeeklyFixtureDates[0])
+    .map((row) => row.time),
+  ["09:15", "10:30", "12:45"],
+  "live Saturday sessions must place lunch after both HYROX slots",
+);
 assert.equal(store.getBooking("pooled-booking"), null);
 assert.equal(store.getBooking(retiredRouteBookingId), null);
 assert.ok(store.getBooking("island-ecc-booking"), "Island ECC bookings must remain available");
@@ -2257,7 +2289,7 @@ const temporaryHorizonRows = [
     id: "hyrox-horizon-day-14",
     activity_id: "hyrox-quarry-bay",
     session_date: horizonDay14Iso,
-    start_time: "11:00:00",
+    start_time: "10:30:00",
     duration_minutes: 60,
     venue: "10/F, Island ECC, Quarry Bay",
     capacity: 30,
@@ -2279,7 +2311,7 @@ const temporaryHorizonRows = [
     id: "hyrox-horizon-day-15",
     activity_id: "hyrox-quarry-bay",
     session_date: horizonDay15Iso,
-    start_time: "11:00:00",
+    start_time: "10:30:00",
     duration_minutes: 60,
     venue: "10/F, Island ECC, Quarry Bay",
     capacity: 30,
@@ -2347,9 +2379,12 @@ const hydratedMidtown = store.upcomingSessions(21)
   .find((session) => session.activityId === "hyrox-midtown");
 const hydratedQuarryBay = store.upcomingSessions(21)
   .find((session) => session.activityId === "hyrox-quarry-bay");
+const hydratedQuarryBayEarly = store.upcomingSessions(21)
+  .find((session) => session.activityId === "hyrox-quarry-bay-early");
 assert.equal(hydratedBft, undefined, "retired BFT HYROX must not hydrate");
 assert.equal(hydratedMidtown, undefined, "retired Midtown HYROX must not hydrate");
 assert.ok(hydratedQuarryBay, "live operations must hydrate the Island ECC HYROX session");
+assert.ok(hydratedQuarryBayEarly, "live operations must hydrate the early Island ECC HYROX session");
 assert.ok(
   operationalTableRows.operational_sessions
     .filter((row) => row.activity_id === "hyrox-quarry-bay")
@@ -2365,7 +2400,24 @@ assert.deepEqual({
   capacity: hydratedQuarryBay.capacity,
   isOpen: hydratedQuarryBay.isOpen,
 }, {
-  time: "11:00",
+  time: "10:30",
+  durationMin: 60,
+  location: "10/F, Island ECC, Quarry Bay",
+  mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
+  price: 180,
+  capacity: 30,
+  isOpen: true,
+});
+assert.deepEqual({
+  time: hydratedQuarryBayEarly.time,
+  durationMin: hydratedQuarryBayEarly.durationMin,
+  location: hydratedQuarryBayEarly.location,
+  mapsQuery: hydratedQuarryBayEarly.mapsQuery,
+  price: hydratedQuarryBayEarly.price,
+  capacity: hydratedQuarryBayEarly.capacity,
+  isOpen: hydratedQuarryBayEarly.isOpen,
+}, {
+  time: "09:15",
   durationMin: 60,
   location: "10/F, Island ECC, Quarry Bay",
   mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
@@ -3462,7 +3514,7 @@ const liveGapHistoryHtml = await views.viewAccount("history");
 const liveGapPaidCard = liveGapHistoryHtml
   .split('<div class="card booking-card">')
   .find((card) => card.includes(`href="#/booking/${liveHistoryGapBooking.id}"`)) || "";
-if (!liveGapPaidCard.includes("11 AM")
+if (!liveGapPaidCard.includes("10:30 AM")
     || !liveGapPaidCard.includes("ITC HYROX")
     || !liveGapPaidCard.includes("10/F, Island ECC, Quarry Bay")
     || !liveGapPaidCard.includes("60 min")
@@ -3863,14 +3915,8 @@ console.log("ok  exact RSVP aggregates survive member RLS and degrade without hi
 // apply to live RSVP sessions (not just locally-seeded free events).
 const saturdaySessions = store.upcomingSessions(14).filter((s) => s.dateISO === lunchSession.dateISO);
 const saturdayTimes = saturdaySessions.map((s) => s.time);
-const sortedTimes = [...saturdayTimes].sort();
-if (saturdayTimes.join(",") !== sortedTimes.join(",")) {
-  throw new Error(`same-day sessions must order by start time; got ${saturdayTimes.join(",")}`);
-}
-if (saturdaySessions.findIndex((s) => s.kind === "rsvp")
-    < saturdaySessions.findIndex((s) => s.activityId === "hyrox-bft")) {
-  throw new Error("the post-training lunch must follow the morning HYROX sessions");
-}
+assert.deepEqual(saturdayTimes, ["09:15", "10:30", "12:45"],
+  "same-day live sessions must place lunch after both Island ECC slots");
 await store.setWeekVenue(lunchSession.id, { location: "Cafe Deco, Central", mapsQuery: "Cafe Deco, Central" });
 const overriddenLunch = store.getSession(lunchSession.id);
 if (overriddenLunch.location !== "Cafe Deco, Central" || overriddenLunch.mapsQuery !== "Cafe Deco, Central") {
@@ -3887,6 +3933,19 @@ views.scheduleState.weekOffset = Math.round(
 views.scheduleState.selected = lunchSession.dateISO;
 const lunchScheduleHtml = views.viewSchedule();
 const lunchDetailHtml = views.viewActivity(lunchSession.id);
+const earlyScheduleIndex = lunchScheduleHtml.indexOf(
+  `href="#/activity/hyrox-quarry-bay-early-${lunchSession.dateISO}"`
+);
+const lateScheduleIndex = lunchScheduleHtml.indexOf(
+  `href="#/activity/hyrox-quarry-bay-${lunchSession.dateISO}"`
+);
+const lunchScheduleIndex = lunchScheduleHtml.indexOf(
+  `href="#/activity/${lunchSession.id}"`
+);
+assert.ok(earlyScheduleIndex >= 0
+  && earlyScheduleIndex < lateScheduleIndex
+  && lateScheduleIndex < lunchScheduleIndex,
+"live Schedule must render 9:15 HYROX, 10:30 HYROX, then 12:45 lunch");
 if (!lunchScheduleHtml.includes("Cafe Deco, Central")
     || !lunchDetailHtml.includes("Cafe Deco, Central")) {
   throw new Error("live lunch venue override must appear on Schedule and Activity Details");
@@ -7877,7 +7936,7 @@ let replacementRow = {
   originalDisplayName: "Payer Member",
   replacementDisplayName: null,
   sessionId: islandEccSessionId,
-  snapshot: { name: "ITC HYROX", kind: "paid", dateISO: normalWeeklyFixtureDates[0], time: "11:00" },
+  snapshot: { name: "ITC HYROX", kind: "paid", dateISO: normalWeeklyFixtureDates[0], time: "10:30" },
   createdAt: "2098-12-31T00:00:00.000Z",
   expiresAt: "2099-01-01T00:00:00.000Z",
 };

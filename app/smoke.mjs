@@ -206,14 +206,17 @@ function assertPrimaryNav(user, expected, label) {
   }
 }
 
-const freshV26State = store.load();
-assert.equal(freshV26State.version, 26, "fresh local state must use the v26 schema");
+const freshV27State = store.load();
+assert.equal(freshV27State.version, 27, "fresh local state must use the v27 schema");
 assert.equal(data.SEED_ACTIVITIES.some(
   (activity) => ["hyrox-bft", "hyrox-midtown"].includes(activity.id)
 ), false, "fresh activity seeds must not contain the retired BFT/Midtown pool");
-assert.equal(freshV26State.activities.some(
+assert.equal(freshV27State.activities.some(
   (activity) => ["hyrox-bft", "hyrox-midtown"].includes(activity.id)
-), false, "fresh v26 state must not activate retired BFT/Midtown templates");
+), false, "fresh v27 state must not activate retired BFT/Midtown templates");
+const quarryBayEarlySeed = data.SEED_ACTIVITIES.find(
+  (activity) => activity.id === "hyrox-quarry-bay-early"
+);
 const quarryBaySeed = data.SEED_ACTIVITIES.find((activity) => activity.id === "hyrox-quarry-bay");
 for (const activityId of ["wnt", "run", "water"]) {
   const freeSeed = data.SEED_ACTIVITIES.find((activity) => activity.id === activityId);
@@ -228,6 +231,7 @@ for (const activityId of ["wnt", "run", "water"]) {
   }, `${activityId} must remain free while enabling uncapped RSVP headcounts`);
 }
 assert.ok(quarryBaySeed, "Island ECC HYROX must remain seeded");
+assert.ok(quarryBayEarlySeed, "the early Island ECC HYROX slot must be seeded");
 assert.equal(data.SEED_ACTIVITIES.some((activity) => activity.id === "hyrox"), false,
   "the ambiguous legacy hyrox activity id must not remain canonical");
 assert.deepEqual(quarryBaySeed && {
@@ -242,13 +246,42 @@ assert.deepEqual(quarryBaySeed && {
 }, {
   name: "ITC HYROX",
   weekday: 6,
-  time: "11:00",
+  time: "10:30",
   durationMin: 60,
   location: "10/F, Island ECC, Quarry Bay",
   mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
   price: 180,
   capacity: 30,
-}, "IA-37 Quarry Bay HYROX must match the approved recurring-session details");
+}, "the later Island ECC HYROX slot must match the approved recurring-session details");
+assert.deepEqual(quarryBayEarlySeed && {
+  name: quarryBayEarlySeed.name,
+  weekday: quarryBayEarlySeed.weekday,
+  time: quarryBayEarlySeed.time,
+  durationMin: quarryBayEarlySeed.durationMin,
+  location: quarryBayEarlySeed.location,
+  mapsQuery: quarryBayEarlySeed.mapsQuery,
+  price: quarryBayEarlySeed.price,
+  capacity: quarryBayEarlySeed.capacity,
+}, {
+  name: "ITC HYROX",
+  weekday: 6,
+  time: "09:15",
+  durationMin: 60,
+  location: "10/F, Island ECC, Quarry Bay",
+  mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
+  price: 180,
+  capacity: 30,
+}, "the early Island ECC HYROX slot must match the approved recurring-session details");
+const orderedSaturdaySessions = data.sessionsInRange([
+  data.SEED_ACTIVITIES.find((activity) => activity.id === "lunch"),
+  quarryBaySeed,
+  quarryBayEarlySeed,
+], new Date(2099, 0, 3), 1);
+assert.deepEqual(
+  orderedSaturdaySessions.map((session) => session.time),
+  ["09:15", "10:30", "12:45"],
+  "Saturday sessions must render chronologically so lunch follows both HYROX slots"
+);
 assert.equal(data.fmtMoney(180), "HK$180",
   "consumer-facing Hong Kong prices should use the standard HK$ symbol");
 const historicalBftActivity = {
@@ -266,6 +299,7 @@ localStorage.setItem("itc.prototype.v1", JSON.stringify({
   sessionUserId: null,
   activities: [legacyBftActivity, {
     ...quarryBaySeed,
+    time: "11:00",
     location: "10/F, 633 King's Road, Quarry Bay, Hong Kong",
     mapsQuery: "10/F, 633 King's Road, Quarry Bay, Hong Kong",
   }],
@@ -289,12 +323,13 @@ localStorage.setItem("itc.prototype.v1", JSON.stringify({
   duty: {},
 }));
 const renamedState = store.load();
-assert.equal(renamedState.version, 26, "legacy state must advance through the HYROX, attendance, prayer, and retirement migrations");
+assert.equal(renamedState.version, 27, "legacy state must advance through the current migrations");
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").hyroxPaymentReminders, true);
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").webPushOps, false);
 assert.equal(renamedState.hyroxCycles["legacy-cycle"]?.collectorPaymentReminderSentAt ?? null, null);
 assert.equal(renamedState.activities.some((activity) => activity.id === "hyrox-bft"), false);
 assert.ok(renamedState.activities.some((activity) => activity.id === "hyrox-quarry-bay"));
+assert.ok(renamedState.activities.some((activity) => activity.id === "hyrox-quarry-bay-early"));
 assert.equal(renamedState.activities.some((activity) => activity.id === "hyrox"), false);
 assert.equal(renamedState.bookings.some((booking) => booking.id === "legacy-bft-booking"), false);
 assert.equal(renamedState.receipts.some((receipt) => receipt.id === "legacy-receipt"), false);
@@ -306,10 +341,16 @@ const migratedQuarryBay = renamedState.activities.find((activity) =>
 );
 assert.equal(migratedQuarryBay.location, "10/F, Island ECC, Quarry Bay");
 assert.equal(migratedQuarryBay.mapsQuery, "Island ECC, Quarry Bay, Hong Kong");
+assert.equal(migratedQuarryBay.time, "10:30");
 assert.equal(
   renamedState.bookings.find((booking) => booking.id === "legacy-quarry-booking")?.snapshot.location,
   "10/F, Island ECC, Quarry Bay",
   "existing Quarry Bay booking snapshots must show the corrected venue"
+);
+assert.equal(
+  renamedState.bookings.find((booking) => booking.id === "legacy-quarry-booking")?.snapshot.time,
+  "10:30",
+  "upcoming Quarry Bay booking snapshots must move from 11:00 AM to 10:30 AM"
 );
 store.resetLocalData();
 
@@ -432,7 +473,7 @@ store.resetLocalData();
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v23PoolFixture));
   const migrated = store.load();
 
-  assert.equal(migrated.version, 26);
+  assert.equal(migrated.version, 27);
   assert.deepEqual(store.notificationsFor("review-admin"), [expectedEccReview],
     "generic local review notices must retain only proven active ECC provenance");
   assert.equal(store.notificationsFor("review-admin").filter((row) => !row.read).length, 1,
@@ -504,7 +545,7 @@ for (const booking of v19ReplacementFixture.bookings) {
 delete v19ReplacementFixture.replacementRequests;
 localStorage.setItem("itc.prototype.v1", JSON.stringify(v19ReplacementFixture));
 const migratedReplacement = store.load();
-assert.equal(migratedReplacement.version, 26, "replacement migration must preserve data through the current v26 state version");
+assert.equal(migratedReplacement.version, 27, "replacement migration must preserve data through the current v27 state version");
 assert.ok(Array.isArray(migratedReplacement.replacementRequests));
 assert.ok(Array.isArray(migratedReplacement.replacementAudit));
 assert.ok(migratedReplacement.bookings.every((booking) =>
@@ -596,8 +637,10 @@ for (const [relativePath, source] of currentHyroxDocs) {
     `${relativePath} must name the forward drift repair`);
   assert.match(source, /All three migrations are applied and recorded exactly once/,
     `${relativePath} must acknowledge all three applied production migrations`);
-  assert.match(source, /Island ECC is the (?:sole|only) active HYROX session/i,
-    `${relativePath} must state the sole active HYROX contract`);
+  assert.match(source, /Island ECC is the (?:sole|only) active HYROX venue/i,
+    `${relativePath} must state the sole active HYROX venue contract`);
+  assert.match(source, /9:15 AM[\s\S]*10:30 AM/i,
+    `${relativePath} must state both active Island ECC session times`);
   assert.match(source, /Retained BFT\/Midtown pool test records are\s+hidden from browser roles, not deleted\./i,
     `${relativePath} must state the retained-record contract`);
   assert.match(source, /backend-first deployment/i,
@@ -982,6 +1025,10 @@ const quarryBayVenueMigrationSource = readFileSync(
   resolve(__dirnameSmoke, "../supabase/migrations/20260902000002_quarry_bay_island_ecc.sql"),
   "utf8"
 );
+const islandEccSlotsMigrationSource = readFileSync(
+  resolve(__dirnameSmoke, "../supabase/migrations/20260929000001_island_ecc_hyrox_slots.sql"),
+  "utf8"
+);
 const collectorPaymentReminderMigrationSource = readFileSync(
   resolve(__dirnameSmoke, "../supabase/migrations/20260908000001_collector_payment_reminders.sql"),
   "utf8"
@@ -1131,6 +1178,37 @@ for (const marker of [
   assert.ok(quarryBayVenueMigrationSource.includes(marker),
     `Quarry Bay venue migration must include ${marker}`);
 }
+for (const marker of [
+  "'hyrox-quarry-bay-early'",
+  "'09:15'",
+  "'10:30'",
+  "duration_minutes = 60",
+  "capacity = 30",
+  "price_hkd = 180",
+  "operational_session_time_changed",
+  "values (b.profile_id), (b.replacement_profile_id)",
+  "jsonb_build_object('start_time', '10:30:00')",
+  "Choose one Island ECC HYROX slot per Saturday.",
+  "pg_advisory_xact_lock",
+  "operational_bookings_island_ecc_replacement_slot",
+  "coalesce(b.replacement_profile_id, b.profile_id)",
+  "reserve_operational_session",
+  "join_operational_queue",
+  "ensure_operational_sessions",
+]) {
+  assert.ok(islandEccSlotsMigrationSource.includes(marker),
+    `Island ECC slots migration must include ${marker}`);
+}
+const islandEccReserveGuardSource = islandEccSlotsMigrationSource
+  .split("create or replace function public.reserve_operational_session(p_session_id text)")[1]
+  ?.split("create or replace function public.join_operational_queue(")[0]
+  ?.split(") or exists (")[0] || "";
+assert.doesNotMatch(
+  islandEccReserveGuardSource,
+  /s\.id <> v_session\.id/,
+  "replacement attendees must not reserve their existing Island ECC slot again",
+);
+console.log("ok  dual Island ECC migration retimes, provisions and guards both slots");
 assert.equal((hyroxActivityMigrationSource.match(
   /drop constraint operational_activity_templates_activity_id_check/g
 ) || []).length, 2,
@@ -4078,6 +4156,22 @@ let dup = null;
 try { store.reserveSession(signIn.user.id, islandEccSession); } catch (e) { dup = e; }
 if (!dup) throw new Error("double reservation should be rejected");
 console.log("ok  double booking rejected");
+const otherIslandEccSlot = allUpcoming.find(
+  (session) => session.activityId === "hyrox-quarry-bay-early"
+    && session.dateISO === islandEccSession.dateISO
+);
+if (!otherIslandEccSlot) throw new Error("expected the second Island ECC slot on the same Saturday");
+assert.throws(
+  () => store.reserveSession(signIn.user.id, otherIslandEccSlot),
+  /Choose one Island ECC HYROX slot per Saturday/,
+  "members must not reserve both Island ECC slots on one Saturday"
+);
+assert.throws(
+  () => store.joinWaitlist(signIn.user.id, otherIslandEccSlot.id),
+  /Choose one Island ECC HYROX slot per Saturday/,
+  "members must not book one Island ECC slot and queue for the other"
+);
+console.log("ok  one Island ECC booking or queue commitment per Saturday");
 store.markBookingPaid(r1.id, "PayMe", "REF123");
 if (!store.getBooking(r1.id).paymentMarkedAt) throw new Error("payment not marked");
 const tinaNotes = store.notificationsFor("fixture-admin");
@@ -4419,7 +4513,7 @@ v22PrayerSnapshot.prayers = [
 ];
 mem.set("itc.prototype.v1", JSON.stringify(v22PrayerSnapshot));
 const migratedPrayerState = store.load();
-assert.equal(migratedPrayerState.version, 26);
+assert.equal(migratedPrayerState.version, 27);
 assert.deepEqual(migratedPrayerState.prayers.map((row) => row.id), [
   "legacy-prayer-a",
   "legacy-prayer-b",
@@ -4818,7 +4912,7 @@ store.resetLocalData();
 // Every accepted historical schema version must run its original migration
 // chain before the exact v24 retirement step, preserving non-pool state.
 for (let version = 9; version <= 23; version++) {
-  const fixture = structuredClone(freshV26State);
+  const fixture = structuredClone(freshV27State);
   fixture.version = version;
   fixture.activities.push(structuredClone(historicalBftActivity), {
     ...structuredClone(historicalBftActivity), id: "hyrox-midtown", location: "Midtown28 Fitness",
@@ -4838,17 +4932,17 @@ for (let version = 9; version <= 23; version++) {
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(fixture));
   const migrated = store.load();
-  assert.equal(migrated.version, 26, `v${version} fixture must reach v26`);
+  assert.equal(migrated.version, 27, `v${version} fixture must reach v27`);
   assert.equal(migrated.bookings.some((row) => row.id === `retired-${version}`), false);
   assert.ok(migrated.bookings.some((row) => row.id === `ecc-${version}`));
   assert.ok(migrated.bookings.some((row) => row.id === `unrelated-${version}`));
 }
-console.log("ok  every v9-v23 fixture reaches v26 with Island ECC and unrelated records intact");
+console.log("ok  every v9-v23 fixture reaches v27 with Island ECC and unrelated records intact");
 
-// v14 Swimming migration remains part of the accepted v13-to-v26 chain.
+// v14 Swimming migration remains part of the accepted v13-to-v27 chain.
 // Repair only exact historical defaults; preserve every Admin customization.
 {
-  const historicalSwimmingV13 = structuredClone(freshV26State);
+  const historicalSwimmingV13 = structuredClone(freshV27State);
   historicalSwimmingV13.version = 13;
   const historicalWater = historicalSwimmingV13.activities.find(
     (activity) => activity.id === "water"
@@ -4860,7 +4954,7 @@ console.log("ok  every v9-v23 fixture reaches v26 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(historicalSwimmingV13));
   const repaired = store.load();
-  assert.equal(repaired.version, 26, "the historical Swimming fixture must reach v26");
+  assert.equal(repaired.version, 27, "the historical Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -4874,7 +4968,7 @@ console.log("ok  every v9-v23 fixture reaches v26 with Island ECC and unrelated 
     "v14 must repair exact historical Swimming defaults before v24",
   );
 
-  const customizedSwimmingV13 = structuredClone(freshV26State);
+  const customizedSwimmingV13 = structuredClone(freshV27State);
   customizedSwimmingV13.version = 13;
   const customizedWater = customizedSwimmingV13.activities.find(
     (activity) => activity.id === "water"
@@ -4886,7 +4980,7 @@ console.log("ok  every v9-v23 fixture reaches v26 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(customizedSwimmingV13));
   const preserved = store.load();
-  assert.equal(preserved.version, 26, "the customized Swimming fixture must reach v26");
+  assert.equal(preserved.version, 27, "the customized Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -4900,7 +4994,7 @@ console.log("ok  every v9-v23 fixture reaches v26 with Island ECC and unrelated 
     "v14 must preserve Admin-customized Swimming values through v24",
   );
 }
-console.log("ok  v14 Swimming defaults repair and Admin customizations survive the v13-to-v26 chain");
+console.log("ok  v14 Swimming defaults repair and Admin customizations survive the v13-to-v27 chain");
 
 // --- Generic Socials preview: rolling seven-day selector ---
 store.resetLocalData();
@@ -5962,10 +6056,10 @@ console.log("ok  reset");
     failures++;
     console.error("FAIL v10 migration must clear session tied to a removed demo user");
   } else console.log("ok  v10 migration clears removed session");
-  if (migrated.version !== 26) {
+  if (migrated.version !== 27) {
     failures++;
     console.error(`FAIL integrated migration must advance version to 25, got ${migrated.version}`);
-  } else console.log("ok  integrated migration advances genuine v9 state to v26");
+  } else console.log("ok  integrated migration advances genuine v9 state to v27");
 }
 
 {
@@ -5984,7 +6078,7 @@ console.log("ok  reset");
   store.load();
   const v14 = JSON.parse(mem.get("itc.prototype.v1"));
   const migratedUser = v14.users.find((user) => user.id === "real-v13-member");
-  if (v14.version !== 26 || !migratedUser) throw new Error("v26 migration lost the genuine member");
+  if (v14.version !== 27 || !migratedUser) throw new Error("v27 migration lost the genuine member");
   for (const field of ["indemnitySignature", "indemnitySignedAt", "indemnityFormVersion", "emergencyRelationship"]) {
     if (!(field in migratedUser) || migratedUser[field] !== null) {
       throw new Error(`v14 migration should initialize ${field} to null`);
@@ -6013,10 +6107,10 @@ console.log("ok  reset");
   v21.bookings = [structuredClone(preservedBooking)];
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v21));
   const migrated = store.load();
-  assert.equal(migrated.version, 26);
+  assert.equal(migrated.version, 27);
   assert.equal(migrated.bookings.some((booking) => booking.id === preservedBooking.id), false,
     "v22 attendance compatibility must run before v24 removes the pooled booking");
-  console.log("ok  v21 pooled booking reaches and is retired by v26");
+  console.log("ok  v21 pooled booking reaches and is retired by v27");
 }
 
 // --- Admin payment/attendance state seam -----------------------------------
@@ -6024,7 +6118,8 @@ console.log("ok  reset");
   store.resetLocalData();
   installLocalFixtures();
   const paidSessions = store.upcomingSessions(70).filter((session) =>
-    session.kind === "paid" && !session.cancelled && !data.sessionStarted(session)
+    session.activityId === "hyrox-quarry-bay"
+      && !session.cancelled && !data.sessionStarted(session)
   );
   if (paidSessions.length < 3) throw new Error("attendance tests need three future paid sessions");
 
@@ -6741,11 +6836,11 @@ for (const fixture of sourceSnapshots) {
     && !Array.isArray(migrated.paymentPayouts);
   const suppliedPayoutsPreserved = fixture.version !== 12
     || migrated.paymentPayouts["real-admin"]?.fpsPhone === "+852 6000 0000";
-  if (migrated.version !== 26 || suppliedIds.some((id) => !serialized.includes(id))
+  if (migrated.version !== 27 || suppliedIds.some((id) => !serialized.includes(id))
       || !payoutMapValid || !suppliedPayoutsPreserved) {
     failures++;
-    console.error(`FAIL genuine v${fixture.version} fixture must reach v26 intact`);
-  } else console.log(`ok  genuine v${fixture.version} fixture reaches v26 intact`);
+    console.error(`FAIL genuine v${fixture.version} fixture must reach v27 intact`);
+  } else console.log(`ok  genuine v${fixture.version} fixture reaches v27 intact`);
 }
 
 for (const invalidCounter of [null, -1, 1.5, "broken"]) {
@@ -7699,6 +7794,23 @@ assert.equal(confirmedBooking.replacementUserId, "replacement-member");
 assert.equal(store.effectiveAttendeeId(confirmedBooking), "replacement-member");
 assert.deepEqual(store.attendeesFor(store.getSession(confirmedBooking.sessionId)), ["Replacement M."]);
 store.signIn("replacement@example.test");
+const confirmedReplacementSession = store.getSession(confirmedBooking.sessionId);
+const replacementOtherSlot = store.upcomingSessions(21).find((session) =>
+  data.ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session.activityId)
+    && session.dateISO === confirmedReplacementSession.dateISO
+    && session.id !== confirmedReplacementSession.id
+);
+assert.ok(replacementOtherSlot, "replacement guard needs the other Island ECC slot");
+assert.throws(
+  () => store.reserveSession("replacement-member", confirmedReplacementSession.id),
+  /Choose one Island ECC HYROX slot per Saturday/,
+  "a confirmed replacement attendee must not reserve the same Island ECC slot again"
+);
+assert.throws(
+  () => store.reserveSession("replacement-member", replacementOtherSlot.id),
+  /Choose one Island ECC HYROX slot per Saturday/,
+  "a confirmed replacement attendee must not reserve the other Island ECC slot"
+);
 assert.match(views.viewBooking(replacementBooking.id), /You’re booked in/);
 assert.match(views.viewBooking(replacementBooking.id), /HK\$180/);
 assert.equal(store.receiptsForUser("replacement-member").length, 0);

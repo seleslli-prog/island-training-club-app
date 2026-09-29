@@ -221,9 +221,10 @@ Supabase Admin; this cleanup does not change the schema or delete live users.
 
 ## HYROX pool retirement: backend-first deployment
 
-Island ECC is the only active HYROX session. It keeps the direct paid-session
-reservation, waitlist, payment, receipt, attendance, replacement, collector,
-and venue-confirmation behavior. Retained BFT/Midtown pool test records are
+Island ECC is the only active HYROX venue, with 9:15 AM and 10:30 AM Saturday
+sessions. Both keep the direct paid-session reservation, waitlist, payment,
+receipt, attendance, replacement, collector, and venue-confirmation behavior.
+Retained BFT/Midtown pool test records are
 hidden from browser roles, not deleted. Retirement sends no cancellation or
 member notification.
 

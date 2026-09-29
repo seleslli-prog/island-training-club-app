@@ -11,7 +11,7 @@
 // any local mutation that would otherwise mask the failure.
 // ==========================================================================
 
-import { SEED_ACTIVITIES } from "./data.js";
+import { SEED_ACTIVITIES, compareSessionsByStart } from "./data.js";
 import { isLive, supabase } from "./config.js";
 import {
   isRetiredHyroxActivityId,
@@ -835,7 +835,9 @@ export function getLiveSession(id) {
 }
 
 export function listLiveSessions() {
-  return [...liveCache.sessions.values()].map(applyLiveVenueOverride);
+  return [...liveCache.sessions.values()]
+    .map(applyLiveVenueOverride)
+    .sort(compareSessionsByStart);
 }
 
 export function liveRetiredSessionStub(id) {

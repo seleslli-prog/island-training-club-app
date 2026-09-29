@@ -7,6 +7,8 @@
 
 import {
   SEED_ACTIVITIES,
+  ISLAND_ECC_HYROX_ACTIVITY_IDS,
+  compareSessionsByStart,
   sessionsInRange,
   sessionStarted,
   hktEventStartMs,
@@ -45,7 +47,7 @@ const APPLY_DRAFT_KEY = "itc.apply.draft.v1";
 const APPLY_DRAFT_VERSION = 1;
 const LAST_ROUTE_KEY = "itc.last-route.v1";
 const LAST_ROUTE_VERSION = 1;
-const STATE_VERSION = 26;
+const STATE_VERSION = 27;
 
 const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
@@ -486,11 +488,41 @@ function migrate() {
 
   const v = state.version || 0;
   if (v >= STATE_VERSION) return;
+  if (v < 27) {
+    // v27: Island ECC offers two independently capacitated Saturday slots.
+    // Preserve the existing id for the later slot so every stored reference
+    // survives, and only rewrite exact former defaults.
+    const lateSlot = state.activities.find((activity) => activity.id === "hyrox-quarry-bay");
+    if (lateSlot?.time === "11:00") lateSlot.time = "10:30";
+    if (!state.activities.some((activity) => activity.id === "hyrox-quarry-bay-early")) {
+      const earlySlot = SEED_ACTIVITIES.find(
+        (activity) => activity.id === "hyrox-quarry-bay-early"
+      );
+      if (earlySlot) state.activities.push(structuredClone(earlySlot));
+    }
+    const todayISO = todayHktISO();
+    for (const booking of state.bookings) {
+      if (booking.sessionId?.startsWith("hyrox-quarry-bay-")
+          && !booking.sessionId.startsWith("hyrox-quarry-bay-early-")
+          && booking.snapshot?.dateISO >= todayISO
+          && booking.snapshot?.time === "11:00") {
+        booking.snapshot.time = "10:30";
+      }
+    }
+    for (const [sessionId, override] of Object.entries(state.sessionOverrides)) {
+      if (sessionId.startsWith("hyrox-quarry-bay-")
+          && !sessionId.startsWith("hyrox-quarry-bay-early-")
+          && sessionDateOf(sessionId) >= todayISO
+          && override?.time === "11:00") {
+        override.time = "10:30";
+      }
+    }
+  }
   if (v < 19) {
     // v19: all Quarry Bay session capacity is expanded to 30, including
     // sessions already materialized in local state.
     for (const activity of state.activities) {
-      if (activity.id === "hyrox-quarry-bay") activity.capacity = 30;
+      if (ISLAND_ECC_HYROX_ACTIVITY_IDS.has(activity.id)) activity.capacity = 30;
     }
   }
   if (v < 18) {
@@ -523,7 +555,7 @@ function migrate() {
     const canonicalBft = state.activities.find((activity) => activity.id === "hyrox-bft");
     if (legacyBft && !canonicalBft) legacyBft.id = "hyrox-bft";
     else if (legacyBft) state.activities = state.activities.filter((activity) => activity !== legacyBft);
-    for (const id of ["hyrox-bft", "hyrox-quarry-bay"]) {
+    for (const id of ["hyrox-bft", "hyrox-quarry-bay-early", "hyrox-quarry-bay"]) {
       if (!state.activities.some((activity) => activity.id === id)) {
         const seed = SEED_ACTIVITIES.find((activity) => activity.id === id);
         if (seed) state.activities.push(structuredClone(seed));
@@ -645,7 +677,10 @@ function migrate() {
     // v2: Sunday Trail Run removed; HYROX moved to Sat 11:15 at Causeway Bay
     // BFT (HK$180) and a second Saturday session added at Midtown 28 (11:00).
     state.activities = state.activities.filter(
-      (a) => !["trail", "hyrox", "hyrox-bft", "hyrox-midtown", "hyrox-quarry-bay"].includes(a.id)
+      (a) => ![
+        "trail", "hyrox", "hyrox-bft", "hyrox-midtown",
+        "hyrox-quarry-bay-early", "hyrox-quarry-bay",
+      ].includes(a.id)
     );
     state.activities.push(
       ...SEED_ACTIVITIES.filter((a) => a.category === "HYROX").map((a) =>
@@ -1618,10 +1653,16 @@ function replacementIsHyrox(booking) {
 
 function replacementDuplicateForUser(userId, booking) {
   return state.bookings.some((candidate) => candidate.id !== booking.id
-    && candidate.userId === userId
-    && ["reserved", "confirmed"].includes(candidate.status)
+    && (candidate.replacementUserId || candidate.userId) === userId
+    && ["reserved", "confirmed", "attended"].includes(candidate.status)
     && replacementIsHyrox(candidate)
     && candidate.snapshot?.dateISO === booking.snapshot?.dateISO);
+}
+
+function replacementConflictForUser(userId, booking) {
+  const session = getSession(booking?.sessionId);
+  return replacementDuplicateForUser(userId, booking)
+    || hasOtherIslandEccCommitment(userId, session, { includeQueues: true });
 }
 
 function recordReplacementAudit(request, action, actorId, reason = null, now = Date.now()) {
@@ -1726,7 +1767,8 @@ export async function acceptReplacement(token, now = Date.now()) {
   }
   if (actor.id === request.originalUserId) replacementRequestError("The original member cannot accept their own replacement invite.");
   const booking = getBooking(request.bookingId);
-  if (!booking || !replacementEligible(booking, now).ok || replacementDuplicateForUser(actor.id, booking)) {
+  if (!booking || !replacementEligible(booking, now).ok
+      || replacementConflictForUser(actor.id, booking)) {
     replacementRequestError("This booking is no longer available for replacement.");
   }
   request.status = "accepted";
@@ -1806,7 +1848,8 @@ export async function decideReplacement(requestId, confirm, reason = null, now =
     if (request.status !== "accepted") replacementRequestError("Only an accepted replacement can be confirmed.");
     if (request.expiresAt <= now) replacementRequestError("This replacement request has expired.");
     const booking = getBooking(request.bookingId);
-    if (!booking || !replacementEligible(booking, now).ok || replacementDuplicateForUser(request.replacementUserId, booking)) {
+    if (!booking || !replacementEligible(booking, now).ok
+        || replacementConflictForUser(request.replacementUserId, booking)) {
       replacementRequestError("This booking is no longer available for replacement.");
     }
     booking.replacementUserId = request.replacementUserId;
@@ -1926,6 +1969,29 @@ function snapshotFor(session) {
   };
 }
 
+function isIslandEccHyroxSession(session) {
+  return ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session?.activityId);
+}
+
+function hasOtherIslandEccCommitment(userId, session, { includeQueues = false } = {}) {
+  if (!isIslandEccHyroxSession(session)) return false;
+  const hasBooking = state.bookings.some((booking) => {
+    if ((booking.replacementUserId || booking.userId) !== userId
+        || !["reserved", "confirmed", "attended"].includes(booking.status)) return false;
+    const bookedSession = getSession(booking.sessionId);
+    return isIslandEccHyroxSession(bookedSession)
+      && bookedSession.dateISO === session.dateISO;
+  });
+  if (hasBooking || !includeQueues) return hasBooking;
+  return Object.entries(state.queues).some(([sessionId, queue]) => {
+    if (sessionId === session.id || sessionDateOf(sessionId) !== session.dateISO) return false;
+    const queuedSession = getSession(sessionId);
+    return isIslandEccHyroxSession(queuedSession)
+      && [...(queue?.waitlist || []), ...(queue?.interest || [])]
+        .some((entry) => entry.userId === userId);
+  });
+}
+
 // Reserve a spot without paying. The spot is held until the next payment
 // checkpoint (Thu 6 PM, then Fri 2 PM, then a 2-hour last-minute window).
 export function reserveSession(userId, sessionOrId, now = Date.now()) {
@@ -1953,6 +2019,9 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
   if (
     userBookingFor(userId, session.id) || userReservationFor(userId, session.id)
   ) throw new Error("Already booked");
+  if (hasOtherIslandEccCommitment(userId, session, { includeQueues: true })) {
+    throw new Error("Choose one Island ECC HYROX slot per Saturday.");
+  }
 
   const booking = {
     id: uid("b"),
@@ -2144,8 +2213,12 @@ function cascadeSession(sessionId, now = Date.now()) {
 
 function joinQueue(userId, sessionId, kind) {
   requireAuthorizedPaymentOwner(userId);
+  const session = getSession(sessionId);
   if (userBookingFor(userId, sessionId) || userReservationFor(userId, sessionId))
     throw new Error("Already booked");
+  if (hasOtherIslandEccCommitment(userId, session, { includeQueues: true })) {
+    throw new Error("Choose one Island ECC HYROX slot per Saturday.");
+  }
   const q = paymentQueueFor(sessionId);
   for (const list of [q.waitlist, q.interest]) {
     if (list.some((e) => e.userId === userId)) throw new Error("Already in a queue for this session");
@@ -2293,9 +2366,7 @@ export function upcomingSessions(days = 14) {
           past: false,
         };
       })
-      .sort((a, b) =>
-        a.dateISO.localeCompare(b.dateISO) || String(a.time).localeCompare(String(b.time))
-      );
+      .sort(compareSessionsByStart);
   }
   const todayStart = today.getTime();
   const horizon = todayStart + days * 24 * 60 * 60 * 1000;
@@ -2315,9 +2386,7 @@ export function upcomingSessions(days = 14) {
       spots: spotsLeft(decorated),
       past: false,
     };
-  }), ...oneOffs].sort((a, b) =>
-    a.dateISO.localeCompare(b.dateISO) || String(a.time).localeCompare(String(b.time))
-  );
+  }), ...oneOffs].sort(compareSessionsByStart);
 }
 
 export function nextSession() {

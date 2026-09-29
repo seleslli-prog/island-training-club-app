@@ -6,6 +6,11 @@
 // Photo paths are relative to /app/index.html.
 const PH = "../assets/itc/";
 
+export const ISLAND_ECC_HYROX_ACTIVITY_IDS = new Set([
+  "hyrox-quarry-bay-early",
+  "hyrox-quarry-bay",
+]);
+
 // --- Activity templates ----------------------------------------------------
 // kind: "free"  -> no booking required; optional RSVP; no capacity or checkout
 // kind: "paid"  -> members book + pay per session at a fixed price
@@ -71,12 +76,30 @@ export const SEED_ACTIVITIES = [
     published: true,
   },
   {
+    id: "hyrox-quarry-bay-early",
+    name: "ITC HYROX",
+    kind: "paid",
+    category: "HYROX",
+    weekday: 6, // Saturday
+    time: "09:15",
+    durationMin: 60,
+    location: "10/F, Island ECC, Quarry Bay",
+    mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
+    photo: PH + "hyrox.webp",
+    blurb:
+      "Weekly hybrid race training: ski, sled, burpees and running intervals. Every session is purchased separately at one fixed price.",
+    memberNote: "Gym entry fee is included in the session price.",
+    price: 180, // HKD
+    capacity: 30,
+    published: true,
+  },
+  {
     id: "hyrox-quarry-bay",
     name: "ITC HYROX",
     kind: "paid",
     category: "HYROX",
     weekday: 6, // Saturday
-    time: "11:00",
+    time: "10:30",
     durationMin: 60,
     location: "10/F, Island ECC, Quarry Bay",
     mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
@@ -316,6 +339,12 @@ export function donorIdProblem(raw) {
 // with a deterministic id (`${activityId}-${YYYY-MM-DD}`) so bookings survive
 // reloads.
 
+export function compareSessionsByStart(a, b) {
+  return String(a?.dateISO || "").localeCompare(String(b?.dateISO || ""))
+    || String(a?.time || "").localeCompare(String(b?.time || ""))
+    || String(a?.id || "").localeCompare(String(b?.id || ""));
+}
+
 export function sessionsInRange(activities, fromDate, days) {
   const out = [];
   const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
@@ -333,7 +362,7 @@ export function sessionsInRange(activities, fromDate, days) {
       });
     }
   }
-  return out;
+  return out.sort(compareSessionsByStart);
 }
 
 // A session counts as past once its start time has passed — a date-only

@@ -21,6 +21,8 @@ import {
   LEADERS,
   CULTURE,
   ANNOUNCEMENTS,
+  ISLAND_ECC_HYROX_ACTIVITY_IDS,
+  compareSessionsByStart,
   findSession,
   sessionStarted,
   hktEventStartMs,
@@ -408,6 +410,7 @@ export function viewSchedule() {
       .map((session) => store.getSession(session.id))
       .filter(Boolean);
   }
+  weekSessions.sort(compareSessionsByStart);
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const cells = Array.from({ length: 7 }, (_, i) => {
@@ -2903,19 +2906,22 @@ function adminFinalizeGymCard(s, cardClass = "", memberUsers = []) {
 }
 
 function adminIslandEccHandoff(session, memberUsers) {
-  if (!session || session.activityId !== "hyrox-quarry-bay" || session.cancelled) return "";
+  if (!session || !ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session.activityId)
+      || session.cancelled) return "";
   return adminFinalizeGymCard(session, "hyrox-island-ecc-card", memberUsers);
 }
 
 function adminFinalizeGym(memberUsers) {
   const financialBookings = store.paymentRosterBookings();
   const candidates = new Map(store.upcomingSessions(21)
-    .filter((session) => session.activityId === "hyrox-quarry-bay")
+    .filter((session) => ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session.activityId))
     .map((session) => [session.id, session]));
   for (const booking of financialBookings) {
     if (!booking.sessionId) continue;
     const session = store.getSession(booking.sessionId);
-    if (session?.activityId === "hyrox-quarry-bay") candidates.set(session.id, session);
+    if (ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session?.activityId)) {
+      candidates.set(session.id, session);
+    }
   }
   const upcoming = [...candidates.values()].filter((session) => {
     const hasActiveBooking = financialBookings.some((booking) => booking.sessionId === session.id);
@@ -2923,7 +2929,7 @@ function adminFinalizeGym(memberUsers) {
     const withinDisplayWindow = Date.now() >= start - 21 * 24 * 60 * 60_000
       && store.attendanceWindowForSession(session).state !== "locked";
     return hasActiveBooking || withinDisplayWindow;
-  }).sort((a, b) => hktEventStartMs(a.dateISO, a.time) - hktEventStartMs(b.dateISO, b.time));
+  }).sort(compareSessionsByStart);
   const cards = upcoming.map((session) => adminIslandEccHandoff(session, memberUsers)).join("");
   return `
     <section class="admin-control-group mt24" aria-labelledby="hyrox-venue-handoff-title">
