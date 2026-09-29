@@ -2721,7 +2721,7 @@ if (localVisitorHome.includes("My Week")) {
   throw new Error("visitor Home must not show My Week");
 }
 {
-  const weekStart = data.mondayOf(data.todayLocal());
+  const weekStart = data.sundayOf(data.todayLocal());
   const weekEnd = data.addDays(weekStart, 6);
   const freeInWeek = allUpcoming.filter((session) => {
     if (session.kind !== "free") return false;
@@ -2745,11 +2745,9 @@ const assertRenderedActivityLinksAreFree = (html, label) => {
   const linkedIds = [...html.matchAll(/href="#\/activity\/([^"]+)"/g)].map((match) => match[1]);
   if (!linkedIds.length) {
     // Mirror viewHome()'s visitor branch: when no free sessions exist in the
-    // current Mon–Sun window, the empty state is the expected output and
-    // there are no links to verify. The seed data (Mon/Tue/Wed only) makes
-    // this the case on Thu–Sun — without this guard the suite was green only
-    // on Mon–Wed.
-    const weekStart = data.mondayOf(data.todayLocal());
+    // current Sun–Sat window (same as Schedule), the empty state is the
+    // expected output and there are no links to verify.
+    const weekStart = data.sundayOf(data.todayLocal());
     const weekEnd = data.addDays(weekStart, 6);
     const freeInWeek = allUpcoming.filter((session) => {
       if (session.kind !== "free") return false;
@@ -2775,7 +2773,7 @@ const assertRenderedActivityLinksAreFree = (html, label) => {
 };
 assertRenderedActivityLinksAreFree(localVisitorHome, "visitor Home");
 {
-  const weekStart = data.mondayOf(data.todayLocal());
+  const weekStart = data.sundayOf(data.todayLocal());
   const weekEnd = data.addDays(weekStart, 6);
   const freeInWeek = allUpcoming.filter((session) => {
     if (session.kind !== "free") return false;
@@ -2790,7 +2788,7 @@ assertRenderedActivityLinksAreFree(localVisitorHome, "visitor Home");
       throw new Error("visitor Home must show free sessions only");
     }
   } else {
-    // Thu–Sun: no free sessions in window, so neither name should appear.
+    // Outside free-session weekdays: no free sessions in window.
     if (localVisitorHome.includes(free.name) || localVisitorHome.includes(paid.name)) {
       throw new Error("visitor Home should not list session names when the current week has no free sessions");
     }
@@ -3506,9 +3504,8 @@ if (pendingAccount.includes('data-action="manage-profile-photo"')) {
 const pendingHome = views.viewHome();
 {
   // Pending applicants see "My Week" filtered to free sessions in the
-  // current Mon–Sun window (same as the visitor branch). On Thu–Sun the
-  // seed data yields no such sessions, so neither session name appears.
-  const weekStart = data.mondayOf(data.todayLocal());
+  // current Sun–Sat window (same as Schedule / visitor Home).
+  const weekStart = data.sundayOf(data.todayLocal());
   const weekEnd = data.addDays(weekStart, 6);
   const freeInWeek = allUpcoming.filter((session) => {
     if (session.kind !== "free") return false;
@@ -4362,10 +4359,21 @@ if (!store.receiptForBooking(r1.id)) throw new Error("receipt should attach to t
 console.log("ok  collector confirms -> booking confirmed + receipt (PayMe)");
 const booking = conf.booking, receipt = conf.receipt;
 const bookedActivityLink = `href="#/activity/${booking.sessionId}"`;
+const myWeekStart = data.sundayOf(data.todayLocal());
+const myWeekEndISO = data.isoDate(data.addDays(myWeekStart, 6));
+const myWeekStartISO = data.isoDate(myWeekStart);
+const bookingInMyWeek = booking.snapshot.dateISO >= myWeekStartISO
+  && booking.snapshot.dateISO <= myWeekEndISO;
 const approvedHome = views.viewHome();
-if (!approvedHome.includes("My Week") || !approvedHome.includes(booking.snapshot.name)
-    || !approvedHome.includes(bookedActivityLink)) {
-  throw new Error("approved Home must show the confirmed future booking in My Week");
+if (!approvedHome.includes("My Week")) {
+  throw new Error("approved Home must show My Week");
+}
+if (bookingInMyWeek) {
+  if (!approvedHome.includes(booking.snapshot.name) || !approvedHome.includes(bookedActivityLink)) {
+    throw new Error("approved Home must show this week's confirmed booking in My Week");
+  }
+} else if (approvedHome.includes(bookedActivityLink)) {
+  throw new Error("approved My Week must exclude confirmed bookings outside the current Sun–Sat week");
 }
 for (const session of allUpcoming.filter((item) => item.id !== booking.sessionId)) {
   if (approvedHome.includes(`href="#/activity/${session.id}"`)) {
@@ -4394,8 +4402,36 @@ try {
   booking.snapshot.dateISO = futureSnapshotDateISO;
   booking.snapshot.startTime = futureSnapshotStartTime;
 }
-if (!views.viewHome().includes(bookedActivityLink)) {
+if (bookingInMyWeek && !views.viewHome().includes(bookedActivityLink)) {
   throw new Error("confirmed future booking fixture must be restored after My Week mutations");
+}
+{
+  // A confirmed booking next week must not appear even inside the 14-day set.
+  const nextWeekSession = allUpcoming.find((session) =>
+    session.kind === "paid"
+    && session.id !== booking.sessionId
+    && session.dateISO > myWeekEndISO
+    && !data.sessionStarted(session));
+  if (nextWeekSession) {
+    const nextWeekReservation = store.reserveSession(signIn.user.id, nextWeekSession.id);
+    store.markBookingPaid(nextWeekReservation.id, "PayMe", "NEXTWEEK");
+    store.signIn("admin@example.test");
+    store.confirmBookingPayment(nextWeekReservation.id);
+    store.signIn(signIn.user.email);
+    const nextWeekLink = `href="#/activity/${nextWeekSession.id}"`;
+    const homeThisWeek = views.viewHome();
+    if (homeThisWeek.includes(nextWeekLink)) {
+      throw new Error("approved My Week must exclude confirmed bookings outside the current Sun–Sat week");
+    }
+    if (bookingInMyWeek && !homeThisWeek.includes(bookedActivityLink)) {
+      throw new Error("approved My Week must still show this week's confirmed booking");
+    }
+    // Detach the fixture so later Profile booking-count checks still see one row.
+    const nextWeekBooking = store.getBooking(nextWeekReservation.id);
+    const nextWeekReceipt = store.receiptForBooking(nextWeekReservation.id);
+    if (nextWeekBooking) nextWeekBooking.userId = "__smoke-my-week-cleanup__";
+    if (nextWeekReceipt) nextWeekReceipt.userId = "__smoke-my-week-cleanup__";
+  }
 }
 const islandEccBookingHtml = await check("booking confirmation", () => views.viewBooking(booking.id));
 const islandEccReceiptHtml = await check("receipt", () => views.viewReceipt(receipt.id));

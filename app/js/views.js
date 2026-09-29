@@ -29,7 +29,6 @@ import {
   hktEventStartMs,
   sessionsInRange,
   parseISO,
-  mondayOf,
   sundayOf,
   addDays,
   todayHktISO,
@@ -306,10 +305,9 @@ function visitorDraftActions() {
 
 export function viewHome() {
   const user = store.currentUser();
-  // Same 14-day window bookings are made in — a confirmed booking can never
-  // fall out of "My week" (e.g. next Saturday's booking seen on Sat evening).
+  // Match Schedule's Sunday–Saturday week (sundayOf + 7 days), not Mon–Sun.
   const upcoming = store.upcomingSessions(14);
-  const weekStart = mondayOf(todayLocal());
+  const weekStart = sundayOf(todayLocal());
   const weekEnd = addDays(weekStart, 6);
   const inThisWeek = (s) => {
     const iso = s.dateISO || (s.snapshot && s.snapshot.dateISO);
@@ -336,7 +334,7 @@ export function viewHome() {
         .filter((booking) => booking.status === "confirmed" && !sessionStarted(booking.snapshot))
         .map((booking) => booking.sessionId)
     );
-    rows = upcoming.filter((session) => bookedIds.has(session.id));
+    rows = upcoming.filter((session) => bookedIds.has(session.id) && inThisWeek(session));
     emptyMsg = `Nothing booked this week yet. <a href="#/schedule" style="color:var(--accent)">Find a session →</a>`;
     weekHeading = "My Week";
   }
