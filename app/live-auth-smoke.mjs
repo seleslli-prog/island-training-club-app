@@ -2562,8 +2562,8 @@ assert.match(signedOutHome, /href="#\/account"[^>]*>Use an email link instead</)
 assert.doesNotMatch(signedOutHome, /href="#\/account"[^>]*>Sign in or join</);
 store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
 const signedOutAccount = await views.viewAccount();
-assert.match(signedOutAccount, /Unfinished application on this device/);
-assert.match(signedOutAccount, /Sign in to continue where you left off/);
+assert.match(signedOutAccount, /Continue your application/);
+assert.match(signedOutAccount, /You started the membership form earlier\. Sign in to finish it\./);
 assert.match(
   signedOutAccount,
   /data-action="sign-in-google"[^>]*>Sign in to continue</,

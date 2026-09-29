@@ -266,7 +266,7 @@ function visitorDraftActions() {
   if (isLive()) {
     return `
     <div class="banner mt16" data-draft-resume>
-      <p><strong>Unfinished application on this device</strong><br><span class="muted small">Sign in to continue where you left off.</span></p>
+      <p><strong>Continue your application</strong><br><span class="muted small">You started the membership form earlier. Sign in to finish it.</span></p>
       <div class="actions">
         <button class="btn sm" type="button" data-action="sign-in-google">Sign in to continue</button>
         <button class="btn ghost sm" type="button" data-action="discard-draft">Discard</button>
@@ -275,7 +275,7 @@ function visitorDraftActions() {
   }
   return `
     <div class="banner mt16" data-draft-resume>
-      <p><strong>Continue your application</strong><br><span class="muted small">Your unfinished form is saved on this device.</span></p>
+      <p><strong>Continue your application</strong><br><span class="muted small">You started the membership form earlier. Continue to finish it.</span></p>
       <div class="actions">
         <a class="btn sm" href="#/apply">Continue your application</a>
         <button class="btn ghost sm" type="button" data-action="discard-draft">Discard</button>

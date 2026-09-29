@@ -3368,7 +3368,9 @@ for (const [label, field] of [
   const homeWithDraft = views.viewHome();
   const accountWithDraft = await views.viewAccount();
   for (const [label, html] of [["home", homeWithDraft], ["account", accountWithDraft]]) {
-    if (!html.includes("Continue your application") || !html.includes('data-action="discard-draft"')) {
+    if (!html.includes("Continue your application")
+        || !html.includes("You started the membership form earlier")
+        || !html.includes('data-action="discard-draft"')) {
       throw new Error(`${label} should expose Continue + Discard for a saved draft`);
     }
   }
