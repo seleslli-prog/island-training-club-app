@@ -2033,7 +2033,7 @@ function applyFormHtml(cu, draft) {
           ${applyField("text", "guardian_phone", "Guardian phone", savedAge === true, fields.guardian_phone)}
         </div>
         ${applyField("text", "emergency_name", "Emergency contact name", true, fields.emergency_name)}
-        ${applyField("text", "emergency_relationship", "Relationship to participant", true, fields.emergency_relationship)}
+        ${applyField("text", "emergency_relationship", "Emergency contact's relationship to participant", true, fields.emergency_relationship)}
         ${applyField("text", "emergency_phone", "Emergency contact phone", true, fields.emergency_phone)}
         ${applySelect("heard_source", "How did you hear about ITC?", ["friend", "family", "search", "social", "event", "other"], true, fields.heard_source)}
         ${applyField("text", "heard_detail", "Detail (optional)", false, fields.heard_detail)}
@@ -2085,7 +2085,7 @@ function viewApplyLocal() {
       <div class="field"><label for="ap-phone">Mobile / WhatsApp *</label><input id="ap-phone" name="phone" type="tel" required autocomplete="tel" placeholder="+852 …"></div>
       <div class="field-row">
         <div class="field"><label for="ap-en">Emergency contact name *</label><input id="ap-en" name="emergencyName" required></div>
-        <div class="field"><label for="ap-er">Relationship to participant *</label><input id="ap-er" name="emergencyRelationship" required></div>
+        <div class="field"><label for="ap-er">Emergency contact's relationship to participant *</label><input id="ap-er" name="emergencyRelationship" required></div>
         <div class="field"><label for="ap-ep">Emergency contact phone *</label><input id="ap-ep" name="emergencyPhone" type="tel" required></div>
       </div>
       <div class="field">
