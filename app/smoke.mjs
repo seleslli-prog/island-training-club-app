@@ -4391,6 +4391,20 @@ const memberActivityFallback = views.viewActivity(paid.id, { avatarRows: null })
 if (!memberActivityFallback.includes("Who’s coming") || /object_path|pending_object|google_object/.test(memberActivityFallback)) {
   throw new Error("attendee resolver failure must retain safe attendee copy without internal paths");
 }
+const memberActivityEmptyAvatars = views.viewActivity(paid.id, {
+  attendeeNames: ["Riley R."],
+  avatarRows: [],
+});
+if (!memberActivityEmptyAvatars.includes("Riley R.") || memberActivityEmptyAvatars.includes("No confirmed bookings yet")) {
+  throw new Error("empty avatar rows must fall back to attendee names for Who's coming");
+}
+const memberActivityNamesUnavailable = views.viewActivity(paid.id, {
+  attendeeNames: null,
+  avatarRows: [],
+});
+if (!memberActivityNamesUnavailable.includes("temporarily unavailable")) {
+  throw new Error("null attendee names with empty avatars must show the unavailable copy");
+}
 store.signOut();
 if ((await store.getSessionAvatars(paid.id)).length !== 0) {
   throw new Error("signed-out local attendee adapter must not return booked-member rows");

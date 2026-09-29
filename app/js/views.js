@@ -672,9 +672,11 @@ export function viewActivity(sessionId, options) {
       : "";
 
   const fallbackNames = attendeeNames === undefined ? store.attendeesFor(s) : attendeeNames;
-  const attendeeRows = Array.isArray(avatarRows)
+  // Prefer avatar rows when present. An empty avatar payload must not hide
+  // names from get_operational_attendee_names (live RSVP/paid rosters).
+  const attendeeRows = Array.isArray(avatarRows) && avatarRows.length
     ? avatarRows
-    : Array.isArray(fallbackNames)
+    : Array.isArray(fallbackNames) && fallbackNames.length
       ? fallbackNames.map((displayName) => ({ displayName, url: null, source: "initials", state: "active" }))
       : [];
   const attendeeList = attendeeRows.length
@@ -689,7 +691,7 @@ export function viewActivity(sessionId, options) {
           })}
           <span class="attendee-name">${esc(row.displayName || "Member")}</span>
         </div>`).join("")
-    : attendeeNames === null && !Array.isArray(avatarRows)
+    : attendeeNames === null
       ? '<p class="muted small">Attendee names are temporarily unavailable. Try again shortly.</p>'
       : '<p class="muted small">No confirmed bookings yet.</p>';
   const attendees =

@@ -510,19 +510,35 @@ async function render(generation = renderGeneration) {
       if (viewer?.status === "approved") {
         try {
           attendeeNames = await store.attendeeNamesFor(arg);
+          // If the names RPC is empty but hydrated bookings show people
+          // (common when count is ahead of roster RPC), use cache names.
+          if (Array.isArray(attendeeNames) && !attendeeNames.length && session) {
+            const cachedNames = store.attendeesFor(session);
+            if (cachedNames.length) attendeeNames = cachedNames;
+          }
         } catch (err) {
           console.warn("Unable to load attendee names", err);
-          attendeeNames = null;
+          attendeeNames = session ? store.attendeesFor(session) : null;
+          if (Array.isArray(attendeeNames) && !attendeeNames.length) attendeeNames = null;
         }
         if ((session?.kind === "paid" || store.sessionRequiresRsvp(session))
             && canManageOwnAvatar(viewer)) {
           try {
             avatarRows = await store.getSessionAvatars(arg);
-            if (Array.isArray(attendeeNames)) {
-              avatarRows = avatarRows.map((row, index) => ({
-                ...row,
-                displayName: attendeeNames[index] || row.displayName,
-              }));
+            if (Array.isArray(attendeeNames) && attendeeNames.length) {
+              if (!Array.isArray(avatarRows) || !avatarRows.length) {
+                avatarRows = attendeeNames.map((displayName) => ({
+                  displayName,
+                  url: null,
+                  source: "initials",
+                  state: "active",
+                }));
+              } else {
+                avatarRows = avatarRows.map((row, index) => ({
+                  ...row,
+                  displayName: attendeeNames[index] || row.displayName,
+                }));
+              }
             }
           } catch {
             avatarRows = null;
