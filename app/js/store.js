@@ -1065,7 +1065,7 @@ export function getApplyDeviceId() {
   }
 }
 
-export function getApplyDraft() {
+function readApplyDraft() {
   try {
     const raw = localStorage.getItem(APPLY_DRAFT_KEY);
     if (!raw) return null;
@@ -1088,16 +1088,40 @@ export function getApplyDraft() {
   }
 }
 
-export function saveApplyDraft({ fields = {} } = {}) {
+export function getApplyDraft({ profileId = null } = {}) {
+  const draft = readApplyDraft();
+  if (!draft) return null;
+  const ownerId = draft.profileId == null ? null : String(draft.profileId);
+  const wantedId = profileId == null ? null : String(profileId);
+  // Account-scoped reads only resume a draft owned by that profile, or an
+  // unclaimed draft the pending member is about to continue after sign-in.
+  if (wantedId && ownerId && ownerId !== wantedId) return null;
+  if (wantedId && !ownerId) {
+    draft.profileId = wantedId;
+    try { localStorage.setItem(APPLY_DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  }
+  return draft;
+}
+
+export function saveApplyDraft({ fields = {}, profileId = null } = {}) {
   try {
     const deviceId = getApplyDeviceId();
     if (!deviceId) return null;
-    const existing = getApplyDraft();
+    const actorId = profileId || currentUser()?.id || null;
+    const existing = readApplyDraft();
+    const ownerId = existing?.profileId == null ? null : String(existing.profileId);
+    if (actorId && ownerId && ownerId !== String(actorId)) return null;
     const draft = {
       version: APPLY_DRAFT_VERSION,
       deviceId,
+      profileId: actorId || ownerId || null,
       savedAt: Date.now(),
-      fields: { ...(existing?.fields || {}), ...fields },
+      fields: {
+        ...((!ownerId || !actorId || ownerId === String(actorId))
+          ? (existing?.fields || {})
+          : {}),
+        ...fields,
+      },
     };
     localStorage.setItem(APPLY_DRAFT_KEY, JSON.stringify(draft));
     return draft;
@@ -1106,8 +1130,17 @@ export function saveApplyDraft({ fields = {} } = {}) {
   }
 }
 
-export function clearApplyDraft() {
-  try { localStorage.removeItem(APPLY_DRAFT_KEY); } catch {}
+export function clearApplyDraft({ profileId = null } = {}) {
+  try {
+    if (profileId) {
+      const draft = readApplyDraft();
+      if (!draft) return;
+      const ownerId = draft.profileId == null ? null : String(draft.profileId);
+      // Remove only this account's draft, or an unclaimed leftover after sign-in.
+      if (ownerId && ownerId !== String(profileId)) return;
+    }
+    localStorage.removeItem(APPLY_DRAFT_KEY);
+  } catch {}
 }
 
 // --- Signup / approval ---------------------------------------------------------

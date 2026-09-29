@@ -260,19 +260,10 @@ export function notificationBellHTML(unreadCount = 0, active = false) {
 // ============================================================================
 
 function visitorDraftActions() {
-  if (!store.getApplyDraft()) return "";
-  // Live apply requires a signed-in pending profile. Linking straight to
-  // #/apply bounces signed-out visitors back to Account and looks broken.
-  if (isLive()) {
-    return `
-    <div class="banner mt16" data-draft-resume>
-      <p><strong>Continue your application</strong><br><span class="muted small">You started the membership form earlier. Sign in to finish it.</span></p>
-      <div class="actions">
-        <button class="btn sm" type="button" data-action="sign-in-google">Sign in to continue</button>
-        <button class="btn ghost sm" type="button" data-action="discard-draft">Discard</button>
-      </div>
-    </div>`;
-  }
+  // Live drafts belong to a signed-in pending profile and only resume on
+  // #/apply after auth. Advertising a device draft while signed out makes
+  // Sign in look like it will reopen someone else's unfinished form.
+  if (isLive() || !store.getApplyDraft()) return "";
   return `
     <div class="banner mt16" data-draft-resume>
       <p><strong>Continue your application</strong><br><span class="muted small">You started the membership form earlier. Continue to finish it.</span></p>
@@ -1950,10 +1941,12 @@ export async function viewApplyLive() {
   const cu = await store.getCurrentUser();
   if (!cu) return { redirect: "#/account" };
   if (cu.role !== "pending") {
+    store.clearApplyDraft({ profileId: cu.id });
     return `<section class="card"><p class="muted">Your application has already been processed.</p></section>`;
   }
   const existing = await store.getMyApplication();
   if (existing) {
+    store.clearApplyDraft({ profileId: cu.id });
     return `
       <section class="card">
         <p class="kicker">Application</p>
@@ -1961,7 +1954,7 @@ export async function viewApplyLive() {
         <p class="muted">Your application was submitted on ${fmtDate(existing.submitted_at)}. An admin will review it shortly.</p>
       </section>`;
   }
-  return applyFormHtml(cu, store.getApplyDraft());
+  return applyFormHtml(cu, store.getApplyDraft({ profileId: cu.id }));
 }
 
 function heardSourceLabel(value) {

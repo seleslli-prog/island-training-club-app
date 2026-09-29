@@ -2561,20 +2561,18 @@ assert.match(signedOutHome, /data-action="sign-in-google"[^>]*>Continue with Goo
 assert.match(signedOutHome, /href="#\/account"[^>]*>Use an email link instead</);
 assert.doesNotMatch(signedOutHome, /href="#\/account"[^>]*>Sign in or join</);
 store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
+const signedOutHomeWithDraft = views.viewHome();
 const signedOutAccount = await views.viewAccount();
-assert.match(signedOutAccount, /Continue your application/);
-assert.match(signedOutAccount, /You started the membership form earlier\. Sign in to finish it\./);
-assert.match(
-  signedOutAccount,
-  /data-action="sign-in-google"[^>]*>Sign in to continue</,
-  "live draft resume must sign in instead of bouncing signed-out visitors off #/apply"
+assert.doesNotMatch(
+  signedOutHomeWithDraft,
+  /Continue your application|Unfinished application|Sign in to continue|data-draft-resume/,
+  "live signed-out Home must not advertise a device draft before sign-in"
 );
 assert.doesNotMatch(
   signedOutAccount,
-  /href="#\/apply"[^>]*>Continue your application</,
-  "live draft resume must not link signed-out visitors to #/apply"
+  /Continue your application|Unfinished application|Sign in to continue|data-draft-resume/,
+  "live signed-out Account must not advertise a device draft before sign-in"
 );
-assert.match(signedOutAccount, /data-action="discard-draft"/);
 assert.match(signedOutAccount, /data-action="sign-in-google"/);
 assert.match(
   signedOutAccount,
@@ -2828,6 +2826,21 @@ assert.match(liveApplyHtml, new RegExp(`name="waiver_signed_at"[^>]*value="${tod
 assert.match(liveApplyHtml, new RegExp(`name="waiver_signed_at"[^>]*max="${todayISO}"`));
 assert.doesNotMatch(liveApplyHtml, /name="email"/);
 
+store.saveApplyDraft({
+  profileId: "someone-else",
+  fields: { mobile: "+852 0000 0000", full_name: "Other Person" },
+});
+assert.equal(
+  store.getApplyDraft({ profileId: authUser.id }),
+  null,
+  "a draft owned by another profile must not resume for this signed-in applicant"
+);
+assert.doesNotMatch(
+  await views.viewApply(),
+  /Other Person|data-draft-resume/,
+  "live apply must not resume another account's unfinished form"
+);
+store.clearApplyDraft();
 store.saveApplyDraft({ fields: {
   full_name: "Riley Magic",
   mobile: "+852 6123 4567",

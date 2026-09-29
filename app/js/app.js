@@ -704,7 +704,10 @@ function updateApplyDraftStatus(form, draft) {
 }
 
 function saveApplyDraftForm(form) {
-  const draft = store.saveApplyDraft({ fields: collectApplyDraftFields(form) });
+  const draft = store.saveApplyDraft({
+    fields: collectApplyDraftFields(form),
+    profileId: store.currentUser()?.id || null,
+  });
   updateApplyDraftStatus(form, draft);
   return draft;
 }
@@ -925,7 +928,7 @@ document.addEventListener("click", async (e) => {
     }
     case "discard-draft":
       clearTimeout(applyDraftTimer);
-      store.clearApplyDraft();
+      store.clearApplyDraft({ profileId: store.currentUser()?.id || null });
       toast("Application draft discarded");
       await renderWithFeedback();
       break;
