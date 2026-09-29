@@ -1,8 +1,16 @@
 // Push-only service worker. No asset caching / offline shell.
-// Scope: /app/
+// Live registration uses /push-sw.js with scope "/"; local uses /app/push-sw.js.
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 self.addEventListener("push", (event) => {
-  let payload = { title: "Island Training Club", body: "", url: "/app/#/notifications" };
+  let payload = { title: "Island Training Club", body: "", url: "/#/notifications" };
   try {
     if (event.data) {
       const parsed = event.data.json();
@@ -17,18 +25,27 @@ self.addEventListener("push", (event) => {
     }
   }
   const title = String(payload.title || "Island Training Club");
+  const rawUrl = String(payload.url || "/#/notifications");
+  // Canonical live site redirects /app/ → /; keep hash routes on root.
+  const url = rawUrl.startsWith("/app/")
+    ? `/${rawUrl.slice("/app/".length)}`
+    : rawUrl;
   const options = {
-    body: String(payload.body || ""),
-    data: { url: String(payload.url || "/app/#/notifications") },
-    icon: "/assets/itc/logo-favicon.png",
-    badge: "/assets/itc/favicon-48.png",
+    body: String(payload.body || "New update from Island Training Club"),
+    data: { url },
+    tag: "itc-ops",
+    renotify: true,
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options).catch((err) => {
+      console.error("[itc push-sw] showNotification failed", err);
+    }),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = String(event.notification?.data?.url || "/app/#/notifications");
+  const target = String(event.notification?.data?.url || "/#/notifications");
   event.waitUntil((async () => {
     const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const client of all) {

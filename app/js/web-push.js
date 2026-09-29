@@ -164,7 +164,30 @@ export async function syncWebPushSubscription({ enabled } = {}) {
 }
 
 // Manual retry from DevTools: await window.__itcSyncWebPush(true)
+// Local banner smoke (no Edge Function): await window.__itcTestNotification()
 if (typeof window !== "undefined") {
   window.__itcSyncWebPush = (enabled = true) => syncWebPushSubscription({ enabled: !!enabled });
   window.__itcWebPushPaths = appPaths;
+  window.__itcTestNotification = async () => {
+    if (!webPushSupported()) throw new Error("Web push unsupported in this browser");
+    if (Notification.permission !== "granted") {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") throw new Error("Notification permission not granted");
+    }
+    const reg = await registration();
+    await reg.showNotification("ITC test", {
+      body: "If you see this, OS banners work for this site",
+      tag: "itc-ops-test",
+      renotify: true,
+    });
+    const sub = await reg.pushManager.getSubscription();
+    return {
+      ok: true,
+      permission: Notification.permission,
+      scriptURL: reg.active?.scriptURL || null,
+      scope: reg.scope,
+      subscribed: !!sub,
+      endpointPrefix: sub?.endpoint ? sub.endpoint.slice(0, 64) : null,
+    };
+  };
 }

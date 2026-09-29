@@ -124,11 +124,14 @@ Deno.serve(async (request) => {
     }
 
     const destination = String(notification.destination || '#/notifications').trim();
+    // Live Vercel redirects /app/ → /; keep notification open URLs on the root shell.
     const openUrl = destination.startsWith('#')
-      ? `/app/${destination}`
+      ? `/${destination}`
       : destination.startsWith('/app/')
+      ? `/${destination.slice('/app/'.length)}`
+      : destination.startsWith('/')
       ? destination
-      : `/app/#/notifications`;
+      : `/#/notifications`;
 
     const body = {
       title: notification.title || 'Island Training Club',
@@ -138,6 +141,7 @@ Deno.serve(async (request) => {
 
     let sent = 0;
     const removed: string[] = [];
+    const failures: Array<{ id: string; statusCode: number }> = [];
     for (const row of subscriptions) {
       try {
         await webpush.sendNotification(
@@ -146,18 +150,31 @@ Deno.serve(async (request) => {
             keys: { p256dh: row.p256dh, auth: row.auth },
           },
           JSON.stringify(body),
+          {
+            TTL: 60 * 60,
+            urgency: 'high',
+          },
         );
         sent += 1;
       } catch (err) {
         const statusCode = Number((err as { statusCode?: number })?.statusCode || 0);
+        failures.push({ id: row.id, statusCode });
         if (statusCode === 404 || statusCode === 410) {
           await admin.from('push_subscriptions').delete().eq('id', row.id);
           removed.push(row.id);
+        } else {
+          console.error('web-push delivery failed', { id: row.id, statusCode, err });
         }
       }
     }
 
-    return jsonResponse({ ok: true, sent, removed: removed.length, kind: notification.kind });
+    return jsonResponse({
+      ok: true,
+      sent,
+      removed: removed.length,
+      kind: notification.kind,
+      failures: failures.length ? failures : undefined,
+    });
   } catch (err) {
     console.error('send-web-push failed', err);
     return jsonResponse({ error: 'Unable to send web push' }, 500);

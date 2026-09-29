@@ -1199,11 +1199,13 @@ console.log("ok  web push ops preference migration is phase-1 column only");
   );  const pushSw = readFileSync(resolve(__dirnameSmoke, "push-sw.js"), "utf8");
   assert.ok(pushSw.includes('addEventListener("push"'), "push-sw must handle push");
   assert.ok(pushSw.includes("notificationclick"), "push-sw must handle notificationclick");
+  assert.ok(pushSw.includes("skipWaiting"), "push-sw must activate promptly");
   assert.equal(/caches\.|cache\.addAll/i.test(pushSw), false, "push-sw must not use Cache API");
   const webPushClient = readFileSync(resolve(__dirnameSmoke, "js/web-push.js"), "utf8");
   assert.ok(webPushClient.includes("syncWebPushSubscription"), "web-push client helper missing");
   assert.ok(webPushClient.includes("push-sw.js"), "web-push client must resolve push-sw.js");
   assert.ok(webPushClient.includes("__itcSyncWebPush"), "web-push debug helper missing");
+  assert.ok(webPushClient.includes("__itcTestNotification"), "web-push local banner test helper missing");
   assert.ok(
     webPushClient.includes("if (isLive())") && webPushClient.includes('new URL("/push-sw.js"'),
     "live web-push path helper must register /push-sw.js for canonical root pages",
@@ -2263,6 +2265,13 @@ assert.deepEqual(vercelConfig.rewrites, [
   { source: "/", destination: "/app/index.html" },
   { source: "/push-sw.js", destination: "/app/push-sw.js" },
 ], "canonical root must serve the app and expose push-sw.js at / for root-scope registration");
+assert.ok(
+  Array.isArray(vercelConfig.headers)
+    && vercelConfig.headers.some((entry) => entry.source === "/push-sw.js"
+      && (entry.headers || []).some((header) => header.key === "Service-Worker-Allowed"
+        && header.value === "/")),
+  "push-sw.js must allow root scope via Service-Worker-Allowed",
+);
 const legacyProductionHosts = [
   "island-training-club-app-island-training-club.vercel.app",
   "island-training-club-app.vercel.app",
