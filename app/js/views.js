@@ -551,6 +551,18 @@ export function viewActivity(sessionId, options) {
   const venueVisual = !s.cancelled && !past && s.kind === "free"
     ? venuePresentationHTML(venuePresentation)
     : "";
+
+  // Roster first so RSVP "N going" copy cannot disagree with Who's coming.
+  const fallbackNames = attendeeNames === undefined ? store.attendeesFor(s) : attendeeNames;
+  // Prefer avatar rows when present. An empty avatar payload must not hide
+  // names from get_operational_attendee_names (live RSVP/paid rosters).
+  const attendeeRows = Array.isArray(avatarRows) && avatarRows.length
+    ? avatarRows
+    : Array.isArray(fallbackNames) && fallbackNames.length
+      ? fallbackNames.map((displayName) => ({ displayName, url: null, source: "initials", state: "active" }))
+      : [];
+  const rsvpRosterCount = attendeeRows.length;
+
   if (s.cancelled) {
     const cancellationFollowup = s.kind === "paid"
       ? "Paid bookings were moved to the next available session — check your account."
@@ -566,7 +578,8 @@ export function viewActivity(sessionId, options) {
     // RSVP capability controls participation independently of the activity's
     // presentation kind. Free activities retain walk-in framing, while Lunch
     // retains its organizer and pay-your-own-bill copy.
-    const goingCount = store.attendeeCountFor(s);
+    // Match the visible Who's coming roster when the count table lags.
+    const goingCount = Math.max(store.attendeeCountFor(s), rsvpRosterCount);
     if (s.kind === "free") {
       const freeBanner = `
         <div class="free-banner">
@@ -671,14 +684,6 @@ export function viewActivity(sessionId, options) {
       <div><small>Places</small><strong>${spots <= 0 ? "Full" : `${spots} of ${s.capacity} left`}</strong></div>`
       : "";
 
-  const fallbackNames = attendeeNames === undefined ? store.attendeesFor(s) : attendeeNames;
-  // Prefer avatar rows when present. An empty avatar payload must not hide
-  // names from get_operational_attendee_names (live RSVP/paid rosters).
-  const attendeeRows = Array.isArray(avatarRows) && avatarRows.length
-    ? avatarRows
-    : Array.isArray(fallbackNames) && fallbackNames.length
-      ? fallbackNames.map((displayName) => ({ displayName, url: null, source: "initials", state: "active" }))
-      : [];
   const attendeeList = attendeeRows.length
     ? attendeeRows.map((row) => `
         <div class="attendee-row">

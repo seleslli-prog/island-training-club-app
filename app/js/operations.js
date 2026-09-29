@@ -472,10 +472,10 @@ function replaceState(payload) {
   );
   liveCache.rsvpCounts = new Map();
   liveCache.rsvpCountError = payload.rsvpCountError || null;
+  // Only store rows returned by get_operational_rsvp_counts. Do not pre-seed
+  // every RSVP session to 0 — that made missing/stale count rows look like a
+  // definitive empty roster while Who's coming still listed people.
   if (!liveCache.rsvpCountError) {
-    for (const session of payload.sessions) {
-      if (session.requiresRsvp) liveCache.rsvpCounts.set(session.id, 0);
-    }
     for (const row of payload.rsvpCounts || []) {
       const count = Number(row.going_count);
       if (row.session_id && !liveCache.retiredSessionIds.has(row.session_id)

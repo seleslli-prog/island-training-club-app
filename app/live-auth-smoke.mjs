@@ -3906,8 +3906,8 @@ assert.equal(operations.liveRsvpCountFor(lunchSession.id), null,
 operationalRsvpCountError = null;
 operationalRsvpCountRowsOverride = [];
 await operations.refreshOperationalState();
-assert.equal(operations.liveRsvpCountFor(lunchSession.id), 0,
-  "a successful empty aggregate must initialize each RSVP session to zero");
+assert.equal(operations.liveRsvpCountFor(lunchSession.id), null,
+  "a successful empty aggregate must leave RSVP sessions unset (not seed a false zero)");
 operationalRsvpCountRowsOverride = null;
 await operations.refreshOperationalState();
 assert.equal(operations.operationalStateStatus().rsvpCountError, null,

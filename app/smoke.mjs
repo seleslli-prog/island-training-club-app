@@ -4398,6 +4398,16 @@ const memberActivityEmptyAvatars = views.viewActivity(paid.id, {
 if (!memberActivityEmptyAvatars.includes("Riley R.") || memberActivityEmptyAvatars.includes("No confirmed bookings yet")) {
   throw new Error("empty avatar rows must fall back to attendee names for Who's coming");
 }
+const lunchRsvp = allUpcoming.find((session) => session.activityId === "lunch" && !data.sessionStarted(session));
+if (lunchRsvp) {
+  const mismatchedCountHtml = views.viewActivity(lunchRsvp.id, {
+    attendeeNames: ["Seles L."],
+    avatarRows: [],
+  });
+  if (!mismatchedCountHtml.includes("Seles L.") || !mismatchedCountHtml.includes("1 going")) {
+    throw new Error("RSVP activity must align going count with Who's coming roster length");
+  }
+}
 const memberActivityNamesUnavailable = views.viewActivity(paid.id, {
   attendeeNames: null,
   avatarRows: [],

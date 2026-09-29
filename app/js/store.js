@@ -1501,11 +1501,14 @@ export function sessionRequiresRsvp(session) {
 
 export function attendeeCountFor(session) {
   if (!session?.id || (session.kind !== "paid" && !sessionRequiresRsvp(session))) return 0;
+  const bookingCount = activeBookingsForSession(session.id).length;
   if (isLive()) {
     const exactCount = liveOps.liveRsvpCountFor(session.id);
-    if (exactCount !== null) return exactCount;
+    // Count-table rows can lag hydrated bookings; never under-report what we
+    // already know from confirmed bookings in memory.
+    if (exactCount !== null) return Math.max(exactCount, bookingCount);
   }
-  return activeBookingsForSession(session.id).length;
+  return bookingCount;
 }
 
 export function attendeesFor(session) {
