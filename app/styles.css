@@ -2129,17 +2129,23 @@ a.profile-row:hover .pr-text strong { color: var(--accent); }
 /* ---- Underlined link inside checkbox labels ----------------------- */
 
 .modal-link {
-  color: inherit;
+  color: var(--accent);
+  font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 2px;
-  text-decoration-thickness: 1px;
+  text-decoration-thickness: 1.5px;
 }
-.modal-link:hover { color: var(--accent); }
+.modal-link:hover,
+.modal-link:focus-visible {
+  color: var(--ink);
+}
 
 /* ---- Disabled checkbox with hint ---------------------------------- */
+/* Soften label copy only — keep doc links full contrast (opacity on the
+   span would dim child links too and make them hard to find/tap). */
 
-.check input[disabled] + span { opacity: .55; }
-.check input[disabled] + span .modal-link { opacity: 1; }
+.check input[disabled] + span { color: var(--faint); }
+.check input[disabled] + span .modal-link { color: var(--accent); }
 
 .replacement-panel { border-color: var(--line); background: rgba(202, 255, 49, 0.035); }
 .replacement-panel h3 { margin: 0; }
