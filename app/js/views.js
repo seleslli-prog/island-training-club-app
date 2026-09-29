@@ -2056,7 +2056,7 @@ function applyFormHtml(cu, draft) {
         </div>
         ${applyField("text", "waiver_signature_text", "Participant's full name as signature", true, fields.waiver_signature_text)}
         ${applyField("date", "waiver_signed_at", "Date of signing", true, fields.waiver_signed_at || todayISO(), `max="${todayISO()}"`)}
-        <button class="btn btn-primary" type="submit">Submit application</button>
+        <button class="btn btn-primary mt24" type="submit">Submit application</button>
         <div class="draft-controls mt16">
           <button class="btn ghost sm" type="button" data-action="save-draft">Save draft now</button>
           <span class="muted small" data-draft-status aria-live="polite">${draft ? `Saved at ${esc(savedTime)}` : ""}</span>
