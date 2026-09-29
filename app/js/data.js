@@ -413,25 +413,65 @@ export function nextPayDeadline(dateISO, now = Date.now()) {
 
 // --- Calendar (.ics) ------------------------------------------------------------
 
+function escapeICS(value) {
+  return String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/([,;])/g, "\\$1");
+}
+
+function formatICSUtc(ms) {
+  const date = new Date(ms);
+  return [
+    date.getUTCFullYear(),
+    pad(date.getUTCMonth() + 1),
+    pad(date.getUTCDate()),
+  ].join("") + "T" + [
+    pad(date.getUTCHours()),
+    pad(date.getUTCMinutes()),
+    pad(date.getUTCSeconds()),
+  ].join("") + "Z";
+}
+
+function foldICSLine(line) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  let part = "";
+  let bytes = 0;
+  for (const character of line) {
+    const characterBytes = encoder.encode(character).length;
+    const limit = parts.length ? 74 : 75;
+    if (part && bytes + characterBytes > limit) {
+      parts.push(part);
+      part = "";
+      bytes = 0;
+    }
+    part += character;
+    bytes += characterBytes;
+  }
+  parts.push(part);
+  return parts.join("\r\n ");
+}
+
 export function buildICS(session) {
-  const dt = session.dateISO.replaceAll("-", "");
-  const start = `${dt}T${session.time.replace(":", "")}00`;
-  const endDate = new Date(parseISO(session.dateISO).getTime() + session.durationMin * 60000);
-  const end = `${dt}T${pad(endDate.getHours())}${pad(endDate.getMinutes())}00`;
+  const startMs = hktEventStartMs(session.dateISO, session.time);
+  const durationMin = Number(session.durationMin);
+  const endMs = startMs + (Number.isFinite(durationMin) ? durationMin : 60) * 60000;
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Island Training Club//ITC App//EN",
     "BEGIN:VEVENT",
     `UID:${session.id}@islandtrainingclub`,
-    `DTSTART:${start}`,
-    `DTEND:${end}`,
-    `SUMMARY:${session.name} — Island Training Club`,
-    `LOCATION:${session.location}`,
-    `DESCRIPTION:${session.blurb.replace(/\n/g, " ")}`,
+    `DTSTAMP:${formatICSUtc(Date.now())}`,
+    `DTSTART:${formatICSUtc(startMs)}`,
+    `DTEND:${formatICSUtc(endMs)}`,
+    `SUMMARY:${escapeICS(`${session.name} — Island Training Club`)}`,
+    `LOCATION:${escapeICS(session.location)}`,
+    `DESCRIPTION:${escapeICS(session.blurb)}`,
     "END:VEVENT",
     "END:VCALENDAR",
-  ].join("\r\n");
+  ].map(foldICSLine).join("\r\n") + "\r\n";
 }
 
 export function mapsUrl(session) {
