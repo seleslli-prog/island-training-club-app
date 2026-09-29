@@ -4730,13 +4730,13 @@ console.log("ok  prayer requests migrate and enforce local role, ownership, reda
 
 // --- ICS generation ---
 const fellowship = await views.viewCommunity("fellowship");
-assert.ok(fellowship.includes("service starts 9:30 AM"),
-  "fellowship copy must show the 9:30 AM Sunday service start");
+assert.ok(fellowship.includes("services are at 9:30 AM, 11:30 AM and 3:30 PM."),
+  "fellowship copy must show all Sunday service times");
 assert.ok(!fellowship.includes("service starts 10:30 AM"),
   "fellowship copy must not retain the old 10:30 AM service start");
 assert.ok(!fellowship.includes("Draft content — fellowship details to be confirmed with ITC leadership."),
   "fellowship page must not show internal draft-status copy");
-console.log("ok  fellowship service time is 9:30 AM");
+console.log("ok  fellowship lists all Sunday service times");
 
 const ics = data.buildICS({
   ...free,
