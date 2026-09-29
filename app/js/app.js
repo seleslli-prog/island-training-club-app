@@ -720,15 +720,45 @@ document.addEventListener("change", scheduleApplyDraftSave);
 
 // --- ICS download -------------------------------------------------------------------
 
-function downloadICS(session) {
-  const blob = new Blob([buildICS(session)], { type: "text/calendar" });
+async function downloadICS(session) {
+  const ics = buildICS(session);
+  const filename = `itc-${session.id}.ics`;
+  const file = typeof File === "function"
+    ? new File([ics], filename, { type: "text/calendar;charset=utf-8" })
+    : null;
+
+  // iOS Safari is more reliable when the .ics is handed to its share sheet
+  // than when a Blob URL is treated as a download. Choosing Calendar there
+  // opens the native event form, where the member still confirms the event.
+  if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: session.name,
+        text: "Add this Island Training Club session to your calendar.",
+      });
+      toast("Calendar event shared — choose Calendar to add it");
+      return;
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      // Fall through to the regular download for browsers whose share sheet
+      // cannot accept the file after all.
+    }
+  }
+
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `itc-${session.id}.ics`;
+  a.download = filename;
+  a.hidden = true;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
-  toast("Calendar file downloaded");
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    a.remove();
+  }, 1000);
+  toast("Calendar file ready — open it to add to your calendar");
 }
 
 async function downloadIndemnityList(control) {
@@ -1031,20 +1061,31 @@ document.addEventListener("click", async (e) => {
 
     case "ics": {
       const s = findSession(store.activities(), el.dataset.session);
-      if (s) downloadICS(s);
+      if (s) await downloadICS(s);
       break;
     }
 
     case "ics-booking": {
       const b = store.getBooking(el.dataset.booking);
-      if (b) {
+      if (!b) break;
+      if (!b.sessionId) {
+        toast("Calendar details are not available until a venue is assigned", true);
+        break;
+      }
+      {
         const session = b.sessionId ? store.getSession(b.sessionId) : null;
         const snapshot = b.snapshot || {};
-        downloadICS({
+        const dateISO = session?.dateISO ?? snapshot.dateISO;
+        const time = session?.time || session?.startTime || snapshot.time || snapshot.startTime;
+        if (!dateISO || !time) {
+          toast("Calendar details are not available yet", true);
+          break;
+        }
+        await downloadICS({
           id: b.sessionId,
           name: session?.name ?? snapshot.name,
-          dateISO: session?.dateISO ?? snapshot.dateISO,
-          time: session?.time || session?.startTime || snapshot.time || snapshot.startTime || "00:00",
+          dateISO,
+          time,
           durationMin: session?.durationMin ?? snapshot.durationMin,
           location: session?.location ?? snapshot.location,
           blurb: "",

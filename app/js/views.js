@@ -2376,7 +2376,7 @@ export function viewBooking(bookingId) {
         ? "You’re on the headcount. Walk-ins are still welcome."
         : "No payment needed — everyone pays their own bill at the venue."}</p>`;
     actions = `
-      <button class="btn ghost" type="button" data-action="ics-booking" data-booking="${b.id}">Add to calendar</button>
+      ${b.sessionId ? `<button class="btn ghost" type="button" data-action="ics-booking" data-booking="${b.id}">Add to calendar</button>` : ""}
       ${mine ? `<button class="btn ghost" type="button" data-action="rsvp-withdraw" data-booking="${b.id}">Can’t make it</button>` : ""}`;
   } else if (b.status === "confirmed" && !started) {
     const movedFrom = mine && b.deferredFrom ? store.getBooking(b.deferredFrom) : null;
@@ -2388,7 +2388,7 @@ export function viewBooking(bookingId) {
         : `Booking ref <span class="mono">${esc(b.id.toUpperCase())}</span>`}</p>`;
     actions = `
       ${movedFrom ? `<div class="card mt16"><div class="card-body"><strong>Previous spot released</strong><p class="muted small mt8">${esc(fmtDate(movedFrom.snapshot.dateISO))} · ${fmtTime(movedFrom.snapshot.time)}</p></div></div>` : ""}
-      <button class="btn ghost" type="button" data-action="ics-booking" data-booking="${b.id}">Add to calendar</button>
+      ${b.sessionId ? `<button class="btn ghost" type="button" data-action="ics-booking" data-booking="${b.id}">Add to calendar</button>` : ""}
       ${receipt ? `<a class="btn ghost" href="#/receipt/${receipt.id}">View receipt · ${esc(receipt.number)}</a>` : ""}
       `;
     // No-deferral policy: confirmed paid bookings do not offer self-service

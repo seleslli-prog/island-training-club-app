@@ -4729,9 +4729,58 @@ console.log("ok  Prayer page gates access and renders private member history saf
 console.log("ok  prayer requests migrate and enforce local role, ownership, redaction, and transition parity");
 
 // --- ICS generation ---
-const ics = data.buildICS(free);
-if (!ics.includes("BEGIN:VEVENT") || !ics.includes(free.name)) throw new Error("bad ICS");
+const ics = data.buildICS({
+  ...free,
+  id: "calendar-test",
+  name: "Session, with ITC",
+  dateISO: "2026-09-30",
+  time: "09:30",
+  durationMin: 60,
+  location: "Tamar Park; Hong Kong",
+  blurb: "Bring water;\nMeet at the gate",
+});
+assert.match(ics, /BEGIN:VEVENT/, "ICS must contain an event");
+assert.match(ics, /DTSTAMP:\d{8}T\d{6}Z/,
+  "ICS must include a calendar event creation timestamp");
+assert.match(ics, /DTSTART:20260930T013000Z/,
+  "ICS start must be an absolute UTC instant for a 9:30 AM HKT event");
+assert.match(ics, /DTEND:20260930T023000Z/,
+  "ICS end must be an absolute UTC instant");
+assert.match(ics, /SUMMARY:Session\\, with ITC — Island Training Club/,
+  "ICS text fields must escape commas");
+assert.match(ics, /LOCATION:Tamar Park\\; Hong Kong/,
+  "ICS text fields must escape semicolons");
+assert.match(ics, /DESCRIPTION:Bring water\\;\\nMeet at the gate/,
+  "ICS descriptions must escape punctuation and line breaks");
+if (!ics.endsWith("\r\n")) throw new Error("ICS must end with a CRLF");
+const longIcs = data.buildICS({
+  ...free,
+  id: "calendar-folding-test",
+  dateISO: "2026-09-30",
+  time: "09:30",
+  blurb: "Session details ".repeat(12),
+});
+assert.ok(
+  longIcs.split("\r\n").filter(Boolean)
+    .every((line) => new TextEncoder().encode(line).length <= 75),
+  "long ICS lines must be folded at the RFC 5545 octet limit",
+);
 console.log("ok  ICS generation");
+
+const appCalendarSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
+assert.match(appCalendarSource, /navigator\.canShare/,
+  "calendar export must detect Safari's file-sharing path");
+assert.match(appCalendarSource, /navigator\.share/,
+  "calendar export must offer a file-sharing fallback");
+assert.match(appCalendarSource, /if \(!b\.sessionId\)/,
+  "calendar export must not create an event before a HYROX venue is assigned");
+assert.doesNotMatch(appCalendarSource, /snapshot\.time \|\| snapshot\.startTime \|\| "00:00"/,
+  "calendar export must not invent midnight for an unassigned booking");
+assert.match(appCalendarSource, /document\.body\.appendChild\(a\)/,
+  "calendar download links must be attached before clicking");
+assert.match(appCalendarSource, /setTimeout\(\(\) => \{[\s\S]*?URL\.revokeObjectURL\(url\);[\s\S]*?a\.remove\(\);/,
+  "calendar Blob URLs must be revoked after the browser has consumed them");
+console.log("ok  Safari calendar delivery safeguards are present");
 
 // --- v7 migration: legacy hyphen-less donor IDs get repaired on load ---
 store.resetLocalData();
