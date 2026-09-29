@@ -261,6 +261,18 @@ export function notificationBellHTML(unreadCount = 0, active = false) {
 
 function visitorDraftActions() {
   if (!store.getApplyDraft()) return "";
+  // Live apply requires a signed-in pending profile. Linking straight to
+  // #/apply bounces signed-out visitors back to Account and looks broken.
+  if (isLive()) {
+    return `
+    <div class="banner mt16" data-draft-resume>
+      <p><strong>Unfinished application on this device</strong><br><span class="muted small">Sign in to continue where you left off.</span></p>
+      <div class="actions">
+        <button class="btn sm" type="button" data-action="sign-in-google">Sign in to continue</button>
+        <button class="btn ghost sm" type="button" data-action="discard-draft">Discard</button>
+      </div>
+    </div>`;
+  }
   return `
     <div class="banner mt16" data-draft-resume>
       <p><strong>Continue your application</strong><br><span class="muted small">Your unfinished form is saved on this device.</span></p>
@@ -1386,7 +1398,8 @@ function accountVisitor() {
     return `
       <div class="kicker">Account</div>
       <h1 class="display">Sign in</h1>
-      <p class="subcopy mt8">Use your Google account to sign in to Island Training Club. New here? You'll be guided through a short application after sign-in.</p>
+      <p class="subcopy mt8">Use your Google account to sign in to Island Training Club.</p>
+      <p class="muted small mt8">New here? You'll be guided through a short application after sign-in.</p>
       ${visitorDraftActions()}
       <div class="card mt24"><div class="card-body">
         <button class="btn mt16" type="button" data-action="sign-in-google">Continue with Google</button>

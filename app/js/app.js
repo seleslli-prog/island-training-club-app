@@ -2077,8 +2077,33 @@ function form_kind_toggle(select) {
 
 // --- Boot ---------------------------------------------------------------------------------------
 
+function consumeAuthCallbackError() {
+  const params = new URLSearchParams(location.search);
+  const error = params.get("error");
+  const code = params.get("error_code");
+  const description = params.get("error_description");
+  if (!error && !code && !description) return null;
+  params.delete("error");
+  params.delete("error_code");
+  params.delete("error_description");
+  const query = params.toString();
+  history.replaceState(
+    history.state,
+    "",
+    `${location.pathname}${query ? `?${query}` : ""}${location.hash}`
+  );
+  if (code === "bad_oauth_state" || /oauth state has expired/i.test(description || "")) {
+    return "That Google sign-in expired. Please try signing in again.";
+  }
+  const detail = String(description || code || error || "")
+    .replace(/\+/g, " ")
+    .trim();
+  return detail ? `Sign-in failed: ${detail}` : "Sign-in failed. Please try again.";
+}
+
 async function boot() {
   store.load();
+  const authCallbackError = consumeAuthCallbackError();
   // Live mode: hydrate the synchronous view model before the first render
   // so Home renders with the correct signed-in state. The callback lock
   // is held by Supabase's own handler, so getCurrentUser() must not run
@@ -2093,9 +2118,12 @@ async function boot() {
     } catch (err) {
       bootError = err;
     }
+    if (authCallbackError) toast(authCallbackError, true);
     if (bootError) {
       toast(bootError.message || "Application read failed", true);
     }
+  } else if (authCallbackError) {
+    toast(authCallbackError, true);
   }
   const startup = store.startupRoute(location.hash, store.currentUser()?.id);
   if (startup !== location.hash) replaceRoute(startup);

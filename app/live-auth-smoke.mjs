@@ -2447,6 +2447,9 @@ assert.match(appSource, /case "save-draft"/);
 assert.match(appSource, /case "discard-draft"/);
 assert.match(appSource, /store\.saveApplyDraft/);
 assert.match(appSource, /store\.clearApplyDraft/);
+assert.match(appSource, /function consumeAuthCallbackError\(/);
+assert.match(appSource, /bad_oauth_state/);
+assert.match(appSource, /That Google sign-in expired/);
 
 await store.setWeekVenue("wnt-2026-08-05", {
   location: "Central Harbourfront — 7pm sharp",
@@ -2559,9 +2562,25 @@ assert.match(signedOutHome, /href="#\/account"[^>]*>Use an email link instead</)
 assert.doesNotMatch(signedOutHome, /href="#\/account"[^>]*>Sign in or join</);
 store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
 const signedOutAccount = await views.viewAccount();
-assert.match(signedOutAccount, /Continue your application/);
+assert.match(signedOutAccount, /Unfinished application on this device/);
+assert.match(signedOutAccount, /Sign in to continue where you left off/);
+assert.match(
+  signedOutAccount,
+  /data-action="sign-in-google"[^>]*>Sign in to continue</,
+  "live draft resume must sign in instead of bouncing signed-out visitors off #/apply"
+);
+assert.doesNotMatch(
+  signedOutAccount,
+  /href="#\/apply"[^>]*>Continue your application</,
+  "live draft resume must not link signed-out visitors to #/apply"
+);
 assert.match(signedOutAccount, /data-action="discard-draft"/);
 assert.match(signedOutAccount, /data-action="sign-in-google"/);
+assert.match(
+  signedOutAccount,
+  /Use your Google account to sign in to Island Training Club\.<\/p>\s*<p class="muted small mt8">New here\?/,
+  "Account sign-in copy must separate Google sign-in from the new-member application note"
+);
 assert.match(signedOutAccount, /id="form-magic-link"/);
 assert.match(signedOutAccount, /<input(?=[^>]*name="email")(?=[^>]*type="email")[^>]*>/);
 assert.match(signedOutAccount, /Email me a sign-in link/);
