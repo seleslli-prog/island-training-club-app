@@ -2824,6 +2824,17 @@ assert.match(liveApplyHtml, /data-doc-accept="indemnity"/);
 assert.match(liveApplyHtml, /name="waiver"[^>]*disabled[^>]*data-doc-checkbox/);
 assert.match(liveApplyHtml, new RegExp(`name="waiver_signed_at"[^>]*value="${todayISO}"`));
 assert.match(liveApplyHtml, new RegExp(`name="waiver_signed_at"[^>]*max="${todayISO}"`));
+assert.ok(
+  liveApplyHtml.indexOf('data-doc-accept="privacy"')
+    < liveApplyHtml.indexOf('data-doc-accept="guidelines"')
+    && liveApplyHtml.indexOf('data-doc-accept="guidelines"')
+      < liveApplyHtml.indexOf('data-doc-accept="indemnity"')
+    && liveApplyHtml.indexOf('data-doc-accept="indemnity"')
+      < liveApplyHtml.indexOf('name="waiver_signature_text"')
+    && liveApplyHtml.indexOf('name="waiver_signature_text"')
+      < liveApplyHtml.indexOf('name="waiver_signed_at"'),
+  "live apply must put indemnity, signature, and signing date after community guidelines"
+);
 assert.doesNotMatch(liveApplyHtml, /name="email"/);
 
 store.saveApplyDraft({

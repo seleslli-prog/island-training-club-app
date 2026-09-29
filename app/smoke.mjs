@@ -3074,6 +3074,17 @@ if (!applyLocalHtml.includes(`max="${data.todayHktISO()}"`)) {
   failures++;
   console.error("FAIL local signing date should be capped at HKT today");
 }
+const localGuidelinesAt = applyLocalHtml.indexOf('data-doc-accept="guidelines"');
+const localIndemnityAt = applyLocalHtml.indexOf('data-doc-accept="indemnity"');
+const localSignatureAt = applyLocalHtml.indexOf('name="indemnitySignature"');
+const localSignedAt = applyLocalHtml.indexOf('name="indemnitySignedAt"');
+if (!(localGuidelinesAt >= 0
+    && localGuidelinesAt < localIndemnityAt
+    && localIndemnityAt < localSignatureAt
+    && localSignatureAt < localSignedAt)) {
+  failures++;
+  console.error("FAIL local apply must put indemnity, signature, and signing date after community guidelines");
+}
 console.log("ok  local-mode apply form collects emergencyRelationship, signature, and signing date");
 for (const marker of [
   'emergencyRelationship: fd.get("emergencyRelationship") || ""',

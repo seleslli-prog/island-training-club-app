@@ -2039,13 +2039,6 @@ function applyFormHtml(cu, draft) {
         ${applyField("text", "preferred_name", "Preferred name (optional)", false, fields.preferred_name)}
         <label class="check"><input type="checkbox" name="photo_consent" ${checked("photo_consent")} required> I consent to photos/videos of me being used on ITC channels. *</label>
         <p class="muted small">Please contact ITC Committee if you have any questions/concerns about this.</p>
-        <div data-doc-accept="indemnity">
-          <label class="check"><input type="checkbox" name="waiver" ${checked("waiver")} required disabled data-doc-checkbox>
-            <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="indemnity">Indemnity</a> form. *</span></label>
-          <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
-        </div>
-        ${applyField("text", "waiver_signature_text", "Participant's full name as signature", true, fields.waiver_signature_text)}
-        ${applyField("date", "waiver_signed_at", "Date of signing", true, fields.waiver_signed_at || todayISO(), `max="${todayISO()}"`)}
         <div data-doc-accept="privacy">
           <label class="check"><input type="checkbox" name="privacy" ${checked("privacy")} required disabled data-doc-checkbox>
             <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="privacy">privacy policy</a>. *</span></label>
@@ -2056,6 +2049,13 @@ function applyFormHtml(cu, draft) {
             <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="guidelines">community guidelines</a>. *</span></label>
           <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
         </div>
+        <div data-doc-accept="indemnity">
+          <label class="check"><input type="checkbox" name="waiver" ${checked("waiver")} required disabled data-doc-checkbox>
+            <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="indemnity">Indemnity</a> form. *</span></label>
+          <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+        </div>
+        ${applyField("text", "waiver_signature_text", "Participant's full name as signature", true, fields.waiver_signature_text)}
+        ${applyField("date", "waiver_signed_at", "Date of signing", true, fields.waiver_signed_at || todayISO(), `max="${todayISO()}"`)}
         <button class="btn btn-primary" type="submit">Submit application</button>
         <div class="draft-controls mt16">
           <button class="btn ghost sm" type="button" data-action="save-draft">Save draft now</button>
@@ -2105,6 +2105,19 @@ function viewApplyLocal() {
       </div>
       <label class="check"><input type="checkbox" name="ageConfirmed" required>
         <span>I confirm I am 18 or over, or that a parent/guardian will accompany me to sessions. *</span></label>
+      <div data-doc-accept="privacy">
+        <label class="check"><input type="checkbox" name="privacy" required disabled data-doc-checkbox>
+          <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="privacy">privacy policy</a>. *</span></label>
+        <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+      </div>
+      <div data-doc-accept="guidelines">
+        <label class="check"><input type="checkbox" name="guidelines" required disabled data-doc-checkbox>
+          <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="guidelines">community guidelines</a>. *</span></label>
+        <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+      </div>
+      <label class="check"><input type="checkbox" name="mediaConsent" required>
+        <span>I consent to being included in ITC photos and videos. *</span></label>
+      <p class="muted small">Please contact ITC Committee if you have any questions/concerns about this.</p>
       <div data-doc-accept="indemnity">
         <label class="check"><input type="checkbox" name="indemnity" required disabled data-doc-checkbox>
           <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="indemnity">Indemnity</a> form. *</span></label>
@@ -2118,19 +2131,6 @@ function viewApplyLocal() {
         <label for="ap-signed-at">Date of signing *</label>
         <input id="ap-signed-at" name="indemnitySignedAt" type="date" value="${todayISO()}" max="${todayISO()}" required>
       </div>
-      <div data-doc-accept="guidelines">
-        <label class="check"><input type="checkbox" name="guidelines" required disabled data-doc-checkbox>
-          <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="guidelines">community guidelines</a>. *</span></label>
-        <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
-      </div>
-      <div data-doc-accept="privacy">
-        <label class="check"><input type="checkbox" name="privacy" required disabled data-doc-checkbox>
-          <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="privacy">privacy policy</a>. *</span></label>
-        <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
-      </div>
-      <label class="check"><input type="checkbox" name="mediaConsent" required>
-        <span>I consent to being included in ITC photos and videos. *</span></label>
-      <p class="muted small">Please contact ITC Committee if you have any questions/concerns about this.</p>
       <div id="apply-error"></div>
       <button class="btn mt24" type="submit">Submit application</button>
     </form>`;
