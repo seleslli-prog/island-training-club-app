@@ -1799,7 +1799,7 @@ async function accountPrivacyEdit(user) {
       <p class="muted small">Thursday payment reminders for unpaid HYROX reservations. You can still check payment status in the app.</p>
       <label class="check"><input type="checkbox" name="email_receipts" ${hydrated.emailReceipts ? "checked" : ""}> Email receipts</label>
       <label class="check"><input type="checkbox" name="community_news" ${hydrated.communityNews ? "checked" : ""}> Community news</label>
-      <label class="check"><input type="checkbox" name="web_push_ops" ${hydrated.webPushOps ? "checked" : ""}> Web push for bookings &amp; venue</label>
+      <label class="check"><input type="checkbox" name="web_push_ops" ${hydrated.webPushOps ? "checked" : ""}> Web push for bookings, venue &amp; announcements</label>
       <p class="muted small">Browser alerts for booking, payment, and venue updates (live mode, HTTPS). Off by default. iPhone needs Add to Home Screen. In-app inbox still works either way.</p>
       <div class="actions">
         <button class="btn" type="submit">Save changes</button>
@@ -1821,7 +1821,7 @@ async function accountPrivacy(user) {
         <div class="line"><span>HYROX payment reminders</span><strong>${onOff(hydrated.hyroxPaymentReminders !== false)}</strong></div>
         <div class="line"><span>Email receipts</span><strong>${onOff(hydrated.emailReceipts)}</strong></div>
         <div class="line"><span>Community news</span><strong>${onOff(hydrated.communityNews)}</strong></div>
-        <div class="line"><span>Web push for bookings &amp; venue</span><strong>${onOff(!!hydrated.webPushOps)}</strong></div>
+        <div class="line"><span>Web push for bookings, venue &amp; announcements</span><strong>${onOff(!!hydrated.webPushOps)}</strong></div>
       </div>
       <a class="btn ghost sm mt16" href="#/account/privacy/edit">Edit privacy preferences</a>
       <p class="muted small mt16">You can update these communication preferences at any time.</p>

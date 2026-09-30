@@ -560,6 +560,7 @@ export const WEB_PUSH_OPS_KINDS = Object.freeze([
   "operational_session_cancelled",
   "operational_session_cancelled_no_defer",
   "operational_session_venue_updated",
+  "community_announcement_published",
 ]);
 
 const NOTIFICATION_DESTINATIONS = new Map([

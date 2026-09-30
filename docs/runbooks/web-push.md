@@ -1,10 +1,10 @@
 # Web Push — live deploy runbook
 
-Browser Web Push for operational booking / payment / venue notifications.
+Browser Web Push for operational booking / payment / venue notifications and shared community announcements. Audit rows are not pushed.
 
 ## Prerequisites
 
-- Migrations applied through `20260929000002_web_push_payload_snapshot.sql` (and earlier pref + delivery + settings migrations).
+- Migrations applied through `20260930000001_web_push_community_announcement.sql` (and earlier pref + delivery + settings + payload-snapshot migrations).
 - App served over **HTTPS** (or localhost). Canonical production root is `/` (not `/app/`); `vercel.json` rewrites `/push-sw.js` → `/app/push-sw.js` so root-scope registration works.
 - Desktop Chrome/Firefox/Edge, or Android Chrome. **iOS** requires Add to Home Screen (installed PWA) on a recent iOS version.
 - If Invocations return `skipped: missing_notification`, the trigger body is still id-only or the Edge Function is stale — apply the snapshot migration and redeploy `send-web-push`.
@@ -59,8 +59,8 @@ supabase functions deploy send-web-push --no-verify-jwt
 ## Member enable path
 
 1. Sign in (live).
-2. Profile → Privacy & Notifications → enable **Web push for bookings & venue** → Allow in the browser prompt.
-3. Trigger an allowlisted event (e.g. venue confirm/update) while the tab is backgrounded.
+2. Profile → Privacy & Notifications → enable **Web push for bookings, venue & announcements** → Allow in the browser prompt.
+3. Trigger an allowlisted event (venue confirm/update, or publish a community announcement) while the tab is backgrounded.
 4. OS notification should appear; click opens the activity / notifications route.
 
 ## Disable

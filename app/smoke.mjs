@@ -1178,6 +1178,24 @@ console.log("ok  web push ops preference migration is phase-1 column only");
       `web push payload snapshot migration missing ${marker}`,
     );
   }
+  const webPushCommunityMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20260930000001_web_push_community_announcement.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "community_announcement_published",
+    "web_push_ops_kind_eligible",
+  ]) {
+    assert.ok(
+      webPushCommunityMigration.includes(marker),
+      `web push community migration missing ${marker}`,
+    );
+  }
+  assert.equal(
+    webPushCommunityMigration.includes("'community_announcement_audit'"),
+    false,
+    "community web push allowlist must not treat audit rows as eligible",
+  );
   const sendWebPushSource = readFileSync(
     resolve(__dirnameSmoke, "../supabase/functions/send-web-push/index.ts"),
     "utf8",
@@ -3840,7 +3858,7 @@ if (!privacyEditHtml.includes('name="hyrox_payment_reminders"')
   console.error("FAIL Privacy & Notifications edit missing HYROX reminder preference");
 } else console.log("ok  Privacy & Notifications exposes HYROX reminder preference");
 if (!privacyEditHtml.includes('name="web_push_ops"')
-    || !privacyEditHtml.includes("Web push for bookings &amp; venue")) {
+    || !privacyEditHtml.includes("Web push for bookings, venue &amp; announcements")) {
   failures++;
   console.error("FAIL Privacy & Notifications edit missing web push ops preference");
 } else console.log("ok  Privacy & Notifications exposes web push ops preference");
@@ -3880,11 +3898,12 @@ if (store.currentUser()?.webPushOps !== false) {
   console.error("FAIL local Privacy & Notifications update did not clear web push ops");
 } else console.log("ok  local Privacy & Notifications update clears web push ops");
 if (!data.WEB_PUSH_OPS_KINDS.includes("operational_session_venue_updated")
+    || !data.WEB_PUSH_OPS_KINDS.includes("community_announcement_published")
     || data.WEB_PUSH_OPS_KINDS.includes("operational_payment_marked")
-    || data.WEB_PUSH_OPS_KINDS.includes("community_announcement_published")) {
+    || data.WEB_PUSH_OPS_KINDS.includes("community_announcement_audit")) {
   failures++;
   console.error("FAIL WEB_PUSH_OPS_KINDS allowlist is wrong");
-} else console.log("ok  WEB_PUSH_OPS_KINDS allowlist covers booking/payment/venue only");
+} else console.log("ok  WEB_PUSH_OPS_KINDS allowlist covers booking/payment/venue and shared announcements");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
