@@ -471,6 +471,8 @@ export function buildICS(session) {
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Island Training Club//ITC App//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${session.id}@islandtrainingclub`,
     `DTSTAMP:${formatICSUtc(Date.now())}`,

@@ -5042,6 +5042,7 @@ const ics = data.buildICS({
   location: "Tamar Park; Hong Kong",
   blurb: "Bring water;\nMeet at the gate",
 });
+assert.match(ics, /METHOD:PUBLISH/, "ICS must publish an event the calendar can add");
 assert.match(ics, /BEGIN:VEVENT/, "ICS must contain an event");
 assert.match(ics, /DTSTAMP:\d{8}T\d{6}Z/,
   "ICS must include a calendar event creation timestamp");
@@ -5079,6 +5080,10 @@ assert.match(appCalendarSource, /if \(!b\.sessionId\)/,
   "calendar export must not create an event before a HYROX venue is assigned");
 assert.doesNotMatch(appCalendarSource, /snapshot\.time \|\| snapshot\.startTime \|\| "00:00"/,
   "calendar export must not invent midnight for an unassigned booking");
+assert.match(appCalendarSource, /function appleCalendarClient/,
+  "calendar export must detect Safari when file sharing is unavailable");
+assert.match(appCalendarSource, /window\.location\.assign\(url\)/,
+  "Safari must open the calendar preview instead of forcing a file download");
 assert.match(appCalendarSource, /document\.body\.appendChild\(a\)/,
   "calendar download links must be attached before clicking");
 assert.match(appCalendarSource, /setTimeout\(\(\) => \{[\s\S]*?URL\.revokeObjectURL\(url\);[\s\S]*?a\.remove\(\);/,

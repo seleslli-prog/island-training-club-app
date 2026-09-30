@@ -784,6 +784,14 @@ document.addEventListener("change", scheduleApplyDraftSave);
 
 // --- ICS download -------------------------------------------------------------------
 
+function appleCalendarClient() {
+  const ua = navigator.userAgent || "";
+  const iOS = /iPad|iPhone|iPod/.test(ua)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const safari = /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|Edg/i.test(ua);
+  return iOS || safari;
+}
+
 async function downloadICS(session) {
   const ics = buildICS(session);
   const filename = `itc-${session.id}.ics`;
@@ -805,13 +813,22 @@ async function downloadICS(session) {
       return;
     } catch (err) {
       if (err?.name === "AbortError") return;
-      // Fall through to the regular download for browsers whose share sheet
-      // cannot accept the file after all.
+      // Fall through when the share sheet cannot accept the file.
     }
   }
 
   const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
   const url = URL.createObjectURL(blob);
+
+  // Safari without file sharing ignores the download attribute and saves the
+  // file to Files. Navigating to the blob opens the calendar preview instead.
+  if (appleCalendarClient()) {
+    window.location.assign(url);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast("Opening calendar…");
+    return;
+  }
+
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
