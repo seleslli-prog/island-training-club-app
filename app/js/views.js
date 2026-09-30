@@ -722,7 +722,7 @@ export function viewActivity(sessionId, options) {
     <div class="meta-grid">
       <div><small>When</small><strong>${esc(fmtDate(s.date))}<br>${fmtTime(s.time)}</strong></div>
       <div><small>Where</small><strong>${esc(s.location)}</strong></div>
-      <div><small>Length</small><strong>${s.durationMin} min</strong></div>
+      <div><small>Duration</small><strong>${s.durationMin} min</strong></div>
       ${metaPaid}
     </div>
     <p class="subcopy mt16">${esc(s.blurb)}</p>
