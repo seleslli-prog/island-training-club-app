@@ -1614,7 +1614,8 @@ document.addEventListener("submit", async (e) => {
 
   if (form.dataset.form === "apply") {
     e.preventDefault();
-    if (!form.reportValidity()) return;
+    const docsReady = components.validateApplyDocumentAcceptance(form);
+    if (!form.reportValidity() || !docsReady) return;
     const control = form.querySelector('[type="submit"]');
     await withBusyControl(control, "Submitting…", async () => {
       const fd = new FormData(form);
@@ -1741,7 +1742,8 @@ document.addEventListener("submit", async (e) => {
 
     case "form-apply": {
       e.preventDefault();
-      if (!form.reportValidity()) return;
+      const docsReady = components.validateApplyDocumentAcceptance(form);
+      if (!form.reportValidity() || !docsReady) return;
       const fd = new FormData(form);
       const errEl = form.querySelector("#apply-error");
       if (donorIdProblem(fd.get("donorId"))) {

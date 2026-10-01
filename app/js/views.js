@@ -2075,19 +2075,22 @@ function applyFormHtml(cu, draft) {
         <label class="check"><input type="checkbox" name="photo_consent" ${checked("photo_consent")} required> I consent to photos/videos of me being used on ITC channels. *</label>
         <p class="muted small">Please contact ITC Committee if you have any questions/concerns about this.</p>
         <div data-doc-accept="privacy">
+          <p class="muted small" data-doc-hint>Click on the highlighted link below to read the document and enable acceptance.</p>
           <label class="check"><input type="checkbox" name="privacy" ${checked("privacy")} required disabled data-doc-checkbox>
             <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="privacy">privacy policy</a>. *</span></label>
-          <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+          <p class="form-error" data-doc-warn hidden role="alert"></p>
         </div>
         <div data-doc-accept="guidelines">
+          <p class="muted small" data-doc-hint>Click on the highlighted link below to read the document and enable acceptance.</p>
           <label class="check"><input type="checkbox" name="guidelines" ${checked("guidelines")} required disabled data-doc-checkbox>
             <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="guidelines">community guidelines</a>. *</span></label>
-          <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+          <p class="form-error" data-doc-warn hidden role="alert"></p>
         </div>
         <div data-doc-accept="indemnity">
+          <p class="muted small" data-doc-hint>Click on the highlighted link below to read the document and enable acceptance.</p>
           <label class="check"><input type="checkbox" name="waiver" ${checked("waiver")} required disabled data-doc-checkbox>
             <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="indemnity">Indemnity</a> form. *</span></label>
-          <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+          <p class="form-error" data-doc-warn hidden role="alert"></p>
         </div>
         ${applyField("text", "waiver_signature_text", "Participant's full name as signature", true, fields.waiver_signature_text)}
         ${applyField("date", "waiver_signed_at", "Date of signing", true, fields.waiver_signed_at || todayISO(), `max="${todayISO()}"`)}
@@ -2141,22 +2144,25 @@ function viewApplyLocal() {
       <label class="check"><input type="checkbox" name="ageConfirmed" required>
         <span>I confirm I am 18 or over, or that a parent/guardian will accompany me to sessions. *</span></label>
       <div data-doc-accept="privacy">
+        <p class="muted small" data-doc-hint>Click on the highlighted link below to read the document and enable acceptance.</p>
         <label class="check"><input type="checkbox" name="privacy" required disabled data-doc-checkbox>
           <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="privacy">privacy policy</a>. *</span></label>
-        <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+        <p class="form-error" data-doc-warn hidden role="alert"></p>
       </div>
       <div data-doc-accept="guidelines">
+        <p class="muted small" data-doc-hint>Click on the highlighted link below to read the document and enable acceptance.</p>
         <label class="check"><input type="checkbox" name="guidelines" required disabled data-doc-checkbox>
           <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="guidelines">community guidelines</a>. *</span></label>
-        <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+        <p class="form-error" data-doc-warn hidden role="alert"></p>
       </div>
       <label class="check"><input type="checkbox" name="mediaConsent" required>
         <span>I consent to being included in ITC photos and videos. *</span></label>
       <p class="muted small">Please contact ITC Committee if you have any questions/concerns about this.</p>
       <div data-doc-accept="indemnity">
+        <p class="muted small" data-doc-hint>Click on the highlighted link below to read the document and enable acceptance.</p>
         <label class="check"><input type="checkbox" name="indemnity" required disabled data-doc-checkbox>
           <span>I accept the <a href="#" class="modal-link" data-action="open-doc" data-doc="indemnity">Indemnity</a> form. *</span></label>
-        <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+        <p class="form-error" data-doc-warn hidden role="alert"></p>
       </div>
       <div class="field">
         <label for="ap-signature">Participant's full name as signature *</label>

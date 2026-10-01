@@ -6,6 +6,7 @@
 //   SCROLL_END_THRESHOLD_PX                          — constant exported for testing
 //   isAtScrollEnd(top,h,scroll)                      — pure scroll-end math
 //   applyDocumentAcceptance(trigger)                 — DOM-mutation helper for the ack callback
+//   validateApplyDocumentAcceptance(form)            — Submit-time unread-doc warnings
 //   openReadAndAcceptModal({docKey, onAccept, trigger}) — the modal itself
 //
 // Documents come from the DOCUMENTS registry in documents.js. The modal is
@@ -13,10 +14,11 @@
 //
 // Pairing convention (used by the apply forms and Profile > Indemnity):
 //   <div data-doc-accept="privacy">
+//     <p class="muted small" data-doc-hint>Click on the highlighted link below…</p>
 //     … <a data-action="open-doc" data-doc="privacy">privacy policy</a> …
 //     <input … disabled data-doc-checkbox>
 //     <button … disabled data-doc-submit>Accept &amp; Confirm</button>
-//     <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
+//     <p class="form-error" data-doc-warn hidden role="alert"></p>
 //   </div>
 // applyDocumentAcceptance(trigger) finds the trigger's nearest
 // [data-doc-accept] container and unlocks its checkbox and/or submit button —
@@ -43,7 +45,51 @@ export function applyDocumentAcceptance(trigger) {
   if (submit) submit.disabled = false;
   const hint = container.querySelector("[data-doc-hint]");
   if (hint) hint.hidden = true;
+  const warn = container.querySelector("[data-doc-warn]");
+  if (warn) {
+    warn.hidden = true;
+    warn.textContent = "";
+  }
   return true;
+}
+
+const APPLY_DOC_WARN_LABELS = {
+  privacy: "privacy policy",
+  guidelines: "community guidelines",
+  indemnity: "Indemnity form",
+};
+
+// Returns true when every gated Apply document is unlocked and checked.
+// Disabled required checkboxes are skipped by reportValidity(), so Submit
+// must call this and surface [data-doc-warn] under each unread document.
+export function validateApplyDocumentAcceptance(form) {
+  if (!form?.querySelectorAll) return true;
+  const containers = [...form.querySelectorAll("[data-doc-accept]")];
+  let firstWarn = null;
+  let ok = true;
+  for (const container of containers) {
+    const checkbox = container.querySelector("[data-doc-checkbox]");
+    const warn = container.querySelector("[data-doc-warn]");
+    if (!checkbox || !warn) continue;
+    const accepted = !checkbox.disabled && checkbox.checked;
+    if (accepted) {
+      warn.hidden = true;
+      warn.textContent = "";
+      continue;
+    }
+    const key = typeof container.getAttribute === "function"
+      ? (container.getAttribute("data-doc-accept") || "")
+      : "";
+    const label = APPLY_DOC_WARN_LABELS[key] || "document";
+    warn.textContent = `Open and read the ${label} to enable acceptance.`;
+    warn.hidden = false;
+    ok = false;
+    if (!firstWarn) firstWarn = warn;
+  }
+  if (firstWarn?.scrollIntoView) {
+    firstWarn.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+  return ok;
 }
 
 export function openReadAndAcceptModal({ docKey, onAccept, trigger } = {}) {

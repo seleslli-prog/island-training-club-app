@@ -3133,6 +3133,18 @@ for (const key of ["privacy", "guidelines", "indemnity"]) {
     console.error(`FAIL local-mode apply form should place the hint above the ${key} checkbox`);
   }
 }
+const liveApplySrc = (integratedViewSource.match(/export async function viewApplyLive\([\s\S]*?^export function viewApply\(/m) || [""])[0];
+if ((liveApplySrc.match(new RegExp(applyDocHint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length !== 3) {
+  failures++;
+  console.error("FAIL live-mode apply form should show the read-first hint for all three documents");
+}
+for (const key of ["privacy", "guidelines", "indemnity"]) {
+  const block = liveApplySrc.match(new RegExp(`data-doc-accept="${key}"[\\s\\S]*?</div>`));
+  if (!block || block[0].indexOf("data-doc-hint") > block[0].indexOf("data-doc-checkbox")) {
+    failures++;
+    console.error(`FAIL live-mode apply form should place the hint above the ${key} checkbox`);
+  }
+}
 if (!applyLocalHtml.includes('name="mediaConsent" required') || applyLocalHtml.includes("(Optional) I consent")) {
   failures++;
   console.error("FAIL local-mode apply form photo consent should be required");
