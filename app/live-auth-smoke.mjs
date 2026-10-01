@@ -4308,47 +4308,55 @@ applicationRows.set(authUser.id, {
 });
 const privacySummary = await views.viewAccount("privacy");
 for (const label of [
-  "Photo/video consent",
-  "Privacy policy accepted",
   "WhatsApp session reminders",
   "HYROX payment reminders",
   "Email receipts",
   "Community news",
 ]) {
-  if (!privacySummary.includes(label)) throw new Error(`Live privacy summary missing ${label}`);
+  if (!privacySummary.includes(label)) throw new Error(`Live notifications summary missing ${label}`);
 }
-if (!privacySummary.includes("Allowed")) {
-  throw new Error("Live privacy summary should show Allowed when photo consent is true");
-}
-if (!privacySummary.includes(confirmedDay)) {
-  throw new Error("Live privacy summary should show the accepted privacy date");
+if (privacySummary.includes("Photo/video consent") || privacySummary.includes("Privacy policy accepted")) {
+  throw new Error("Live notifications summary should not include agreements");
 }
 if (!privacySummary.includes('>Off<') || (privacySummary.match(/>On</g) || []).length < 2) {
-  throw new Error("Live privacy summary should show the expected On/Off values");
+  throw new Error("Live notifications summary should show the expected On/Off values");
 }
-if (!privacySummary.includes('href="#/account/privacy/edit"')) {
-  throw new Error("Live privacy summary should link to the edit route");
+if (!privacySummary.includes('href="#/account/notifications/edit"')) {
+  throw new Error("Live notifications summary should link to the edit route");
 }
 if (privacySummary.includes('data-form="privacy-preferences"')) {
-  throw new Error("Live privacy summary should be a card, not the edit form");
+  throw new Error("Live notifications summary should be a card, not the edit form");
+}
+const agreementsSummary = await views.viewAccount("agreements");
+if (!agreementsSummary.includes("I consent to photos/videos of me being used on ITC channels. *")) {
+  throw new Error("Live agreements should show required photo consent copy");
+}
+if (!agreementsSummary.includes("Please contact ITC Committee if you have any questions/concerns about this.")) {
+  throw new Error("Live agreements should show the ITC Committee contact line");
+}
+if (!agreementsSummary.includes("Privacy policy accepted") || !agreementsSummary.includes(confirmedDay)) {
+  throw new Error("Live agreements should show the accepted privacy date");
+}
+if (!agreementsSummary.includes("View Privacy Policy") || !agreementsSummary.includes("View Community Guidelines") || !agreementsSummary.includes("View Indemnity")) {
+  throw new Error("Live agreements should let members open accepted documents");
+}
+if (!/name="photo_consent"[^>]*checked/.test(agreementsSummary) || !/name="photo_consent"[^>]*required/.test(agreementsSummary)) {
+  throw new Error("Live agreements should prefill required checked photo consent");
 }
 const privacyEdit = await views.viewAccount("privacy", "edit");
 if (!privacyEdit.includes('data-form="privacy-preferences"')) {
-  throw new Error("Live privacy edit route should render the privacy-preferences form");
+  throw new Error("Live notifications edit route should render the privacy-preferences form");
 }
-if (!privacyEdit.includes('href="#/account/privacy"')) {
-  throw new Error("Live privacy edit route should link back to #/account/privacy");
+if (!privacyEdit.includes('href="#/account/notifications"')) {
+  throw new Error("Live notifications edit route should link back to #/account/notifications");
 }
-if (!privacyEdit.includes("Privacy policy accepted") || !privacyEdit.includes(confirmedDay)) {
-  throw new Error("Live privacy edit route should show privacy acceptance read-only");
+if (privacyEdit.includes("Privacy policy accepted") || privacyEdit.includes('name="photo_consent"')) {
+  throw new Error("Live notifications edit should not include agreements or photo consent");
 }
-for (const name of ["photo_consent", "whatsapp_reminders", "hyrox_payment_reminders", "email_receipts", "community_news", "web_push_ops"]) {
+for (const name of ["whatsapp_reminders", "hyrox_payment_reminders", "email_receipts", "community_news", "web_push_ops"]) {
   if (!privacyEdit.includes(`name="${name}"`)) {
-    throw new Error(`Live privacy edit route missing ${name}`);
+    throw new Error(`Live notifications edit route missing ${name}`);
   }
-}
-if (!/name="photo_consent"[^>]*checked/.test(privacyEdit)) {
-  throw new Error("Live privacy edit route should prefill checked photo consent");
 }
 if (/name="whatsapp_reminders"[^>]*checked/.test(privacyEdit)) {
   throw new Error("Live privacy edit route should leave unchecked WhatsApp reminders off");
@@ -4422,7 +4430,6 @@ for (const banned of [
   if (banned in membershipPatch) throw new Error(`membership patch should exclude ${banned}`);
 }
 await store.updateMyPrivacyPreferences({
-  photo_consent: false,
   whatsapp_reminders: true,
   hyrox_payment_reminders: false,
   email_receipts: false,
@@ -4434,10 +4441,11 @@ if (!privacyPatch) throw new Error("privacy update missing");
 const privacyKeys = Object.keys(privacyPatch).sort().join(",");
 if (
   privacyKeys !==
-  ["community_news", "email_receipts", "hyrox_payment_reminders", "photo_consent", "web_push_ops", "whatsapp_reminders"].join(",")
+  ["community_news", "email_receipts", "hyrox_payment_reminders", "web_push_ops", "whatsapp_reminders"].join(",")
 ) {
   throw new Error(`privacy patch leaked fields: ${privacyKeys}`);
 }
+if ("photo_consent" in privacyPatch) throw new Error("notification patch should exclude photo_consent");
 for (const banned of [
   "mobile",
   "is_minor",
@@ -4580,8 +4588,8 @@ if (missingPrivacy?.redirect || !missingPrivacy.includes("Application details un
 for (const [label, html, title, backHref, backLabel] of [
   ["Profile", missingAccount, "Profile", "#/home", "Home"],
   ["Membership Details", missingDetails, "Membership Details", "#/account", "Profile"],
-  ["Indemnity", missingIndemnity, "Indemnity", "#/account", "Profile"],
-  ["Privacy & Notifications", missingPrivacy, "Privacy &amp; Notifications", "#/account", "Profile"],
+  ["Agreements", missingIndemnity, "Agreements", "#/account", "Profile"],
+  ["Notifications", missingPrivacy, "Notifications", "#/account", "Profile"],
 ]) {
   assert.equal((html.match(/<h1\b/g) || []).length, 1,
     `Missing-application ${label} must render exactly one h1`);
@@ -4966,9 +4974,9 @@ const oldestGate = deferred();
 const middleGate = deferred();
 const currentGate = deferred();
 applicationReadGates.push(oldestGate.promise, middleGate.promise, currentGate.promise);
-location.hash = "#/account/privacy";
+location.hash = "#/account/notifications";
 const oldestRender = windowListeners.get("hashchange")();
-location.hash = "#/account/indemnity";
+location.hash = "#/account/agreements";
 const middleRender = windowListeners.get("hashchange")();
 location.hash = "#/account/details";
 const currentRender = windowListeners.get("hashchange")();

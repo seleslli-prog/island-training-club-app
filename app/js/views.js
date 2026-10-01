@@ -1316,13 +1316,13 @@ export async function viewAccount(section, sub) {
     [section, sub] = section.split("/");
   }
   if (sub && section === "details") section = "details/edit";
-  if (sub && section === "privacy") section = "privacy/edit";
+  if (sub && (section === "privacy" || section === "notifications")) section = `${section}/edit`;
   const user = store.currentUser();
   if (!user) return accountVisitor();
   // Live mode: when no live application exists, render an unavailable card so
   // the Profile surface doesn't pretend to have data it can't actually show.
   if (isLive()) {
-    const allowedWithoutApp = ["details/edit", "privacy/edit"];
+    const allowedWithoutApp = ["details/edit", "privacy/edit", "notifications/edit"];
     const path = `${section || "home"}${sub ? `/${sub}` : ""}`;
     if (!allowedWithoutApp.includes(path)) {
       try {
@@ -1331,9 +1331,11 @@ export async function viewAccount(section, sub) {
           const sectionTitle = {
             details: "Membership Details",
             donor: "Membership Details",
-            indemnity: "Indemnity",
+            indemnity: "Agreements",
+            agreements: "Agreements",
             payments: "Payments & Receipts",
-            privacy: "Privacy & Notifications",
+            privacy: "Notifications",
+            notifications: "Notifications",
             bookings: "Bookings",
             history: "Bookings",
           }[section] || "Profile";
@@ -1363,15 +1365,18 @@ export async function viewAccount(section, sub) {
     case "details/edit":
       return await accountDetailsEdit(user);
     case "indemnity":
-      return await accountIndemnity(user);
+    case "agreements":
+      return await accountAgreements(user);
     case "donor":
       return await accountDetails(user);
     case "payments":
       return accountPayments(user);
     case "privacy":
-      return await accountPrivacy(user);
+    case "notifications":
+      return await accountNotifications(user);
     case "privacy/edit":
-      return await accountPrivacyEdit(user);
+    case "notifications/edit":
+      return await accountNotificationsEdit(user);
     case "bookings":
       return accountBookings(user, sub === "attended" ? "attended" : "all");
     case "history":
@@ -1411,6 +1416,7 @@ async function hydrateLiveUser(user) {
       indemnitySignedAt: app.waiver_signed_at ?? user.indemnitySignedAt ?? "",
       indemnityFormVersion: app.waiver_form_version ?? user.indemnityFormVersion ?? "",
       privacyAcceptedAt: app.privacy_accepted_at ?? user.privacyAcceptedAt,
+      guidelinesAcceptedAt: app.guidelines_accepted_at ?? user.guidelinesAcceptedAt,
       appliedAt: app.submitted_at ?? user.appliedAt,
     };
   } catch (err) {
@@ -1587,14 +1593,14 @@ async function accountMember(user) {
       ${isAdmin ? profileRow("#/admin", ICONS.shield, "Admin Tools", "Approvals, activities and members") : ""}
       ${profileRow("#/account/details", ICONS.user, "Membership Details", "Contact, emergency and donor information")}
       ${profileRow(
-        "#/account/indemnity",
+        "#/account/agreements",
         ICONS.check,
-        "Indemnity",
-        indemnity.row,
-        { cls: indemnity.kind === "current" ? "ok" : "todo" }
+        "Agreements",
+        !hydrated.mediaConsent ? "Photo consent required" : indemnity.row,
+        { cls: indemnity.kind === "current" && hydrated.mediaConsent ? "ok" : "todo" }
       )}
       ${profileRow("#/account/payments", ICONS.dollar, "Payments & Receipts", "Bookings, donations and orders")}
-      ${profileRow("#/account/privacy", ICONS.bell, "Privacy & Notifications", "Consent and communication choices")}
+      ${profileRow("#/account/notifications", ICONS.bell, "Notifications", "WhatsApp, email and session alerts")}
     </div>
 
     <div class="btn-row">
@@ -1714,13 +1720,34 @@ function linkCard(href, title, status, { sub = "", cls = "" } = {}) {
     </a>`;
 }
 
-async function accountIndemnity(user) {
+function acceptedDocRow(label, acceptedAt, docKey, viewLabel) {
+  return `
+        <div class="line"><span>${label}</span><strong>${acceptedAt ? fmtDay(acceptedAt) : "To be accepted"}</strong></div>
+        <a class="btn ghost sm" href="#" data-action="open-doc" data-doc="${docKey}">${viewLabel}</a>`;
+}
+
+async function accountAgreements(user) {
   const hydrated = await hydrateLiveUser(user);
   const current = store.isIndemnityCurrent(hydrated);
   const hadAcceptance = !!hydrated.indemnityAcceptedAt;
   const defaultDate = todayISO();
+  const guidelinesAt = hydrated.guidelinesAcceptedAt || hydrated.appliedAt;
   return `
-    ${profileSubpageHeader({ title: "Indemnity" })}
+    ${profileSubpageHeader({ title: "Agreements" })}
+    <form id="form-photo-consent" data-form="photo-consent" class="card mt16"><div class="card-body">
+      <label class="check"><input type="checkbox" name="photo_consent" ${hydrated.mediaConsent ? "checked" : ""} required>
+        <span>I consent to photos/videos of me being used on ITC channels. *</span></label>
+      <p class="muted small">Please contact ITC Committee if you have any questions/concerns about this.</p>
+      <div class="actions">
+        <button class="btn" type="submit">Save photo consent</button>
+      </div>
+    </div></form>
+    <div class="card mt16"><div class="card-body">
+      <div class="receipt-lines" style="margin-top:0;border-top:0">
+        ${acceptedDocRow("Privacy policy accepted", hydrated.privacyAcceptedAt, "privacy", "View Privacy Policy")}
+        ${acceptedDocRow("Community guidelines accepted", guidelinesAt, "guidelines", "View Community Guidelines")}
+      </div>
+    </div></div>
     ${current ? `
       <div class="banner mt16">
         <span class="kicker">Indemnity confirmed on ${fmtDay(hydrated.indemnityAcceptedAt)}</span>
@@ -1733,7 +1760,7 @@ async function accountIndemnity(user) {
           : "Please read the Indemnity, then accept and confirm."}</p>
       </div>`}
     ${current ? `
-      <a class="btn ghost sm mt16" href="#" data-action="open-doc" data-doc="indemnity">View as full document</a>
+      <a class="btn ghost sm mt16" href="#" data-action="open-doc" data-doc="indemnity">View Indemnity</a>
       <div class="card mt16"><div class="card-body receipt-lines">
         <div class="line"><span>Signed by</span><strong>${esc(hydrated.indemnitySignature)}</strong></div>
         <div class="line"><span>Date of signing</span><strong>${fmtDay(parseISO(hydrated.indemnitySignedAt))}</strong></div>
@@ -1743,7 +1770,7 @@ async function accountIndemnity(user) {
         <div class="line"><span>Document version</span><strong>${esc(hydrated.indemnityFormVersion)}</strong></div>
       </div></div>` : `
       <div data-doc-accept="indemnity">
-        <a class="btn ghost sm mt16" href="#" data-action="open-doc" data-doc="indemnity">View as full document</a>
+        <a class="btn ghost sm mt16" href="#" data-action="open-doc" data-doc="indemnity">View Indemnity</a>
         <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
         <form id="form-indemnity" class="mt16" novalidate>
           <div class="field"><label for="indemnity-signature">Participant's full name as signature *</label><input id="indemnity-signature" name="signature" required autocomplete="name"></div>
@@ -1783,17 +1810,15 @@ function accountPayments(user) {
     }`;
 }
 
-async function accountPrivacyEdit(user) {
+async function accountNotificationsEdit(user) {
   const hydrated = await hydrateLiveUser(user);
   return `
     ${profileSubpageHeader({
-      backHref: "#/account/privacy",
-      backLabel: "Privacy & Notifications",
-      title: "Edit Privacy & Notifications",
+      backHref: "#/account/notifications",
+      backLabel: "Notifications",
+      title: "Edit Notifications",
     })}
     <form id="form-privacy" data-form="privacy-preferences" class="card mt16"><div class="card-body">
-      <div class="line"><span>Privacy policy accepted</span><strong>${hydrated.privacyAcceptedAt ? fmtDay(hydrated.privacyAcceptedAt) : "To be accepted"}</strong></div>
-      <label class="check"><input type="checkbox" name="photo_consent" ${hydrated.mediaConsent ? "checked" : ""}> Photos and video at sessions</label>
       <label class="check"><input type="checkbox" name="whatsapp_reminders" ${hydrated.whatsappReminders ? "checked" : ""}> WhatsApp session reminders</label>
       <label class="check"><input type="checkbox" name="hyrox_payment_reminders" ${hydrated.hyroxPaymentReminders !== false ? "checked" : ""}> HYROX payment reminders</label>
       <p class="muted small">Thursday payment reminders for unpaid HYROX reservations. You can still check payment status in the app.</p>
@@ -1803,27 +1828,25 @@ async function accountPrivacyEdit(user) {
       <p class="muted small">Browser alerts for booking, payment, and venue updates (live mode, HTTPS). Off by default. iPhone needs Add to Home Screen. In-app inbox still works either way.</p>
       <div class="actions">
         <button class="btn" type="submit">Save changes</button>
-        <a class="btn ghost" href="#/account/privacy">Cancel</a>
+        <a class="btn ghost" href="#/account/notifications">Cancel</a>
       </div>
     </div></form>`;
 }
 
-async function accountPrivacy(user) {
+async function accountNotifications(user) {
   const hydrated = await hydrateLiveUser(user);
   const onOff = (v) => (v ? "On" : "Off");
   return `
-    ${profileSubpageHeader({ title: "Privacy & Notifications" })}
+    ${profileSubpageHeader({ title: "Notifications" })}
     <div class="card mt16"><div class="card-body">
       <div class="receipt-lines" style="margin-top:0;border-top:0">
-        <div class="line"><span>Photo/video consent</span><strong>${hydrated.mediaConsent ? "Allowed" : "Not allowed"}</strong></div>
-        <div class="line"><span>Privacy policy accepted</span><strong>${hydrated.privacyAcceptedAt ? fmtDay(hydrated.privacyAcceptedAt) : "To be accepted"}</strong></div>
         <div class="line"><span>WhatsApp session reminders</span><strong>${onOff(hydrated.whatsappReminders)}</strong></div>
         <div class="line"><span>HYROX payment reminders</span><strong>${onOff(hydrated.hyroxPaymentReminders !== false)}</strong></div>
         <div class="line"><span>Email receipts</span><strong>${onOff(hydrated.emailReceipts)}</strong></div>
         <div class="line"><span>Community news</span><strong>${onOff(hydrated.communityNews)}</strong></div>
         <div class="line"><span>Web push for bookings, venue &amp; announcements</span><strong>${onOff(!!hydrated.webPushOps)}</strong></div>
       </div>
-      <a class="btn ghost sm mt16" href="#/account/privacy/edit">Edit privacy preferences</a>
+      <a class="btn ghost sm mt16" href="#/account/notifications/edit">Edit notification preferences</a>
       <p class="muted small mt16">You can update these communication preferences at any time.</p>
     </div></div>`;
 }

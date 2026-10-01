@@ -55,7 +55,7 @@ const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
   /^#\/(?:home|schedule|giving|notifications|apply)$/,
   /^#\/community(?:\/(?:prayers|fellowship|meals|announcements|about))?$/,
-  /^#\/account(?:\/(?:details(?:\/edit)?|indemnity|donor|payments|privacy(?:\/edit)?|bookings(?:\/attended)?|history))?$/,
+  /^#\/account(?:\/(?:details(?:\/edit)?|indemnity|agreements|donor|payments|privacy(?:\/edit)?|notifications(?:\/edit)?|bookings(?:\/attended)?|history))?$/,
   new RegExp(`^#/(?:activity|checkout|pay|booking|receipt)/${ROUTE_ID}$`),
   new RegExp(`^#/hyrox/${ROUTE_ID}(?:/register)?$`),
   new RegExp(`^#/replacement/${ROUTE_ID}$`),
@@ -4431,7 +4431,6 @@ function membershipPatch(form) {
 
 function privacyPatch(form) {
   return {
-    photo_consent: !!form.photo_consent,
     whatsapp_reminders: !!form.whatsapp_reminders,
     email_receipts: !!form.email_receipts,
     community_news: !!form.community_news,
@@ -4561,12 +4560,33 @@ export async function updateMyPrivacyPreferences(form) {
   if (!isLive() || !supabase) {
     const user = currentUser();
     if (!user) throw new Error("Not signed in");
-    user.mediaConsent = patch.photo_consent;
     user.whatsappReminders = patch.whatsapp_reminders;
     user.emailReceipts = patch.email_receipts;
     user.communityNews = patch.community_news;
     user.hyroxPaymentReminders = patch.hyrox_payment_reminders;
     user.webPushOps = patch.web_push_ops;
+    save();
+    return localApplication(user);
+  }
+  const cu = await getCurrentUser();
+  if (!cu) throw new Error("Not signed in");
+  const { data, error } = await supabase
+    .from("applications")
+    .update(patch)
+    .eq("profile_id", cu.id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateMyPhotoConsent(form) {
+  if (!form.photo_consent) throw new Error("Photo and video consent is required");
+  const patch = { photo_consent: true };
+  if (!isLive() || !supabase) {
+    const user = currentUser();
+    if (!user) throw new Error("Not signed in");
+    user.mediaConsent = true;
     save();
     return localApplication(user);
   }

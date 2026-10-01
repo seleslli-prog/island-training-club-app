@@ -1651,6 +1651,24 @@ document.addEventListener("submit", async (e) => {
     return;
   }
 
+  if (form.dataset.form === "photo-consent") {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    const control = form.querySelector('[type="submit"]');
+    await withBusyControl(control, "Saving…", async () => {
+      try {
+        const entries = Object.fromEntries(new FormData(form).entries());
+        await store.updateMyPhotoConsent(entries);
+        toast("Photo consent saved");
+        location.hash = "#/account/agreements";
+        await renderWithFeedback();
+      } catch (err) {
+        toast(err.message || "Unable to save photo consent", true);
+      }
+    });
+    return;
+  }
+
   if (form.id === "form-privacy") {
     e.preventDefault();
     if (!form.reportValidity()) return;
@@ -1664,8 +1682,8 @@ document.addEventListener("submit", async (e) => {
           try {
             const pushResult = await syncWebPushSubscription({ enabled });
             if (enabled && pushResult?.endpoint) {
-              toast("Privacy preferences saved — browser push on");
-              location.hash = "#/account/privacy";
+              toast("Notification preferences saved — browser push on");
+              location.hash = "#/account/notifications";
               await renderWithFeedback();
               return;
             }
@@ -1673,23 +1691,23 @@ document.addEventListener("submit", async (e) => {
             if (enabled) {
               // Prefer stays saved; surface push setup failure separately.
               console.error("[itc web-push]", pushErr);
-              toast(pushErr.message || "Privacy saved, but browser push was not enabled", true);
-              location.hash = "#/account/privacy";
+              toast(pushErr.message || "Notifications saved, but browser push was not enabled", true);
+              location.hash = "#/account/notifications";
               await renderWithFeedback();
               return;
             }
           }
         } else if (enabled) {
-          toast("Privacy saved locally — web push needs live Supabase mode", true);
-          location.hash = "#/account/privacy";
+          toast("Notifications saved locally — web push needs live Supabase mode", true);
+          location.hash = "#/account/notifications";
           await renderWithFeedback();
           return;
         }
-        toast("Privacy preferences saved");
-        location.hash = "#/account/privacy";
+        toast("Notification preferences saved");
+        location.hash = "#/account/notifications";
         await renderWithFeedback();
       } catch (err) {
-        toast(err.message || "Unable to save privacy preferences", true);
+        toast(err.message || "Unable to save notification preferences", true);
       }
     });
     return;

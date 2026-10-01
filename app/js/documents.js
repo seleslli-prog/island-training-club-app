@@ -58,7 +58,7 @@ export function renderPrivacyDocument() {
       <h3>Who sees it</h3>
       <p>Only ITC leaders and the systems that run the club. We never sell your information or share it with third parties for marketing.</p>
       <h3>Your choices</h3>
-      <p>Photo and video consent is optional and can be changed at any time from your Profile. You can ask an ITC leader to correct or delete your information. Questions? Speak to any ITC leader before or after a session.</p>
+      <p>Photo and video consent is required to take part in ITC sessions. You can review that consent, along with the privacy policy, community guidelines and indemnity you accepted, from Profile → Agreements. You can ask an ITC leader to correct or delete your information. Questions? Contact ITC Committee or speak to any ITC leader before or after a session.</p>
     </div>`;
 }
 
@@ -72,7 +72,7 @@ export function renderGuidelinesDocument() {
       <h3>Safety first</h3>
       <p>Follow the instructions of ITC leaders at all times. Work within your own limits, scale movements when asked, and tell a leader about any injury or health concern before a session starts.</p>
       <h3>Photos and media</h3>
-      <p>We sometimes take photos and videos at sessions. You will only appear if you have given consent, and you can withdraw that consent at any time from your Profile.</p>
+      <p>We sometimes take photos and videos at sessions. You will only appear if you have given consent. Questions or concerns? Contact ITC Committee.</p>
       <h3>Conduct</h3>
       <p>Members who repeatedly ignore these guidelines may be asked to leave a session, or have their membership reviewed by ITC leaders.</p>
     </div>`;

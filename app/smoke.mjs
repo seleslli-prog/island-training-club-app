@@ -51,7 +51,7 @@ for (const route of [
   "#/giving",
   "#/notifications",
   "#/account/bookings/attended",
-  "#/account/privacy/edit",
+  "#/account/notifications/edit",
   "#/apply",
   "#/checkout/hyrox-bft-2099-01-03",
   "#/pay/booking-123",
@@ -2403,7 +2403,9 @@ assert.doesNotMatch(
   /const target = document\.querySelector\(href\);/,
   "Unguarded querySelector on arbitrary hash hrefs would throw SyntaxError for route links");
 assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPrivacyPreferences\(/,
-  "Privacy & Notifications must persist reminder preferences through the form delegate");
+  "Notifications must persist reminder preferences through the form delegate");
+assert.match(integratedAppSource, /dataset\.form === "photo-consent"[\s\S]*?updateMyPhotoConsent\(/,
+  "Agreements must persist required photo consent through the form delegate");
 assert.match(integratedAppSource, /applyOwnAvatarToRoster/,
   "Activity Who's coming must overlay the viewer's own profile photo onto their roster row");
 assert.equal(typeof store.attendeeCountFor, "function",
@@ -2431,7 +2433,8 @@ console.log("ok  final cross-domain runtime markers coexist");
 for (const marker of [
   "Continue with Google",
   "Membership Details",
-  "Privacy & Notifications",
+  "Agreements",
+  "Notifications",
   "Members",
   "HYROX",
   "Duty",
@@ -3338,7 +3341,7 @@ const applyRes = store.applyForMembership({
   emergencyPhone: "+852 8765 4321",
   heard: "A friend",
   ageConfirmed: true,
-  mediaConsent: false,
+  mediaConsent: true,
   donorId: "Not applicable",
   indemnity: true,
   indemnitySignature: "Test Person",
@@ -3843,16 +3846,16 @@ for (const link of [
   "#/account/bookings",
   "#/account/bookings/attended",
   "#/account/details",
-  "#/account/indemnity",
+  "#/account/agreements",
   "#/account/payments",
-  "#/account/privacy",
+  "#/account/notifications",
 ]) {
   if (!newMemberAcct.includes(`href="${link}"`)) {
     failures++;
     console.error(`FAIL Profile missing ${link} link`);
   }
 }
-for (const redundantLink of ["#/account/donor", "#/account/history", "#/account/about"]) {
+for (const redundantLink of ["#/account/donor", "#/account/history", "#/account/about", "#/account/indemnity", "#/account/privacy"]) {
   if (newMemberAcct.includes(`href="${redundantLink}"`)) {
     failures++;
     console.error(`FAIL Profile should not show redundant ${redundantLink} row`);
@@ -3861,7 +3864,7 @@ for (const redundantLink of ["#/account/donor", "#/account/history", "#/account/
 for (const sub of [
   "Contact, emergency and donor information",
   "Bookings, donations and orders",
-  "Consent and communication choices",
+  "WhatsApp, email and session alerts",
 ]) {
   if (!newMemberAcct.includes(sub)) {
     failures++;
@@ -3876,27 +3879,30 @@ for (const selector of [".ph-stats > .ph-stat", ".ph-stats > .ph-stat:hover", ".
   }
 }
 await check("profile > details", () => views.viewAccount("details"));
-await check("profile > indemnity", () => views.viewAccount("indemnity"));
+await check("profile > agreements", () => views.viewAccount("agreements"));
 await check("profile > payments", () => views.viewAccount("payments"));
-await check("profile > privacy", () => views.viewAccount("privacy"));
-const privacyEditHtml = await views.viewAccount("privacy", "edit");
+await check("profile > notifications", () => views.viewAccount("notifications"));
+const privacyEditHtml = await views.viewAccount("notifications", "edit");
 if (!privacyEditHtml.includes('name="hyrox_payment_reminders"')
     || !privacyEditHtml.includes("Thursday payment reminders for unpaid HYROX reservations")) {
   failures++;
-  console.error("FAIL Privacy & Notifications edit missing HYROX reminder preference");
-} else console.log("ok  Privacy & Notifications exposes HYROX reminder preference");
+  console.error("FAIL Notifications edit missing HYROX reminder preference");
+} else console.log("ok  Notifications exposes HYROX reminder preference");
 if (!privacyEditHtml.includes('name="web_push_ops"')
     || !privacyEditHtml.includes("Web push for bookings, venue &amp; announcements")) {
   failures++;
-  console.error("FAIL Privacy & Notifications edit missing web push ops preference");
-} else console.log("ok  Privacy & Notifications exposes web push ops preference");
+  console.error("FAIL Notifications edit missing web push ops preference");
+} else console.log("ok  Notifications exposes web push ops preference");
+if (privacyEditHtml.includes('name="photo_consent"')) {
+  failures++;
+  console.error("FAIL Notifications edit should not include photo consent");
+} else console.log("ok  Notifications edit excludes photo consent");
 const privacyUser = store.currentUser();
 if (privacyUser?.webPushOps) {
   failures++;
   console.error("FAIL web push ops must default off");
 } else console.log("ok  web push ops defaults off");
 const privacyPreferenceBase = {
-  photo_consent: !!privacyUser?.mediaConsent,
   whatsapp_reminders: !!privacyUser?.whatsappReminders,
   email_receipts: !!privacyUser?.emailReceipts,
   community_news: !!privacyUser?.communityNews,
@@ -3961,10 +3967,10 @@ for (const [label, html, title] of [
   ["details", membershipDetailsHtml, "Membership Details"],
   ["details edit", membershipDetailsEditHtml, "Edit Membership Details"],
   ["legacy donor", donorDetailsHtml, "Membership Details"],
-  ["indemnity", await views.viewAccount("indemnity"), "Indemnity"],
+  ["indemnity", await views.viewAccount("indemnity"), "Agreements"],
   ["payments", await views.viewAccount("payments"), "Payments &amp; Receipts"],
-  ["privacy", await views.viewAccount("privacy"), "Privacy &amp; Notifications"],
-  ["privacy edit", privacyEditHtml, "Edit Privacy &amp; Notifications"],
+  ["privacy", await views.viewAccount("privacy"), "Notifications"],
+  ["privacy edit", privacyEditHtml, "Edit Notifications"],
 ]) {
   try {
     assertProfileSubpageHierarchy(html, title);
@@ -3986,6 +3992,13 @@ if (!newMemberAcct.includes("Indemnity confirmed on") || newMemberAcct.includes(
   failures++;
   console.error("FAIL Profile should show a single indemnity-confirmed-on-date line");
 } else console.log("ok  Profile shows single-line indemnity confirmation");
+store.currentUser().mediaConsent = false;
+const photoRequiredProfile = await views.viewAccount();
+if (!photoRequiredProfile.includes("Photo consent required") || photoRequiredProfile.includes("Indemnity confirmed on")) {
+  failures++;
+  console.error("FAIL Profile Agreements row should require photo consent before showing indemnity status");
+} else console.log("ok  Profile Agreements row requires photo consent");
+store.currentUser().mediaConsent = true;
 const currentIndemnityHtml = await views.viewAccount("indemnity");
 for (const marker of [
   "Indemnity confirmed on",
@@ -4003,6 +4016,25 @@ for (const marker of [
   }
 }
 console.log("ok  current indemnity page shows the stored consent record");
+for (const marker of [
+  'data-form="photo-consent"',
+  "I consent to photos/videos of me being used on ITC channels. *",
+  "Please contact ITC Committee if you have any questions/concerns about this.",
+  "View Privacy Policy",
+  "View Community Guidelines",
+  "View Indemnity",
+  'data-action="open-doc" data-doc="privacy"',
+  'data-action="open-doc" data-doc="guidelines"',
+]) {
+  if (!currentIndemnityHtml.includes(marker)) {
+    failures++;
+    console.error(`FAIL Agreements page missing "${marker}"`);
+  }
+}
+if (!/name="photo_consent"[^>]*required/.test(currentIndemnityHtml)) {
+  failures++;
+  console.error("FAIL Agreements photo consent must be required");
+} else console.log("ok  Agreements shows required photo consent and accepted-document viewers");
 store.currentUser().indemnityAcceptedAt = Date.now() - 86400000;
 store.currentUser().indemnityFormVersion = "v0";
 const legacyIndemnityProfile = await views.viewAccount();
@@ -4055,10 +4087,10 @@ if (!(await views.viewAccount("indemnity")).includes("Accept &amp; Confirm")) {
 
 // --- Profile > Indemnity: one modal acknowledgement + full document button ---
 const indemnityPageHtml = await views.viewAccount("indemnity");
-if (!indemnityPageHtml.includes("View as full document")) {
+if (!indemnityPageHtml.includes("View Indemnity")) {
   failures++;
-  console.error('FAIL Profile > Indemnity should expose a "View as full document" button');
-} else console.log('ok  Profile > Indemnity exposes "View as full document" button');
+  console.error('FAIL Profile > Agreements should expose a "View Indemnity" button');
+} else console.log('ok  Profile > Agreements exposes "View Indemnity" button');
 if (!indemnityPageHtml.includes('data-action="open-doc" data-doc="indemnity"')) {
   failures++;
   console.error('FAIL Profile > Indemnity button should target the indemnity document');

@@ -74,7 +74,7 @@ Administrative testing requires Supabase live mode or the historical `archive/de
 `app/js/store.js` is the only place that touches `localStorage`. Two non-obvious rules:
 
 1. **Never delete `state` keys without a migration.** Persisted state has a `version` field; bump `STATE_VERSION` and add a migration step in `migrate()` instead of removing data outright.
-2. **Seed data is read-only.** Admin edits live in `state`, not in `SEED_*` constants. Resetting local data must rebuild `state` from the seeds.
+2. **Seed data is read-only.** Admin edits live in `state`, not in the `SEED_*` constants. Resetting local data must rebuild `state` from the seeds.
 
 ## Things deliberately NOT in the prototype
 
@@ -92,7 +92,7 @@ When in doubt: is this a real product feature, or a prototype affordance? If the
 
 - **Don't add merchandise or dedicated Shop-tab code to `main`.** Giving is a core `main` feature; catalog, cart, products, and merchandise remain isolated on `feature/shop-page`.
 - **Don't break localStorage migrations.** Bump `STATE_VERSION` and add a migration step. Snapshots in `state.bookings` reference seed activity fields by name; renaming them silently breaks old persisted data.
-- **Title-cased headings on Profile sub-pages.** "Membership Details", "Donor Profile", "Payments & Receipts", "Privacy & Notifications" — "History" stays single-word.
+- **Title-cased headings on Profile sub-pages.** "Membership Details", "Agreements", "Notifications", "Payments & Receipts" — "History" stays single-word.
 - **"My Week" on Home is signed-in-only and shows booked sessions.** Visitors see the upcoming preview, not "My Week".
 - **The Wednesday Night Training session is free and open to walk-ins.** Approved members may optionally RSVP for the attendee list; there is no checkout, payment, or capacity.
 - **The smoke test is the contract.** When you change product behaviour, update the test in the same commit. Don't leave the test failing.
