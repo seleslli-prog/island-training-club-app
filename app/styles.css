@@ -1137,6 +1137,72 @@ a.profile-row:hover .pr-text strong { color: var(--accent); }
 .receipt-lines .line.total { font-weight: 900; font-size: 15px; }
 .receipt-lines .line.total span { color: var(--ink); }
 
+/* ---- Agreements: one quiet card stroke, no nested ghost outlines ------ */
+
+.agreements-page .card {
+  border-color: var(--line-soft);
+}
+
+.agreements-doc-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+}
+
+.agreements-doc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.agreements-doc-head span {
+  color: var(--muted);
+}
+
+.agreements-doc-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.agreements-doc-link:hover,
+.agreements-doc-link:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.agreements-doc-status {
+  margin: 0 0 8px;
+}
+
+.agreements-doc-status.warn .kicker {
+  color: var(--warn);
+}
+
+.agreements-page .receipt-lines {
+  border-top-color: var(--line-soft);
+}
+
+.agreements-page .receipt-lines .line {
+  border-bottom-color: var(--line-soft);
+}
+
+.agreements-page .receipt-lines .line:last-child {
+  border-bottom: 0;
+}
+
 /* ---- Admin ------------------------------------------------------------ */
 
 .admin-tabs {

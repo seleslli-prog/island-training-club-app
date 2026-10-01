@@ -1720,10 +1720,13 @@ function linkCard(href, title, status, { sub = "", cls = "" } = {}) {
     </a>`;
 }
 
-function acceptedDocRow(label, acceptedAt, docKey, viewLabel) {
+function acceptedDocCard(title, label, acceptedAt, docKey, viewLabel) {
   return `
-        <div class="line"><span>${label}</span><strong>${acceptedAt ? fmtDay(acceptedAt) : "To be accepted"}</strong></div>
-        <a class="btn ghost sm" href="#" data-action="open-doc" data-doc="${docKey}">${viewLabel}</a>`;
+    <div class="card mt16"><div class="card-body">
+      <h2 class="agreements-doc-title">${title}</h2>
+      <div class="agreements-doc-head"><span>${label}</span><strong>${acceptedAt ? fmtDay(acceptedAt) : "To be accepted"}</strong></div>
+      <a class="agreements-doc-link" href="#" data-action="open-doc" data-doc="${docKey}">${viewLabel}</a>
+    </div></div>`;
 }
 
 async function accountAgreements(user) {
@@ -1733,6 +1736,7 @@ async function accountAgreements(user) {
   const defaultDate = todayISO();
   const guidelinesAt = hydrated.guidelinesAcceptedAt || hydrated.appliedAt;
   return `
+    <div class="agreements-page">
     ${profileSubpageHeader({ title: "Agreements" })}
     <form id="form-photo-consent" data-form="photo-consent" class="card mt16"><div class="card-body">
       <label class="check"><input type="checkbox" name="photo_consent" ${hydrated.mediaConsent ? "checked" : ""} required>
@@ -1742,49 +1746,47 @@ async function accountAgreements(user) {
         <button class="btn" type="submit">Save photo consent</button>
       </div>
     </div></form>
-    <div class="card mt16"><div class="card-body">
-      <div class="receipt-lines" style="margin-top:0;border-top:0">
-        ${acceptedDocRow("Privacy policy accepted", hydrated.privacyAcceptedAt, "privacy", "View Privacy Policy")}
-        ${acceptedDocRow("Community guidelines accepted", guidelinesAt, "guidelines", "View Community Guidelines")}
-      </div>
-    </div></div>
+    ${acceptedDocCard("Privacy Policy", "Privacy policy accepted", hydrated.privacyAcceptedAt, "privacy", "View Privacy Policy")}
+    ${acceptedDocCard("Community Guidelines", "Community guidelines accepted", guidelinesAt, "guidelines", "View Community Guidelines")}
     ${current ? `
-      <div class="banner mt16">
+      <div class="card mt16"><div class="card-body">
+        <h2 class="agreements-doc-title">Indemnity</h2>
         <span class="kicker">Indemnity confirmed on ${fmtDay(hydrated.indemnityAcceptedAt)}</span>
-        <p>You’re confirmed to join ITC activities.</p>
-      </div>` : `
-      <div class="banner warn mt16">
-        <span class="kicker">To be accepted</span>
-        <p>${hadAcceptance
-          ? "A new version of the Indemnity is available. Please read and re-sign."
-          : "Please read the Indemnity, then accept and confirm."}</p>
-      </div>`}
-    ${current ? `
-      <a class="btn ghost sm mt16" href="#" data-action="open-doc" data-doc="indemnity">View Indemnity</a>
-      <div class="card mt16"><div class="card-body receipt-lines">
+        <p class="muted small">You’re confirmed to join ITC activities.</p>
+        <div class="receipt-lines">
         <div class="line"><span>Signed by</span><strong>${esc(hydrated.indemnitySignature)}</strong></div>
         <div class="line"><span>Date of signing</span><strong>${fmtDay(parseISO(hydrated.indemnitySignedAt))}</strong></div>
         <div class="line"><span>Emergency contact name</span><strong>${esc(hydrated.emergencyName)}</strong></div>
         <div class="line"><span>Emergency contact relationship</span><strong>${esc(hydrated.emergencyRelationship)}</strong></div>
         <div class="line"><span>Emergency contact phone</span><strong>${esc(hydrated.emergencyPhone)}</strong></div>
         <div class="line"><span>Document version</span><strong>${esc(hydrated.indemnityFormVersion)}</strong></div>
+        </div>
+        <a class="agreements-doc-link" href="#" data-action="open-doc" data-doc="indemnity">View Indemnity</a>
       </div></div>` : `
-      <div data-doc-accept="indemnity">
-        <a class="btn ghost sm mt16" href="#" data-action="open-doc" data-doc="indemnity">View Indemnity</a>
+      <div data-doc-accept="indemnity" class="card mt16"><div class="card-body">
+        <h2 class="agreements-doc-title">Indemnity</h2>
+        <div class="agreements-doc-status${hadAcceptance ? " warn" : ""}">
+          <span class="kicker">To be accepted</span>
+          <p class="muted small">${hadAcceptance
+            ? "A new version of the Indemnity is available. Please read and re-sign."
+            : "Please read the Indemnity, then accept and confirm."}</p>
+        </div>
+        <a class="agreements-doc-link" href="#" data-action="open-doc" data-doc="indemnity">View Indemnity</a>
         <p class="muted small" data-doc-hint>Read the document to enable acceptance.</p>
         <form id="form-indemnity" class="mt16" novalidate>
           <div class="field"><label for="indemnity-signature">Participant's full name as signature *</label><input id="indemnity-signature" name="signature" required autocomplete="name"></div>
           <div class="field"><label for="indemnity-signed-at">Date of signing *</label><input id="indemnity-signed-at" name="signedAt" type="date" value="${defaultDate}" max="${defaultDate}" required></div>
-          <div class="card"><div class="card-body receipt-lines">
+          <div class="receipt-lines">
             <div class="line"><span>Emergency contact name</span><strong>${esc(hydrated.emergencyName || "Not provided")}</strong></div>
             <div class="line"><span>Emergency contact phone</span><strong>${esc(hydrated.emergencyPhone || "Not provided")}</strong></div>
-          </div></div>
+          </div>
           <div class="field"><label for="indemnity-relationship">Emergency contact relationship *</label><input id="indemnity-relationship" name="emergencyRelationship" value="${esc(hydrated.emergencyRelationship || "")}" required></div>
-          <a class="btn ghost sm" href="#/account/details/edit">Edit in Membership Details →</a>
+          <a class="agreements-doc-link" href="#/account/details/edit">Edit in Membership Details →</a>
           <div id="indemnity-error"></div>
           <button class="btn mt16" type="submit" data-doc-submit disabled>Accept &amp; Confirm</button>
         </form>
-      </div>`}
+      </div></div>`}
+    </div>
   `;
 }
 
