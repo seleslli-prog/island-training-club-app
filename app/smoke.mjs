@@ -3113,9 +3113,25 @@ if (!applyLocalHtml.includes("data-doc-checkbox")) {
   failures++;
   console.error("FAIL local-mode apply form checkboxes missing data-doc-checkbox attribute");
 }
-if (!applyLocalHtml.includes("Read the document to enable acceptance")) {
+const applyDocHint = "Click on the highlighted link below to read the document and enable acceptance.";
+if (!applyLocalHtml.includes(applyDocHint)) {
   failures++;
   console.error("FAIL local-mode apply form missing the read-first hint copy");
+}
+if ((applyLocalHtml.match(new RegExp(applyDocHint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length !== 3) {
+  failures++;
+  console.error("FAIL local-mode apply form should show the read-first hint for all three documents");
+}
+if (!applyLocalHtml.includes('data-doc-warn hidden role="alert"')) {
+  failures++;
+  console.error("FAIL local-mode apply form missing per-document submit warning slots");
+}
+for (const key of ["privacy", "guidelines", "indemnity"]) {
+  const block = applyLocalHtml.match(new RegExp(`data-doc-accept="${key}"[\\s\\S]*?</div>`));
+  if (!block || block[0].indexOf("data-doc-hint") > block[0].indexOf("data-doc-checkbox")) {
+    failures++;
+    console.error(`FAIL local-mode apply form should place the hint above the ${key} checkbox`);
+  }
 }
 if (!applyLocalHtml.includes('name="mediaConsent" required') || applyLocalHtml.includes("(Optional) I consent")) {
   failures++;
@@ -4178,32 +4194,36 @@ if (typeof components.openReadAndAcceptModal !== "function") {
 } else console.log("ok  components exports openReadAndAcceptModal");
 
 // --- applyDocumentAcceptance: scoped per document container ---
-const mkContainer = () => {
+const mkContainer = (key = "privacy") => {
   const checkbox = { disabled: true, checked: false };
   const submit = { disabled: true };
   const hint = { hidden: false };
+  const warn = { hidden: true, textContent: "", scrollIntoView() {} };
   return {
     checkbox,
     submit,
     hint,
+    warn,
     el: {
+      getAttribute: (name) => (name === "data-doc-accept" ? key : null),
       querySelector: (sel) =>
         sel === "[data-doc-checkbox]" ? checkbox
         : sel === "[data-doc-submit]" ? submit
         : sel === "[data-doc-hint]" ? hint
+        : sel === "[data-doc-warn]" ? warn
         : null,
     },
   };
 };
-const indemnityC = mkContainer();
-const privacyC = mkContainer();
-const guidelinesC = mkContainer();
+const indemnityC = mkContainer("indemnity");
+const privacyC = mkContainer("privacy");
+const guidelinesC = mkContainer("guidelines");
 const privacyTrigger = { closest: (sel) => (sel === "[data-doc-accept]" ? privacyC.el : null) };
 if (components.applyDocumentAcceptance(privacyTrigger) !== true) {
   failures++;
   console.error("FAIL applyDocumentAcceptance should return true when a container is paired");
 }
-if (privacyC.checkbox.disabled !== false || privacyC.checkbox.checked !== true || privacyC.submit.disabled !== false || privacyC.hint.hidden !== true) {
+if (privacyC.checkbox.disabled !== false || privacyC.checkbox.checked !== true || privacyC.submit.disabled !== false || privacyC.hint.hidden !== true || privacyC.warn.hidden !== true || privacyC.warn.textContent !== "") {
   failures++;
   console.error("FAIL applyDocumentAcceptance did not unlock the privacy checkbox, submit button, and hint");
 }
@@ -4214,17 +4234,60 @@ if (indemnityC.checkbox.checked || guidelinesC.checkbox.checked || indemnityC.su
 const submitOnly = {
   submit: { disabled: true },
   hint: { hidden: false },
+  warn: { hidden: false, textContent: "stale", scrollIntoView() {} },
   querySelector: (sel) =>
     sel === "[data-doc-submit]" ? submitOnly.submit
     : sel === "[data-doc-hint]" ? submitOnly.hint
+    : sel === "[data-doc-warn]" ? submitOnly.warn
     : null,
 };
 const submitOnlyTrigger = { closest: (sel) => (sel === "[data-doc-accept]" ? submitOnly : null) };
-if (components.applyDocumentAcceptance(submitOnlyTrigger) !== true || submitOnly.submit.disabled || !submitOnly.hint.hidden) {
+if (components.applyDocumentAcceptance(submitOnlyTrigger) !== true || submitOnly.submit.disabled || !submitOnly.hint.hidden || !submitOnly.warn.hidden || submitOnly.warn.textContent !== "") {
   failures++;
   console.error("FAIL applyDocumentAcceptance should unlock a submit-only document container");
 }
 console.log("ok  applyDocumentAcceptance mutates only the trigger's document container");
+
+// --- validateApplyDocumentAcceptance: warn under every unread document ---
+privacyC.warn.hidden = true;
+privacyC.warn.textContent = "";
+indemnityC.warn.hidden = true;
+indemnityC.warn.textContent = "";
+guidelinesC.warn.hidden = true;
+guidelinesC.warn.textContent = "";
+const unreadApplyForm = {
+  querySelectorAll: (sel) => (sel === "[data-doc-accept]"
+    ? [privacyC.el, guidelinesC.el, indemnityC.el]
+    : []),
+};
+// Reset privacy to unread so all three warn on first validation pass.
+privacyC.checkbox.disabled = true;
+privacyC.checkbox.checked = false;
+if (components.validateApplyDocumentAcceptance(unreadApplyForm) !== false
+    || privacyC.warn.hidden || guidelinesC.warn.hidden || indemnityC.warn.hidden
+    || !privacyC.warn.textContent.includes("privacy policy")
+    || !guidelinesC.warn.textContent.includes("community guidelines")
+    || !indemnityC.warn.textContent.includes("Indemnity form")) {
+  failures++;
+  console.error("FAIL validateApplyDocumentAcceptance should warn under all three unread documents");
+} else console.log("ok  validateApplyDocumentAcceptance warns under unread Apply documents");
+privacyC.checkbox.disabled = false;
+privacyC.checkbox.checked = true;
+guidelinesC.checkbox.disabled = true;
+guidelinesC.checkbox.checked = false;
+indemnityC.checkbox.disabled = true;
+indemnityC.checkbox.checked = false;
+if (components.validateApplyDocumentAcceptance(unreadApplyForm) !== false
+    || !privacyC.warn.hidden
+    || guidelinesC.warn.hidden
+    || indemnityC.warn.hidden) {
+  failures++;
+  console.error("FAIL validateApplyDocumentAcceptance should keep accepted docs clear and warn the rest");
+} else console.log("ok  validateApplyDocumentAcceptance clears accepted docs and warns the rest");
+if ((integratedAppSource.match(/components\.validateApplyDocumentAcceptance\(form\)/g) || []).length < 2) {
+  failures++;
+  console.error("FAIL Apply submit handlers must call validateApplyDocumentAcceptance");
+} else console.log("ok  Apply submit handlers call validateApplyDocumentAcceptance");
 
 // applyDocumentAcceptance: returns false when no container is paired (Profile trigger)
 const orphanTrigger = { closest: () => null };
