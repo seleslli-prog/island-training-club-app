@@ -43,6 +43,7 @@ import {
   notificationHktTime,
   notificationDestination,
   notificationCategory,
+  islandEccPaymentDeadlineAt,
 } from "./data.js";
 
 // Auth roles are normalized: live Supabase returns "super_admin"; the
@@ -143,6 +144,8 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
       : `<span class="badge free booked">${booked.status === "attended" ? "Arrived" : "Booked"}</span>`;
   } else if (reserved) {
     end = `<span class="badge warn">Pay by ${fmtDeadline(reserved.payDeadlineAt)}</span>`;
+  } else if (store.islandEccSignupLocked(s)) {
+    end = `<span class="badge neutral">Opens Monday at 6 PM</span>`;
   } else if (s.kind === "rsvp") {
     const going = store.attendeeCountFor(s);
     end = `<span class="badge free">RSVP</span><span class="spots">${going} going</span>`;
@@ -643,6 +646,51 @@ export function viewActivity(sessionId, options) {
       </div>
       <div class="btn-row">
         <a class="btn" href="#/booking/${booking.id}">Manage booking</a>
+        ${directionsLink}
+      </div>`;
+  } else if (reservation) {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">Pay by ${fmtDeadline(reservation.payDeadlineAt)}</span>
+        <p>Your spot is held. Pay before the checkpoint or it goes to the waitlist.</p>
+      </div>
+      <div class="btn-row">
+        <a class="btn" href="#/pay/${reservation.id}">Pay now</a>
+        ${directionsLink}
+      </div>`;
+  } else if (isMember && store.islandEccSignupLocked(s)) {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">Opens Monday at 6 PM</span>
+        <p>Island ECC HYROX sign-up for this Saturday opens Monday at 6 PM HKT. Both time slots open together.</p>
+      </div>
+      ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
+  } else if (isMember && store.islandEccOtherSlotTaken(s)) {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">Already registered</span>
+        <p>You’re already registered this Saturday. Choose one Island ECC HYROX slot per Saturday.</p>
+      </div>
+      ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
+  } else if (spots <= 0 && isMember) {
+    const waitlistPos = store.waitlistPosition(user.id, s.id);
+    actionBlock = waitlistPos
+      ? `
+      <div class="banner mt16">
+        <span class="kicker">Waitlist</span>
+        <p>You’re #${waitlistPos} on the waitlist for this session. We’ll notify you if a spot opens.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" type="button" data-action="leave-waitlist" data-session="${s.id}">Leave waitlist</button>
+        ${directionsLink}
+      </div>`
+      : `
+      <div class="banner mt16">
+        <span class="kicker">Session full</span>
+        <p>This time is full. Join the waitlist for this session only — you’ll get a spot if one opens.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn" type="button" data-action="join-waitlist" data-session="${s.id}">Join waitlist</button>
         ${directionsLink}
       </div>`;
   } else if (spots <= 0) {
@@ -2220,6 +2268,13 @@ export function viewCheckout(sessionId) {
   if (existingRes) return { redirect: `#/pay/${existingRes.id}` };
   if (sessionStarted(s) || s.cancelled || store.spotsLeft(s) <= 0)
     return { redirect: `#/activity/${sessionId}` };
+  if (store.islandEccSignupLocked(s) || store.islandEccOtherSlotTaken(s)) {
+    return { redirect: `#/activity/${sessionId}` };
+  }
+  const islandEccPayBy = ISLAND_ECC_HYROX_ACTIVITY_IDS.has(s.activityId)
+    && Date.now() >= islandEccPaymentDeadlineAt(s.dateISO)
+    ? "Friday 9 PM"
+    : "Thursday 6 PM";
   return `
     <a class="back-link" href="#/activity/${s.id}">← ${esc(s.name)}</a>
     <div class="kicker mt16">Reserve your spot</div>
@@ -2234,7 +2289,7 @@ export function viewCheckout(sessionId) {
     </div></div>
     <div class="banner mt16">
       <span class="kicker">How it works</span>
-      <p>Your spot is held right away. Pay by PayMe or FPS before the <strong>Thursday 6 PM</strong> checkpoint — the on-duty collector confirms in-app. Unpaid spots go to the waitlist at the checkpoint.</p>
+      <p>Your spot is held right away. Pay by PayMe or FPS before the <strong>${islandEccPayBy}</strong> checkpoint — the on-duty collector confirms in-app. Unpaid spots go to the waitlist at the checkpoint.</p>
     </div>
     <form id="form-reserve" class="mt16" data-session="${s.id}">
       <button class="btn" type="submit">Reserve spot · pay later</button>
