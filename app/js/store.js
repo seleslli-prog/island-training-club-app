@@ -21,6 +21,11 @@ import {
   fmtDate,
   fmtTime,
   nextPayDeadline,
+  islandEccSignupOpen,
+  islandEccNextPayDeadline,
+  islandEccMemberReminderAt,
+  islandEccCollectorFinalizeNudgeAt,
+  ISLAND_ECC_SIGNUP_LOCKED_ERROR,
   uid,
   normalizeDonorId,
   donorIdProblem,
@@ -49,7 +54,7 @@ const APPLY_DRAFT_VERSION = 2;
 const UNCLAIMED_DRAFT_OWNER = "__unclaimed__";
 const LAST_ROUTE_KEY = "itc.last-route.v1";
 const LAST_ROUTE_VERSION = 1;
-const STATE_VERSION = 27;
+const STATE_VERSION = 28;
 
 const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
@@ -232,6 +237,7 @@ function freshState() {
     notifications: [],
     announcements: [],
     duty: {},
+    islandEccWeekOps: {},
   };
 }
 
@@ -935,6 +941,22 @@ function migrate() {
       if (!Object.prototype.hasOwnProperty.call(user, "webPushOps")) {
         user.webPushOps = false;
       }
+    }
+  }
+  if (v < 28) {
+    if (!state.islandEccWeekOps || typeof state.islandEccWeekOps !== "object"
+        || Array.isArray(state.islandEccWeekOps)) {
+      state.islandEccWeekOps = {};
+    }
+    const now = Date.now();
+    const todayISO = todayHktISO(now);
+    for (const booking of state.bookings || []) {
+      if (booking.status !== "reserved" || booking.paymentMarkedAt) continue;
+      const dateISO = booking.snapshot?.dateISO;
+      if (!dateISO || dateISO < todayISO) continue;
+      const activityId = String(booking.sessionId || "").replace(/-\d{4}-\d{2}-\d{2}$/, "");
+      if (!ISLAND_ECC_HYROX_ACTIVITY_IDS.has(activityId)) continue;
+      booking.payDeadlineAt = islandEccNextPayDeadline(dateISO, now);
     }
   }
   state.version = STATE_VERSION;
@@ -2065,6 +2087,16 @@ function hasOtherIslandEccCommitment(userId, session, { includeQueues = false } 
   });
 }
 
+export function islandEccSignupLocked(session, now = Date.now()) {
+  return isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now);
+}
+
+export function islandEccOtherSlotTaken(session, userId = currentUser()?.id) {
+  if (!userId || !isIslandEccHyroxSession(session)) return false;
+  if (userBookingFor(userId, session.id) || userReservationFor(userId, session.id)) return false;
+  return hasOtherIslandEccCommitment(userId, session, { includeQueues: true });
+}
+
 // Reserve a spot without paying. The spot is held until the next payment
 // checkpoint (Thu 6 PM, then Fri 2 PM, then a 2-hour last-minute window).
 export function reserveSession(userId, sessionOrId, now = Date.now()) {
@@ -2089,6 +2121,9 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
   if (session.cancelled) throw new Error("Session is cancelled");
   if (sessionStarted(session)) throw new Error("Session has already started");
   if (spotsLeft(session) <= 0) throw new Error("Session is full");
+  if (isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now)) {
+    throw new Error(ISLAND_ECC_SIGNUP_LOCKED_ERROR);
+  }
   if (
     userBookingFor(userId, session.id) || userReservationFor(userId, session.id)
   ) throw new Error("Already booked");
@@ -2103,7 +2138,9 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
     status: "reserved",
     createdAt: now,
     reservedAt: now,
-    payDeadlineAt: nextPayDeadline(session.dateISO, now),
+    payDeadlineAt: isIslandEccHyroxSession(session)
+      ? islandEccNextPayDeadline(session.dateISO, now)
+      : nextPayDeadline(session.dateISO, now),
     paymentMarkedAt: null,
     paidAt: null,
     paidMethod: null,
@@ -2237,12 +2274,14 @@ export function queueFor(sessionId) {
   };
 }
 
-function sweepCheckpoints(now = Date.now()) {
+export function sweepCheckpoints(now = Date.now()) {
   let dirty = false;
   for (const b of state.bookings) {
     if (b.status !== "reserved") continue;
     // A member who already marked "I've paid" is waiting on the collector,
     // not the clock — the collector confirms or releases at the checkpoint.
+    const session = getSession(b.sessionId);
+    const islandEcc = isIslandEccHyroxSession(session);
     if (!b.paymentMarkedAt && b.payDeadlineAt && now > b.payDeadlineAt) {
       b.status = "expired";
       notify(b.userId, "reservation-expired",
@@ -2250,9 +2289,12 @@ function sweepCheckpoints(now = Date.now()) {
         `#/activity/${b.sessionId}`);
       cascadeSession(b.sessionId, now);
       dirty = true;
-    } else if (
-      !b.paymentMarkedAt && !b.reminderSentAt && b.payDeadlineAt &&
-      now > b.payDeadlineAt - 24 * 3600 * 1000 && now < b.payDeadlineAt
+      continue;
+    }
+    if (
+      !islandEcc
+      && !b.paymentMarkedAt && !b.reminderSentAt && b.payDeadlineAt
+      && now > b.payDeadlineAt - 24 * 3600 * 1000 && now < b.payDeadlineAt
     ) {
       b.reminderSentAt = now;
       notify(b.userId, "payment-reminder",
@@ -2260,8 +2302,71 @@ function sweepCheckpoints(now = Date.now()) {
         `#/pay/${b.id}`);
       dirty = true;
     }
+    if (
+      islandEcc
+      && session
+      && !b.paymentMarkedAt
+      && !b.reminderSentAt
+      && session.dateISO >= todayHktISO(now)
+      && now >= islandEccMemberReminderAt(session.dateISO)
+    ) {
+      b.reminderSentAt = now;
+      const holder = paymentUserById(b.userId);
+      if (holder?.hyroxPaymentReminders !== false) {
+        notify(b.userId, "operational_island_ecc_payment_reminder",
+          `Pay for ITC HYROX on ${fmtDate(session.dateISO)} by the deadline or the spot goes to the waitlist.`,
+          `#/pay/${b.id}`);
+      }
+      dirty = true;
+    }
+  }
+  if (!state.islandEccWeekOps || typeof state.islandEccWeekOps !== "object"
+      || Array.isArray(state.islandEccWeekOps)) {
+    state.islandEccWeekOps = {};
+    dirty = true;
+  }
+  const todayISO = todayHktISO(now);
+  for (const dateISO of islandEccDatesFromState()) {
+    if (dateISO < todayISO) continue;
+    if (now < islandEccMemberReminderAt(dateISO)) continue;
+    const ops = (state.islandEccWeekOps[dateISO] ||= {});
+    const early = getSession(`hyrox-quarry-bay-early-${dateISO}`);
+    const late = getSession(`hyrox-quarry-bay-${dateISO}`);
+    const collectorSession = early || late;
+    const collector = collectorSession ? collectorFor(collectorSession.id) : null;
+    if (collector && !ops.collectorFinalizeReminderSentAt) {
+      notify(collector.id, "operational_island_ecc_collector_finalize_reminder",
+        "Finalize both Island ECC HYROX sessions with Island ECC and the coach.",
+        "#/admin/payments");
+      ops.collectorFinalizeReminderSentAt = now;
+      dirty = true;
+    }
+    if (now < islandEccCollectorFinalizeNudgeAt(dateISO) || ops.collectorFinalizeNudgeSentAt) {
+      continue;
+    }
+    const needsNudge = [early, late].some((session) => session && !session.cancelled && !session.gymConfirmedAt);
+    if (collector && needsNudge) {
+      notify(collector.id, "operational_island_ecc_collector_finalize_nudge",
+        "Still not finalized — please confirm with Island ECC and the coach if possible.",
+        "#/admin/payments");
+      ops.collectorFinalizeNudgeSentAt = now;
+      dirty = true;
+    }
   }
   if (dirty) save();
+}
+
+function islandEccDatesFromState() {
+  const dates = new Set();
+  const consider = (sessionId) => {
+    if (!sessionId) return;
+    const session = getSession(sessionId);
+    if (isIslandEccHyroxSession(session)) dates.add(session.dateISO);
+  };
+  for (const booking of state.bookings) consider(booking.sessionId);
+  for (const sessionId of Object.keys(state.queues || {})) consider(sessionId);
+  for (const sessionId of Object.keys(state.sessionOverrides || {})) consider(sessionId);
+  return dates;
 }
 
 function cascadeSession(sessionId, now = Date.now()) {
@@ -2284,13 +2389,19 @@ function cascadeSession(sessionId, now = Date.now()) {
 
 // --- Direct-session waitlists ---------------------------------------------
 
-function joinQueue(userId, sessionId, kind) {
+function joinQueue(userId, sessionId, kind, now = Date.now()) {
   requireAuthorizedPaymentOwner(userId);
   const session = getSession(sessionId);
+  if (isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now)) {
+    throw new Error(ISLAND_ECC_SIGNUP_LOCKED_ERROR);
+  }
   if (userBookingFor(userId, sessionId) || userReservationFor(userId, sessionId))
     throw new Error("Already booked");
   if (hasOtherIslandEccCommitment(userId, session, { includeQueues: true })) {
     throw new Error("Choose one Island ECC HYROX slot per Saturday.");
+  }
+  if (kind === "waitlist" && session && spotsLeft(session) > 0) {
+    throw new Error("Session is not full.");
   }
   const q = paymentQueueFor(sessionId);
   for (const list of [q.waitlist, q.interest]) {
@@ -2313,12 +2424,12 @@ function queuePosition(userId, sessionId, kind) {
   return idx === -1 ? null : idx + 1;
 }
 
-export function joinWaitlist(userId, sessionId) {
+export function joinWaitlist(userId, sessionId, now = Date.now()) {
   assertActiveSessionTarget(sessionId);
   if (isLive()) {
     return liveOps.liveJoinQueue(sessionId, "waitlist");
   }
-  return joinQueue(userId, sessionId, "waitlist");
+  return joinQueue(userId, sessionId, "waitlist", now);
 }
 export function leaveWaitlist(userId, sessionId) {
   assertActiveSessionTarget(sessionId);

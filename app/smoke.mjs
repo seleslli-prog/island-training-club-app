@@ -13,6 +13,10 @@ globalThis.localStorage = {
   removeItem: (k) => mem.delete(k),
 };
 
+function islandEccOpenNow(session, now = Date.now()) {
+  if (!session?.dateISO || !data.ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session.activityId)) return now;
+  return Math.max(now, data.islandEccSignupOpensAt(session.dateISO));
+}
 const store = await import("./js/store.js");
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
@@ -207,7 +211,7 @@ function assertPrimaryNav(user, expected, label) {
 }
 
 const freshV27State = store.load();
-assert.equal(freshV27State.version, 27, "fresh local state must use the v27 schema");
+assert.equal(freshV27State.version, 28, "fresh local state must use the v28 schema");
 assert.equal(data.SEED_ACTIVITIES.some(
   (activity) => ["hyrox-bft", "hyrox-midtown"].includes(activity.id)
 ), false, "fresh activity seeds must not contain the retired BFT/Midtown pool");
@@ -232,6 +236,33 @@ for (const activityId of ["wnt", "run", "water"]) {
 }
 assert.ok(quarryBaySeed, "Island ECC HYROX must remain seeded");
 assert.ok(quarryBayEarlySeed, "the early Island ECC HYROX slot must be seeded");
+{
+  const saturday = "2026-10-10";
+  assert.equal(data.islandEccSignupOpensAt(saturday), Date.parse("2026-10-05T18:00:00+08:00"));
+  assert.equal(data.islandEccPaymentDeadlineAt(saturday), Date.parse("2026-10-08T18:00:00+08:00"));
+  assert.equal(data.islandEccMemberReminderAt(saturday), Date.parse("2026-10-09T18:00:00+08:00"));
+  assert.equal(data.islandEccLeftoverPayByAt(saturday), Date.parse("2026-10-09T21:00:00+08:00"));
+  assert.equal(data.islandEccCollectorFinalizeNudgeAt(saturday), Date.parse("2026-10-09T21:00:00+08:00"));
+  assert.equal(data.islandEccSignupOpen(saturday, Date.parse("2026-10-05T17:59:00+08:00")), false);
+  assert.equal(data.islandEccSignupOpen(saturday, Date.parse("2026-10-05T18:00:00+08:00")), true);
+  assert.equal(
+    data.islandEccNextPayDeadline(saturday, Date.parse("2026-10-08T17:59:00+08:00")),
+    Date.parse("2026-10-08T18:00:00+08:00"),
+  );
+  assert.equal(
+    data.islandEccNextPayDeadline(saturday, Date.parse("2026-10-08T18:00:00+08:00")),
+    Date.parse("2026-10-09T21:00:00+08:00"),
+  );
+  assert.equal(typeof data.finalCheckpointFor, "function");
+  assert.equal(data.LAST_MINUTE_WINDOW_MS, 2 * 60 * 60 * 1000);
+  assert.equal(
+    data.nextPayDeadline(saturday, Date.parse("2026-10-08T18:00:00+08:00")),
+    data.finalCheckpointFor(saturday),
+    "non–Island ECC nextPayDeadline still uses Friday 14:00 after Thursday 18:00",
+  );
+  assert.equal(data.ISLAND_ECC_SIGNUP_LOCKED_ERROR, "HYROX sign-up opens Monday at 6 PM HKT.");
+  console.log("ok  Island ECC HKT signup and pay-by helpers");
+}
 assert.equal(data.SEED_ACTIVITIES.some((activity) => activity.id === "hyrox"), false,
   "the ambiguous legacy hyrox activity id must not remain canonical");
 assert.deepEqual(quarryBaySeed && {
@@ -340,7 +371,7 @@ localStorage.setItem("itc.prototype.v1", JSON.stringify({
   duty: {},
 }));
 const renamedState = store.load();
-assert.equal(renamedState.version, 27, "legacy state must advance through the current migrations");
+assert.equal(renamedState.version, 28, "legacy state must advance through the current migrations");
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").hyroxPaymentReminders, true);
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").webPushOps, false);
 assert.equal(renamedState.hyroxCycles["legacy-cycle"]?.collectorPaymentReminderSentAt ?? null, null);
@@ -490,7 +521,7 @@ store.resetLocalData();
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v23PoolFixture));
   const migrated = store.load();
 
-  assert.equal(migrated.version, 27);
+  assert.equal(migrated.version, 28);
   assert.deepEqual(store.notificationsFor("review-admin"), [expectedEccReview],
     "generic local review notices must retain only proven active ECC provenance");
   assert.equal(store.notificationsFor("review-admin").filter((row) => !row.read).length, 1,
@@ -562,7 +593,7 @@ for (const booking of v19ReplacementFixture.bookings) {
 delete v19ReplacementFixture.replacementRequests;
 localStorage.setItem("itc.prototype.v1", JSON.stringify(v19ReplacementFixture));
 const migratedReplacement = store.load();
-assert.equal(migratedReplacement.version, 27, "replacement migration must preserve data through the current v27 state version");
+assert.equal(migratedReplacement.version, 28, "replacement migration must preserve data through the current v27 state version");
 assert.ok(Array.isArray(migratedReplacement.replacementRequests));
 assert.ok(Array.isArray(migratedReplacement.replacementAudit));
 assert.ok(migratedReplacement.bookings.every((booking) =>
@@ -1274,6 +1305,24 @@ assert.doesNotMatch(
   "replacement attendees must not reserve their existing Island ECC slot again",
 );
 console.log("ok  dual Island ECC migration retimes, provisions and guards both slots");
+{
+  const islandEccWindowsMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261002000001_island_ecc_signup_windows.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "HYROX sign-up opens Monday at 6 PM HKT.",
+    "operational_island_ecc_payment_reminder",
+    "operational_island_ecc_week_ops",
+    "at time zone 'Asia/Hong_Kong'",
+  ]) {
+    assert.ok(
+      islandEccWindowsMigrationSource.includes(marker),
+      `Island ECC windows migration must include ${marker}`,
+    );
+  }
+  console.log("ok  Island ECC signup-window migration markers");
+}
 assert.equal((hyroxActivityMigrationSource.match(
   /drop constraint operational_activity_templates_activity_id_check/g
 ) || []).length, 2,
@@ -3276,7 +3325,7 @@ if (!unpaidBadgeSession) {
   failures++;
   console.error("FAIL smoke needs an upcoming HYROX session for badge state checks");
 } else {
-  const unpaidReservation = store.reserveSession("fixture-member", unpaidBadgeSession.id);
+  const unpaidReservation = store.reserveSession("fixture-member", unpaidBadgeSession.id, islandEccOpenNow(unpaidBadgeSession));
   const unpaidBadgeHtml = views.viewActivity(unpaidBadgeSession.id);
   if (!unpaidBadgeHtml.includes('badge warn">To be paid</span>')) {
     failures++;
@@ -3933,6 +3982,9 @@ if (store.currentUser()?.webPushOps !== false) {
 } else console.log("ok  local Privacy & Notifications update clears web push ops");
 if (!data.WEB_PUSH_OPS_KINDS.includes("operational_session_venue_updated")
     || !data.WEB_PUSH_OPS_KINDS.includes("community_announcement_published")
+    || !data.WEB_PUSH_OPS_KINDS.includes("operational_island_ecc_payment_reminder")
+    || !data.WEB_PUSH_OPS_KINDS.includes("operational_island_ecc_collector_finalize_reminder")
+    || !data.WEB_PUSH_OPS_KINDS.includes("operational_island_ecc_collector_finalize_nudge")
     || data.WEB_PUSH_OPS_KINDS.includes("operational_payment_marked")
     || data.WEB_PUSH_OPS_KINDS.includes("community_announcement_audit")) {
   failures++;
@@ -4373,10 +4425,10 @@ const islandEccSession = allUpcoming.find(
 );
 if (!islandEccSession) throw new Error("expected an upcoming Island ECC session");
 const before = store.spotsLeft(islandEccSession);
-const reservationNow = Date.now();
+const reservationNow = islandEccOpenNow(islandEccSession);
 const r1 = store.reserveSession(signIn.user.id, islandEccSession, reservationNow);
 if (r1.status !== "reserved") throw new Error("new booking should be reserved");
-if (r1.payDeadlineAt !== data.nextPayDeadline(islandEccSession.dateISO, reservationNow))
+if (r1.payDeadlineAt !== data.islandEccNextPayDeadline(islandEccSession.dateISO, reservationNow))
   throw new Error("reservation deadline should follow the checkpoint rule");
 const after = store.spotsLeft(islandEccSession);
 if (after !== before - 1) throw new Error(`reserved spot not held (${before} -> ${after})`);
@@ -4401,16 +4453,201 @@ const otherIslandEccSlot = allUpcoming.find(
 );
 if (!otherIslandEccSlot) throw new Error("expected the second Island ECC slot on the same Saturday");
 assert.throws(
-  () => store.reserveSession(signIn.user.id, otherIslandEccSlot),
+  () => store.reserveSession(signIn.user.id, otherIslandEccSlot, reservationNow),
   /Choose one Island ECC HYROX slot per Saturday/,
   "members must not reserve both Island ECC slots on one Saturday"
 );
 assert.throws(
-  () => store.joinWaitlist(signIn.user.id, otherIslandEccSlot.id),
+  () => store.joinWaitlist(signIn.user.id, otherIslandEccSlot.id, reservationNow),
   /Choose one Island ECC HYROX slot per Saturday/,
   "members must not book one Island ECC slot and queue for the other"
 );
 console.log("ok  one Island ECC booking or queue commitment per Saturday");
+{
+  const lockedSaturday = "2026-10-24";
+  const lockedLate = store.getSession(`hyrox-quarry-bay-${lockedSaturday}`);
+  const lockedEarly = store.getSession(`hyrox-quarry-bay-early-${lockedSaturday}`);
+  if (!lockedLate || !lockedEarly) throw new Error("expected locked Island ECC sessions");
+  const preservedHold = store.getBooking(r1.id);
+  const preservedDeadline = preservedHold?.payDeadlineAt;
+  if (preservedHold) preservedHold.payDeadlineAt = Date.parse("2099-12-31T23:59:59+08:00");
+  const beforeOpen = data.islandEccSignupOpensAt(lockedSaturday) - 1;
+  assert.throws(
+    () => store.reserveSession(signIn.user.id, lockedLate, beforeOpen),
+    new RegExp(data.ISLAND_ECC_SIGNUP_LOCKED_ERROR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+  assert.throws(
+    () => store.joinWaitlist(signIn.user.id, lockedLate.id, beforeOpen),
+    /HYROX sign-up opens Monday at 6 PM HKT/,
+  );
+  const openAt = data.islandEccSignupOpensAt(lockedSaturday);
+  store.signIn("admin@example.test");
+  const lockedHold = store.reserveSession(store.currentUser().id, lockedLate, openAt);
+  assert.equal(lockedHold.payDeadlineAt, data.islandEccNextPayDeadline(lockedSaturday, openAt));
+  assert.throws(
+    () => store.reserveSession(store.currentUser().id, lockedEarly, openAt),
+    /Choose one Island ECC HYROX slot per Saturday/,
+  );
+  store.signIn(signIn.user.email);
+  const lateActivity = store.getActivity("hyrox-quarry-bay");
+  const previousLateCapacity = lateActivity.capacity;
+  lateActivity.capacity = 1;
+  let promoted;
+  try {
+    assert.equal(store.spotsLeft(store.getSession(lockedLate.id)), 0, "same-slot waitlist requires a full Island ECC session");
+    store.signIn("member@example.test");
+    store.joinWaitlist("fixture-member", lockedLate.id, openAt);
+    store.signIn(signIn.user.email);
+    store.sweepCheckpoints(data.islandEccPaymentDeadlineAt(lockedSaturday) + 1);
+    assert.equal(store.getBooking(lockedHold.id).status, "expired");
+    promoted = store.userReservationFor("fixture-member", lockedLate.id);
+  } finally {
+    lateActivity.capacity = previousLateCapacity;
+  }
+  assert.ok(promoted, "waitlist member should be promoted into a reserved booking");
+  assert.equal(promoted.payDeadlineAt, data.islandEccLeftoverPayByAt(lockedSaturday));
+
+  const friday18 = data.islandEccMemberReminderAt(lockedSaturday);
+  store.sweepCheckpoints(friday18);
+  assert.equal(
+    store.notificationsFor("fixture-member")
+      .filter((n) => n.kind === "operational_island_ecc_payment_reminder").length,
+    1,
+  );
+  const collector = store.collectorFor(lockedLate.id);
+  assert.ok(collector, "expected an on-duty collector");
+  assert.equal(
+    store.notificationsFor(collector.id)
+      .filter((n) => n.kind === "operational_island_ecc_collector_finalize_reminder").length,
+    1,
+  );
+  store.sweepCheckpoints(friday18 + 60 * 1000);
+  assert.equal(
+    store.notificationsFor("fixture-member")
+      .filter((n) => n.kind === "operational_island_ecc_payment_reminder").length,
+    1,
+  );
+  store.sweepCheckpoints(data.islandEccLeftoverPayByAt(lockedSaturday) + 1);
+  assert.equal(store.getBooking(promoted.id).status, "expired");
+
+  const markedSaturday = "2026-10-31";
+  const markedSession = store.getSession(`hyrox-quarry-bay-${markedSaturday}`);
+  const markedHold = store.reserveSession(signIn.user.id, markedSession, data.islandEccSignupOpensAt(markedSaturday));
+  store.markBookingPaid(markedHold.id, "PayMe", "MARKED-HOLD");
+  store.sweepCheckpoints(data.islandEccPaymentDeadlineAt(markedSaturday) + 1);
+  assert.equal(store.getBooking(markedHold.id).status, "reserved");
+  markedHold.userId = "__smoke-marked-hold-cleanup__";
+
+  const nudgeSaturday = "2026-11-07";
+  const nudgeSession = store.getSession(`hyrox-quarry-bay-${nudgeSaturday}`);
+  store.signIn("member@example.test");
+  store.reserveSession("fixture-member", nudgeSession, data.islandEccSignupOpensAt(nudgeSaturday));
+  store.signIn(signIn.user.email);
+  const nudgeCollector = store.collectorFor(nudgeSession.id);
+  const nudgeAt = data.islandEccCollectorFinalizeNudgeAt(nudgeSaturday);
+  const nudgeBefore = store.notificationsFor(nudgeCollector.id)
+    .filter((n) => n.kind === "operational_island_ecc_collector_finalize_nudge").length;
+  store.sweepCheckpoints(nudgeAt);
+  assert.equal(
+    store.notificationsFor(nudgeCollector.id)
+      .filter((n) => n.kind === "operational_island_ecc_collector_finalize_nudge").length,
+    nudgeBefore + 1,
+  );
+  store.sweepCheckpoints(nudgeAt + 1);
+  assert.equal(
+    store.notificationsFor(nudgeCollector.id)
+      .filter((n) => n.kind === "operational_island_ecc_collector_finalize_nudge").length,
+    nudgeBefore + 1,
+  );
+
+  const confirmedSaturday = "2026-11-14";
+  const confirmedLate = store.getSession(`hyrox-quarry-bay-${confirmedSaturday}`);
+  const confirmedEarly = store.getSession(`hyrox-quarry-bay-early-${confirmedSaturday}`);
+  store.signIn("admin@example.test");
+  store.reserveSession("fixture-member", confirmedLate, data.islandEccSignupOpensAt(confirmedSaturday));
+  store.confirmGymBooking(confirmedLate.id, "Island ECC confirmed");
+  store.confirmGymBooking(confirmedEarly.id, "Island ECC confirmed");
+  store.signIn(signIn.user.email);
+  const confirmedCollector = store.collectorFor(confirmedLate.id);
+  const confirmedBefore = store.notificationsFor(confirmedCollector.id)
+    .filter((n) => n.kind === "operational_island_ecc_collector_finalize_nudge").length;
+  store.sweepCheckpoints(data.islandEccCollectorFinalizeNudgeAt(confirmedSaturday));
+  assert.equal(
+    store.notificationsFor(confirmedCollector.id)
+      .filter((n) => n.kind === "operational_island_ecc_collector_finalize_nudge").length,
+    confirmedBefore,
+  );
+  assert.equal(
+    data.nextPayDeadline(lockedSaturday, data.islandEccPaymentDeadlineAt(lockedSaturday)),
+    data.finalCheckpointFor(lockedSaturday),
+  );
+  const restoredHold = store.getBooking(r1.id);
+  if (restoredHold && preservedDeadline != null) restoredHold.payDeadlineAt = preservedDeadline;
+  console.log("ok  Island ECC Monday lock, Thursday expiry, and Friday local sweeps");
+}
+{
+  const lockedUi = store.getSession("hyrox-quarry-bay-2026-10-10");
+  const lockedDetail = views.viewActivity(lockedUi.id);
+  assert.match(lockedDetail, /Opens Monday at 6 PM/);
+  assert.doesNotMatch(lockedDetail, /Book &amp; pay|Book & pay/);
+  assert.doesNotMatch(lockedDetail, /form-reserve/);
+  assert.doesNotMatch(lockedDetail, /join-waitlist/);
+  const lockedSunday = data.sundayOf(data.parseISO(lockedUi.dateISO));
+  const currentSunday = data.sundayOf(data.todayLocal());
+  views.scheduleState.weekOffset = Math.round(
+    (lockedSunday.getTime() - currentSunday.getTime()) / (7 * 24 * 60 * 60 * 1000),
+  );
+  views.scheduleState.selected = lockedUi.dateISO;
+  views.scheduleState.filter = "all";
+  assert.match(views.viewSchedule(), /Opens Monday at 6 PM/);
+  const otherDetail = views.viewActivity(otherIslandEccSlot.id);
+  assert.match(otherDetail, /already registered this Saturday/);
+  assert.doesNotMatch(otherDetail, /Book &amp; pay|Book & pay/);
+  assert.doesNotMatch(otherDetail, /join-waitlist/);
+  {
+    const waitlistSaturday = "2026-11-21";
+    const waitlistSession = store.getSession(`hyrox-quarry-bay-${waitlistSaturday}`);
+    if (!waitlistSession) throw new Error("expected a later Island ECC session for waitlist UI");
+    const waitlistActivity = store.getActivity("hyrox-quarry-bay");
+    const previousCapacity = waitlistActivity.capacity;
+    const openAt = data.islandEccSignupOpensAt(waitlistSaturday);
+    const realNow = Date.now;
+    try {
+      store.signIn("admin@example.test");
+      store.reserveSession(store.currentUser().id, waitlistSession, openAt);
+      waitlistActivity.capacity = 1;
+      store.signIn(signIn.user.email);
+      assert.equal(store.spotsLeft(store.getSession(waitlistSession.id)), 0);
+      Date.now = () => openAt;
+      const fullDetail = views.viewActivity(waitlistSession.id);
+      assert.match(fullDetail, /Join waitlist/);
+      assert.match(fullDetail, /data-action="join-waitlist"/);
+      assert.doesNotMatch(fullDetail, /Book &amp; pay|Book & pay/);
+      store.signIn("member@example.test");
+      store.joinWaitlist("fixture-member", waitlistSession.id, openAt);
+      assert.equal(store.waitlistPosition("fixture-member", waitlistSession.id), 1);
+      assert.match(views.viewActivity(waitlistSession.id), /You’re #1 on the waitlist/);
+      store.signIn(signIn.user.email);
+    } finally {
+      Date.now = realNow;
+      waitlistActivity.capacity = previousCapacity;
+    }
+  }
+  const realNow = Date.now;
+  try {
+    Date.now = () => data.islandEccSignupOpensAt("2026-10-10");
+    const thursdayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-10-10");
+    assert.equal(typeof thursdayCheckout, "string");
+    assert.match(thursdayCheckout, /Thursday 6 PM/);
+    Date.now = () => data.islandEccPaymentDeadlineAt("2026-10-10");
+    const fridayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-10-10");
+    assert.equal(typeof fridayCheckout, "string");
+    assert.match(fridayCheckout, /Friday 9 PM/);
+  } finally {
+    Date.now = realNow;
+  }
+  console.log("ok  Island ECC Monday lock and exclusive-slot copy");
+}
 store.markBookingPaid(r1.id, "PayMe", "REF123");
 if (!store.getBooking(r1.id).paymentMarkedAt) throw new Error("payment not marked");
 const tinaNotes = store.notificationsFor("fixture-admin");
@@ -4539,7 +4776,7 @@ if (bookingInMyWeek && !views.viewHome().includes(bookedActivityLink)) {
     && session.dateISO > myWeekEndISO
     && !data.sessionStarted(session));
   if (nextWeekSession) {
-    const nextWeekReservation = store.reserveSession(signIn.user.id, nextWeekSession.id);
+    const nextWeekReservation = store.reserveSession(signIn.user.id, nextWeekSession.id, islandEccOpenNow(nextWeekSession));
     store.markBookingPaid(nextWeekReservation.id, "PayMe", "NEXTWEEK");
     store.signIn("admin@example.test");
     store.confirmBookingPayment(nextWeekReservation.id);
@@ -4820,7 +5057,7 @@ v22PrayerSnapshot.prayers = [
 ];
 mem.set("itc.prototype.v1", JSON.stringify(v22PrayerSnapshot));
 const migratedPrayerState = store.load();
-assert.equal(migratedPrayerState.version, 27);
+assert.equal(migratedPrayerState.version, 28);
 assert.deepEqual(migratedPrayerState.prayers.map((row) => row.id), [
   "legacy-prayer-a",
   "legacy-prayer-b",
@@ -5244,7 +5481,7 @@ for (let version = 9; version <= 23; version++) {
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(fixture));
   const migrated = store.load();
-  assert.equal(migrated.version, 27, `v${version} fixture must reach v27`);
+  assert.equal(migrated.version, 28, `v${version} fixture must reach v27`);
   assert.equal(migrated.bookings.some((row) => row.id === `retired-${version}`), false);
   assert.ok(migrated.bookings.some((row) => row.id === `ecc-${version}`));
   assert.ok(migrated.bookings.some((row) => row.id === `unrelated-${version}`));
@@ -5266,7 +5503,7 @@ console.log("ok  every v9-v23 fixture reaches v27 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(historicalSwimmingV13));
   const repaired = store.load();
-  assert.equal(repaired.version, 27, "the historical Swimming fixture must reach v27");
+  assert.equal(repaired.version, 28, "the historical Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -5292,7 +5529,7 @@ console.log("ok  every v9-v23 fixture reaches v27 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(customizedSwimmingV13));
   const preserved = store.load();
-  assert.equal(preserved.version, 27, "the customized Swimming fixture must reach v27");
+  assert.equal(preserved.version, 28, "the customized Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -6368,7 +6605,7 @@ console.log("ok  reset");
     failures++;
     console.error("FAIL v10 migration must clear session tied to a removed demo user");
   } else console.log("ok  v10 migration clears removed session");
-  if (migrated.version !== 27) {
+  if (migrated.version !== 28) {
     failures++;
     console.error(`FAIL integrated migration must advance version to 25, got ${migrated.version}`);
   } else console.log("ok  integrated migration advances genuine v9 state to v27");
@@ -6390,7 +6627,7 @@ console.log("ok  reset");
   store.load();
   const v14 = JSON.parse(mem.get("itc.prototype.v1"));
   const migratedUser = v14.users.find((user) => user.id === "real-v13-member");
-  if (v14.version !== 27 || !migratedUser) throw new Error("v27 migration lost the genuine member");
+  if (v14.version !== 28 || !migratedUser) throw new Error("v27 migration lost the genuine member");
   for (const field of ["indemnitySignature", "indemnitySignedAt", "indemnityFormVersion", "emergencyRelationship"]) {
     if (!(field in migratedUser) || migratedUser[field] !== null) {
       throw new Error(`v14 migration should initialize ${field} to null`);
@@ -6419,7 +6656,7 @@ console.log("ok  reset");
   v21.bookings = [structuredClone(preservedBooking)];
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v21));
   const migrated = store.load();
-  assert.equal(migrated.version, 27);
+  assert.equal(migrated.version, 28);
   assert.equal(migrated.bookings.some((booking) => booking.id === preservedBooking.id), false,
     "v22 attendance compatibility must run before v24 removes the pooled booking");
   console.log("ok  v21 pooled booking reaches and is retired by v27");
@@ -6436,10 +6673,10 @@ console.log("ok  reset");
   if (paidSessions.length < 3) throw new Error("attendance tests need three future paid sessions");
 
   store.signIn("member@example.test");
-  const dueBooking = store.reserveSession("fixture-member", paidSessions[0].id);
-  const awaitingBooking = store.reserveSession("fixture-member", paidSessions[1].id);
+  const dueBooking = store.reserveSession("fixture-member", paidSessions[0].id, islandEccOpenNow(paidSessions[0]));
+  const awaitingBooking = store.reserveSession("fixture-member", paidSessions[1].id, islandEccOpenNow(paidSessions[1]));
   store.markBookingPaid(awaitingBooking.id, "FPS", "ATTEND-AWAITING");
-  const paidBooking = store.reserveSession("fixture-member", paidSessions[2].id);
+  const paidBooking = store.reserveSession("fixture-member", paidSessions[2].id, islandEccOpenNow(paidSessions[2]));
   store.markBookingPaid(paidBooking.id, "PayMe", "ATTEND-PAID");
   store.signIn("admin@example.test");
   const confirmation = store.confirmBookingPayment(paidBooking.id);
@@ -6832,7 +7069,7 @@ try {
 }
 const tamperReservation = store.reserveSession("giving-member", {
   ...tamperAuthoritySession, price: 1, capacity: 999,
-});
+}, islandEccOpenNow(tamperAuthoritySession));
 const authoritativeTamperSession = store.getSession(tamperAuthoritySession.id);
 if (tamperReservation.snapshot.price !== authoritativeTamperSession.price
     || tamperReservation.snapshot.capacity !== authoritativeTamperSession.capacity) {
@@ -6852,8 +7089,29 @@ for (let i = 0; i < authoritativeTamperSession.capacity; i++) {
 mem.set("itc.prototype.v1", JSON.stringify(beforeFullFixture));
 store.load();
 store.signIn("giving-member@example.test");
+{
+  const fullTarget = store.getSession(tamperAuthoritySession.id);
+  let remaining = store.spotsLeft(fullTarget);
+  if (remaining > 0) {
+    const extra = JSON.parse(mem.get("itc.prototype.v1"));
+    for (let i = 0; i < remaining; i++) {
+      extra.bookings.push({
+        id: `authority-full-extra-${i}`, userId: `authority-user-extra-${i}`,
+        sessionId: tamperAuthoritySession.id, status: "confirmed", createdAt: Date.now(),
+        snapshot: { price: fullTarget.price, capacity: fullTarget.capacity },
+      });
+    }
+    mem.set("itc.prototype.v1", JSON.stringify(extra));
+    store.load();
+    store.signIn("giving-member@example.test");
+  }
+}
 try {
-  store.reserveSession("giving-member", { ...tamperAuthoritySession, capacity: 999 });
+  store.reserveSession(
+    "giving-member",
+    { ...tamperAuthoritySession, capacity: 999 },
+    islandEccOpenNow(tamperAuthoritySession),
+  );
   throw new Error("forged capacity should not bypass an authoritatively full session");
 } catch (err) {
   if (!/Session is full/.test(err.message)) throw err;
@@ -6864,7 +7122,7 @@ beforeFullFixture.bookings = beforeFullFixture.bookings.filter(
 mem.set("itc.prototype.v1", JSON.stringify(beforeFullFixture));
 store.load();
 store.signIn("giving-member@example.test");
-const approvedReservation = store.reserveSession("giving-member", paymentGateSession.id);
+const approvedReservation = store.reserveSession("giving-member", paymentGateSession.id, islandEccOpenNow(paymentGateSession));
 if (approvedReservation.sessionId !== paymentGateSession.id || approvedReservation.status !== "reserved") {
   throw new Error("approved member should reserve a normal authoritative session by ID");
 }
@@ -6984,12 +7242,14 @@ const movedByOwner = store.deferBooking(approvedReservation.id, deferTarget.id);
 if (movedByOwner.userId !== "giving-member" || movedByOwner.status !== "confirmed") {
   throw new Error("approved booking owner should be able to defer their booking");
 }
+const movedDate = store.getSession(movedByOwner.sessionId)?.dateISO;
 const releaseSession = store.upcomingSessions(28).find((session) =>
-  session.kind === "paid" && !data.sessionStarted(session)
+  session.kind === "paid" && !data.sessionStarted(session) && !session.cancelled
   && session.id !== movedByOwner.sessionId
+  && session.dateISO !== movedDate
 );
 if (!releaseSession) throw new Error("authorization regression needs a release session");
-const ownerReservation = store.reserveSession("giving-member", releaseSession);
+const ownerReservation = store.reserveSession("giving-member", releaseSession, islandEccOpenNow(releaseSession));
 store.signIn("giving-other@example.test");
 try {
   store.releaseReservation(ownerReservation.id);
@@ -7148,7 +7408,7 @@ for (const fixture of sourceSnapshots) {
     && !Array.isArray(migrated.paymentPayouts);
   const suppliedPayoutsPreserved = fixture.version !== 12
     || migrated.paymentPayouts["real-admin"]?.fpsPhone === "+852 6000 0000";
-  if (migrated.version !== 27 || suppliedIds.some((id) => !serialized.includes(id))
+  if (migrated.version !== 28 || suppliedIds.some((id) => !serialized.includes(id))
       || !payoutMapValid || !suppliedPayoutsPreserved) {
     failures++;
     console.error(`FAIL genuine v${fixture.version} fixture must reach v27 intact`);
@@ -7190,7 +7450,7 @@ const receiptSession = store.upcomingSessions(14).find(
   (session) => session.kind === "paid" && !data.sessionStarted(session)
 );
 if (!receiptSession) throw new Error("post-migration receipt check needs an upcoming paid session");
-const migratedReservation = store.reserveSession("receipt-member", receiptSession, Date.now());
+const migratedReservation = store.reserveSession("receipt-member", receiptSession, islandEccOpenNow(receiptSession));
 store.markBookingPaid(migratedReservation.id, "FPS", "MIGRATED-RECEIPT", Date.now());
 store.signIn("receipt-admin@example.test");
 const migratedConfirmation = store.confirmBookingPayment(migratedReservation.id, Date.now());
@@ -8126,12 +8386,12 @@ const replacementOtherSlot = store.upcomingSessions(21).find((session) =>
 );
 assert.ok(replacementOtherSlot, "replacement guard needs the other Island ECC slot");
 assert.throws(
-  () => store.reserveSession("replacement-member", confirmedReplacementSession.id),
+  () => store.reserveSession("replacement-member", confirmedReplacementSession.id, islandEccOpenNow(confirmedReplacementSession)),
   /Choose one Island ECC HYROX slot per Saturday/,
   "a confirmed replacement attendee must not reserve the same Island ECC slot again"
 );
 assert.throws(
-  () => store.reserveSession("replacement-member", replacementOtherSlot.id),
+  () => store.reserveSession("replacement-member", replacementOtherSlot.id, islandEccOpenNow(replacementOtherSlot)),
   /Choose one Island ECC HYROX slot per Saturday/,
   "a confirmed replacement attendee must not reserve the other Island ECC slot"
 );
