@@ -2425,9 +2425,9 @@ assert.deepEqual({
   capacity: 30,
   isOpen: true,
 });
-assert.equal(hydratedQuarryBay.photo, "../assets/itc/hyrox.webp");
+assert.equal(hydratedQuarryBay.photo, "../assets/itc/itc-hyrox-mood.webp");
 assert.match(views.viewActivity(hydratedQuarryBay.id),
-  /class="detail-photo" src="\.\.\/assets\/itc\/hyrox\.webp"/);
+  /class="detail-photo" src="\.\.\/assets\/itc\/itc-hyrox-mood\.webp"/);
 
 const appSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
 assert.match(appSource, /form\.dataset\.form === "apply"/);
@@ -7988,7 +7988,7 @@ let detailPhotoError;
 let detailPhotoSrc = "/assets/itc/missing-hyrox.webp";
 let detailPhotoRemoved = false;
 const detailPhoto = {
-  dataset: { photoFallback: "/assets/itc/hyrox.webp" },
+  dataset: { photoFallback: "/assets/itc/itc-hyrox-mood.webp" },
   isConnected: true,
   getAttribute(name) { return name === "src" ? detailPhotoSrc : null; },
   set src(value) { detailPhotoSrc = value; },
@@ -7997,7 +7997,7 @@ const detailPhoto = {
 };
 assert.equal(app.mountDetailPhotoFallback(detailPhoto), true);
 detailPhotoError();
-assert.equal(detailPhotoSrc, "/assets/itc/hyrox.webp", "failed HYROX image must retry the root asset");
+assert.equal(detailPhotoSrc, "/assets/itc/itc-hyrox-mood.webp", "failed HYROX image must retry the root asset");
 detailPhotoError();
 assert.equal(detailPhotoRemoved, true, "a failed HYROX fallback must not remain broken");
 console.log("ok  HYROX detail photo retries a root asset fallback");

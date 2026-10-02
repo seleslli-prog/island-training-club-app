@@ -85,7 +85,7 @@ export const SEED_ACTIVITIES = [
     durationMin: 60,
     location: "10/F, Island ECC, Quarry Bay",
     mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
-    photo: PH + "hyrox.webp",
+    photo: PH + "itc-hyrox-mood.webp",
     blurb:
       "Weekly hybrid race training: ski, sled, burpees and running intervals. Every session is purchased separately at one fixed price.",
     memberNote: "Gym entry fee is included in the session price.",
@@ -103,7 +103,7 @@ export const SEED_ACTIVITIES = [
     durationMin: 60,
     location: "10/F, Island ECC, Quarry Bay",
     mapsQuery: "Island ECC, Quarry Bay, Hong Kong",
-    photo: PH + "hyrox.webp",
+    photo: PH + "itc-hyrox-mood.webp",
     blurb:
       "Weekly hybrid race training: ski, sled, burpees and running intervals. Every session is purchased separately at one fixed price.",
     memberNote: "Gym entry fee is included in the session price.",

@@ -137,7 +137,7 @@ function buildSessionRow(row, templatesById = null) {
     location: venue,
     mapsQuery,
     venue,
-    photo: metadata?.photo || (oneOff ? "../assets/itc/main.webp" : "../assets/itc/hyrox.webp"),
+    photo: metadata?.photo || (oneOff ? "../assets/itc/main.webp" : "../assets/itc/itc-hyrox-mood.webp"),
     blurb: metadata?.blurb || "",
     memberNote: metadata?.memberNote || "",
     capacity: row.capacity,

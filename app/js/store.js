@@ -487,6 +487,12 @@ function migrate() {
     activity.price = 0;
     activity.capacity = null;
   }
+  for (const activity of state.activities) {
+    if (!ISLAND_ECC_HYROX_ACTIVITY_IDS.has(activity.id)) continue;
+    if (String(activity.photo || "").endsWith("hyrox.webp")) {
+      activity.photo = "../assets/itc/itc-hyrox-mood.webp";
+    }
+  }
   for (const event of state.oneOffEvents) {
     if (event.kind !== "free") continue;
     event.requiresRsvp = true;

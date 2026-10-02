@@ -3374,7 +3374,7 @@ if (paidDirectionsSession) {
     console.error("FAIL paid activity should fall back to its location for Get directions");
   } else console.log("ok  paid activity falls back to its location for Get directions");
 }
-if (!paidHtml.includes('data-photo-fallback="/assets/itc/hyrox.webp"')) {
+if (!paidHtml.includes('data-photo-fallback="/assets/itc/itc-hyrox-mood.webp"')) {
   failures++;
   console.error("FAIL paid activity should provide a root asset fallback for its HYROX image");
 } else console.log("ok  paid activity provides a HYROX image fallback");

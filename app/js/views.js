@@ -759,7 +759,7 @@ export function viewActivity(sessionId, options) {
       ? `<div class="banner mt16"><span class="kicker">Leader note</span><p>${esc(s.memberNote)}</p></div>`
       : memberOnlyNote("Leader notes (meet points, routes, kit) are shared with approved members.")
     : "";
-  const photoFallback = s.kind === "paid" ? "/assets/itc/hyrox.webp" : "/assets/itc/main.webp";
+  const photoFallback = s.kind === "paid" ? "/assets/itc/itc-hyrox-mood.webp" : "/assets/itc/main.webp";
   const photo = s.photo || photoFallback;
 
   return `
