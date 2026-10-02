@@ -31,7 +31,11 @@ import {
   donorIdProblem,
 } from "./data.js";
 import { config, supabase, isLive } from "./config.js";
-import { requestGoogleIdCredential, GIS_CANCELLED } from "./google-gis.js";
+import {
+  requestGoogleIdCredential,
+  consumeGoogleRedirectCredential,
+  GIS_CANCELLED,
+} from "./google-gis.js";
 import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
 import {
@@ -4345,6 +4349,23 @@ export async function getCurrentUser() {
 
 const authCallbackUrl = () => new URL("/app/", window.location.origin).toString();
 
+async function createGoogleSupabaseSession(credential) {
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: "google",
+    token: credential.token,
+    nonce: credential.nonce,
+  });
+  if (error) throw error;
+}
+
+export async function completeGoogleSignInFromRedirect() {
+  if (!isLive() || !supabase) return false;
+  const credential = consumeGoogleRedirectCredential();
+  if (!credential) return false;
+  await createGoogleSupabaseSession(credential);
+  return true;
+}
+
 export async function signInWithGoogle() {
   if (!isLive() || !supabase) {
     throw new Error("signInWithGoogle requires SUPABASE_URL and SUPABASE_ANON_KEY");
@@ -4356,12 +4377,8 @@ export async function signInWithGoogle() {
     if (error?.code === GIS_CANCELLED) return;
     throw error;
   }
-  const { error } = await supabase.auth.signInWithIdToken({
-    provider: "google",
-    token: credential.token,
-    nonce: credential.nonce,
-  });
-  if (error) throw error;
+  if (!credential?.token || credential.redirected) return;
+  await createGoogleSupabaseSession(credential);
 }
 
 export async function signInWithMagicLink(email) {

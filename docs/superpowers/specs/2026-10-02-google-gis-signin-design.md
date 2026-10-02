@@ -77,8 +77,10 @@ from Supabase Redirect URLs, because Supabase falls back to Site URL.
 1. Member taps **Continue with Google** (Home or Account).
 2. Control shows **Connecting…**, disables, sets `aria-busy`. Duplicate taps
    do nothing until the attempt finishes (existing `withBusyControl`).
-3. Google’s account picker appears as a GIS popup or prompt on this origin.
-   The document origin does not navigate to `supabase.co`.
+3. Google’s account picker appears as a GIS prompt on this origin, or — when
+   One Tap is skipped (Safari) — Google’s account page with `redirect_uri` on
+   this origin’s `/app/` path. The document origin does not navigate to
+   `supabase.co`.
 4. Member completes Google, or closes the picker.
 5. On success, the existing live `SIGNED_IN` listener hydrates the profile
    (pending members still go to `#/apply` when they have no application).
@@ -159,6 +161,12 @@ Add **Authorized JavaScript origins** (scheme + host, no path):
 - `https://island-training-club-app-git-testing-seles-labs.vercel.app`
 - `https://island-training-club-app-git-feature-hyrox-is-083ff7-seles-labs.vercel.app`
 - `http://127.0.0.1:4173`
+
+Also add Authorized redirect URIs for each origin’s `/app/` path. Safari and
+other browsers that skip GIS One Tap use Google’s OIDC implicit flow back to
+that URL (`response_type=id_token`). Hashed unique Vercel hosts are **not**
+covered by the git-feature alias; add that exact origin before testing a
+unique preview URL.
 
 Leave the existing Authorized redirect URI that points at
 `https://krxbvgyolxvmzgysfjkj.supabase.co/auth/v1/callback` in place so current

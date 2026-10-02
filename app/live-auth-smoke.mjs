@@ -14,6 +14,17 @@ globalThis.localStorage = {
   setItem: (key, value) => mem.set(key, String(value)),
   removeItem: (key) => mem.delete(key),
 };
+const sessionMem = new Map();
+globalThis.sessionStorage = {
+  getItem: (key) => (sessionMem.has(key) ? sessionMem.get(key) : null),
+  setItem: (key, value) => sessionMem.set(key, String(value)),
+  removeItem: (key) => sessionMem.delete(key),
+};
+const googleAssigns = [];
+globalThis.history = {
+  state: null,
+  replaceState() {},
+};
 
 const authUser = {
   id: "live-user-1",
@@ -861,6 +872,8 @@ globalThis.window = {
   SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_ANON_KEY: "test-anon-key",
   GOOGLE_CLIENT_ID: "test-google-client.apps.googleusercontent.com",
+  sessionStorage: globalThis.sessionStorage,
+  history: globalThis.history,
   supabase: { createClient: () => fakeSupabase },
   google: {
     accounts: {
@@ -2482,6 +2495,7 @@ assert.match(appSource, /function consumeAuthCallbackError\(/);
 assert.match(appSource, /bad_oauth_state/);
 assert.match(appSource, /That Google sign-in expired/);
 assert.match(appSource, /preloadGoogleGis/);
+assert.match(appSource, /completeGoogleSignInFromRedirect/);
 assert.doesNotMatch(appSource, /signInWithIdToken/);
 
 await store.setWeekVenue("wnt-2026-08-05", {
@@ -4710,8 +4724,12 @@ globalThis.location = {
   hash: "#/account",
   origin: "https://payment-preview.example",
   pathname: "/feature/payment-system/app/",
+  search: "",
+  assign(href) { googleAssigns.push(href); },
 };
 window.location = globalThis.location;
+window.sessionStorage = globalThis.sessionStorage;
+window.history = globalThis.history;
 
 const directMagicLink = store.signInWithMagicLink("  Runner@Example.com ");
 assert.equal(magicLinkCalls, 1);
@@ -7416,6 +7434,7 @@ googleControl.textContent = "Continue with Google";
 googleControl.dataset = { action: "sign-in-google" };
 googleControl.closest = () => googleControl;
 toastStack.children.length = 0;
+googleAssigns.length = 0;
 const firstGoogleClick = click({ target: googleControl });
 assert.equal(googleControl.disabled, true);
 assert.equal(googleControl.textContent, "Connecting…");
@@ -7425,6 +7444,7 @@ for (let i = 0; i < 40 && idTokenCalls === 0; i++) {
   await new Promise(setImmediate);
 }
 assert.equal(oauthCalls, 0, "Google sign-in must not use the Supabase OAuth redirect");
+assert.equal(googleAssigns.length, 0, "GIS success must not leave this origin");
 assert.equal(idTokenCalls, 1, "pending control must prevent a duplicate store action");
 assert.equal(idTokenOptions?.provider, "google");
 assert.equal(idTokenOptions?.token, "gis-id-token");
@@ -7441,16 +7461,44 @@ assert.equal(toastStack.children[0].getAttribute("role"), "alert");
 gisMode = "cancel";
 idTokenCalls = 0;
 toastStack.children.length = 0;
+googleAssigns.length = 0;
 const cancelGoogleControl = makeElement();
 cancelGoogleControl.textContent = "Continue with Google";
 cancelGoogleControl.dataset = { action: "sign-in-google" };
 cancelGoogleControl.closest = () => cancelGoogleControl;
 await click({ target: cancelGoogleControl });
-assert.equal(idTokenCalls, 0, "cancelled GIS prompt must not create a session");
+assert.equal(idTokenCalls, 0, "skipped GIS prompt must not create a session before Google returns");
+assert.equal(oauthCalls, 0, "Safari/skip fallback must not use the Supabase OAuth redirect");
+assert.equal(googleAssigns.length, 1, "skipped GIS prompt must open Google on this origin");
+assert.match(googleAssigns[0], /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/);
+assert.doesNotMatch(googleAssigns[0], /supabase\.co/);
+const skippedOidc = new URL(googleAssigns[0]);
+assert.equal(skippedOidc.searchParams.get("response_type"), "id_token");
+assert.equal(skippedOidc.searchParams.get("redirect_uri"), "https://payment-preview.example/app/");
+assert.equal(skippedOidc.searchParams.get("client_id"), window.GOOGLE_CLIENT_ID);
 assert.deepEqual(toastStack.children.map((item) => item.textContent), []);
 assert.equal(cancelGoogleControl.disabled, false);
 assert.equal(cancelGoogleControl.textContent, "Continue with Google");
 gisMode = "success";
+
+location.hash = "#id_token=aaa.bbb.ccc&authuser=0";
+globalThis.sessionStorage.setItem("itc.gis.nonce", "oidc-raw-nonce");
+idTokenCalls = 0;
+idTokenOptions = null;
+const redirectedGoogle = store.completeGoogleSignInFromRedirect();
+for (let i = 0; i < 40 && idTokenCalls === 0; i++) {
+  await new Promise(setImmediate);
+}
+assert.equal(idTokenCalls, 1, "OIDC return must create the session with the ID token");
+assert.equal(idTokenOptions?.provider, "google");
+assert.equal(idTokenOptions?.token, "aaa.bbb.ccc");
+assert.equal(idTokenOptions?.nonce, "oidc-raw-nonce");
+assert.equal(globalThis.sessionStorage.getItem("itc.gis.nonce"), null);
+assert.equal(location.hash, "#/home");
+releaseIdToken({ data: {}, error: null });
+assert.equal(await redirectedGoogle, true);
+location.hash = "#/admin";
+
 
 // Exercise a second delegated path: sign-out must also suppress duplicate
 // clicks, recover its control on rejection, and withhold the success toast.

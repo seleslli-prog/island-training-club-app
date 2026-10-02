@@ -2213,6 +2213,7 @@ async function boot() {
   if (isLive()) {
     let bootError = null;
     try {
+      await store.completeGoogleSignInFromRedirect();
       await store.getCurrentUser();
       await store.fetchApplicationForUser(store.currentUser());
       await syncApprovedGoogleAvatar({ ifMissing: true });

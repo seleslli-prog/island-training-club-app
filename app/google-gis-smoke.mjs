@@ -25,10 +25,34 @@ const documentStub = {
   },
 };
 
+const sessionMem = new Map();
+const assignedHrefs = [];
+globalThis.sessionStorage = {
+  getItem: (key) => (sessionMem.has(key) ? sessionMem.get(key) : null),
+  setItem: (key, value) => sessionMem.set(key, String(value)),
+  removeItem: (key) => sessionMem.delete(key),
+};
+globalThis.history = {
+  state: null,
+  replaceState(_state, _title, url) {
+    const next = String(url || "");
+    const hashAt = next.indexOf("#");
+    if (hashAt >= 0) globalThis.window.location.hash = next.slice(hashAt);
+  },
+};
 globalThis.document = documentStub;
 globalThis.window = {
   GOOGLE_CLIENT_ID: "test-google-client.apps.googleusercontent.com",
   document: documentStub,
+  sessionStorage: globalThis.sessionStorage,
+  history: globalThis.history,
+  location: {
+    origin: "https://feature.example",
+    pathname: "/app/",
+    search: "",
+    hash: "#/account",
+    assign(href) { assignedHrefs.push(href); },
+  },
 };
 
 let initializeOptions = null;
@@ -38,6 +62,9 @@ function resetGisStub() {
   initializeOptions = null;
   promptCalls = 0;
   promptHandler = null;
+  assignedHrefs.length = 0;
+  sessionMem.clear();
+  window.location.hash = "#/account";
 }
 const googleId = {
   initialize(options) {
@@ -72,6 +99,11 @@ assert.equal(gis.GIS_CANCELLED, "GIS_CANCELLED");
 assert.equal(gis.GIS_ORIGIN_ERROR, "Google sign-in isn’t available on this URL.");
 assert.equal(gis.GIS_LOAD_ERROR, "Google sign-in couldn’t start.");
 assert.equal(gis.googleClientId(), "test-google-client.apps.googleusercontent.com");
+assert.equal(gis.googleRedirectUri(), "https://feature.example/app/");
+assert.equal(
+  gis.googleOriginErrorMessage("https://hashed.example"),
+  "Google sign-in isn’t available on this URL. (https://hashed.example)",
+);
 
 {
   const expected = createHash("sha256").update("abc", "utf8").digest("hex");
@@ -92,6 +124,7 @@ assert.equal(gis.googleClientId(), "test-google-client.apps.googleusercontent.co
   assert.equal(typeof result.nonce, "string");
   assert.ok(result.nonce.length > 0);
   assert.equal(options.nonce, await gis.hashGoogleNonce(result.nonce));
+  assert.equal(assignedHrefs.length, 0, "GIS success must not redirect");
   console.log("ok  requestGoogleIdCredential initialize options and success token");
 }
 
@@ -105,8 +138,19 @@ assert.equal(gis.googleClientId(), "test-google-client.apps.googleusercontent.co
     isDismissedMoment: () => false,
     getNotDisplayedReason: () => "",
   });
-  await assert.rejects(pending, (err) => err?.code === gis.GIS_CANCELLED);
-  console.log("ok  skipped prompt rejects GIS_CANCELLED");
+  const result = await pending;
+  assert.equal(result.redirected, true);
+  assert.equal(assignedHrefs.length, 1);
+  const oidc = new URL(assignedHrefs[0]);
+  assert.equal(oidc.origin, "https://accounts.google.com");
+  assert.equal(oidc.pathname, "/o/oauth2/v2/auth");
+  assert.equal(oidc.searchParams.get("response_type"), "id_token");
+  assert.equal(oidc.searchParams.get("redirect_uri"), "https://feature.example/app/");
+  assert.equal(oidc.searchParams.get("client_id"), window.GOOGLE_CLIENT_ID);
+  assert.doesNotMatch(assignedHrefs[0], /supabase\.co/);
+  assert.equal(typeof oidc.searchParams.get("nonce"), "string");
+  assert.ok(oidc.searchParams.get("nonce").length > 0);
+  console.log("ok  skipped prompt falls back to origin OIDC redirect");
 }
 
 {
@@ -119,8 +163,11 @@ assert.equal(gis.googleClientId(), "test-google-client.apps.googleusercontent.co
     isDismissedMoment: () => false,
     getNotDisplayedReason: () => "unregistered_origin",
   });
-  await assert.rejects(pending, (err) => err?.message === gis.GIS_ORIGIN_ERROR);
-  console.log("ok  unregistered_origin rejects GIS_ORIGIN_ERROR");
+  await assert.rejects(pending, (err) => (
+    err?.message === "Google sign-in isn’t available on this URL. (https://feature.example)"
+  ));
+  assert.equal(assignedHrefs.length, 0, "unregistered origin must not open Google");
+  console.log("ok  unregistered_origin rejects GIS_ORIGIN_ERROR with this origin");
 }
 
 {
@@ -132,6 +179,18 @@ assert.equal(gis.googleClientId(), "test-google-client.apps.googleusercontent.co
   );
   window.GOOGLE_CLIENT_ID = previous;
   console.log("ok  missing client ID rejects configuration error");
+}
+
+{
+  resetGisStub();
+  window.sessionStorage.setItem(gis.GIS_NONCE_KEY, "raw-nonce");
+  window.location.hash = "#id_token=aaa.bbb.ccc&authuser=0";
+  const credential = gis.consumeGoogleRedirectCredential();
+  assert.deepEqual(credential, { token: "aaa.bbb.ccc", nonce: "raw-nonce" });
+  assert.equal(window.sessionStorage.getItem(gis.GIS_NONCE_KEY), null);
+  assert.equal(window.location.hash, "#/home");
+  assert.equal(gis.consumeGoogleRedirectCredential(), null);
+  console.log("ok  consumeGoogleRedirectCredential reads fragment ID token");
 }
 
 {

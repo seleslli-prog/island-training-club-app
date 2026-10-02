@@ -98,6 +98,18 @@ Google sign-in uses Google Identity Services on the current origin, then
 Supabase `signInWithIdToken`. The browser must **not** open
 `https://krxbvgyolxvmzgysfjkj.supabase.co/auth/v1/callback`.
 
+Google binds the client to **hostnames**, not Git SHAs. A hashed Vercel
+preview such as `island-training-club-l74iadepr-seles-labs.vercel.app` is a
+different origin from the git-feature alias even when both deployments are
+the same commit. Google does not accept `*.vercel.app`. If that exact host
+is missing from Authorized JavaScript origins, Continue with Google toasts
+`Google sign-in isn’t available on this URL.` and includes the current
+origin. Test on the git-feature alias (already listed below), or add the
+hashed host before using a unique preview URL.
+
+Safari often skips GIS One Tap. In that case the app opens Google’s account
+picker with `redirect_uri` on **this** origin (`/app/`), not supabase.co.
+
 In Google Cloud Console, on the existing Web client, add these **Authorized
 JavaScript origins** (no path):
 
@@ -107,9 +119,19 @@ JavaScript origins** (no path):
 - `https://island-training-club-app-git-feature-hyrox-is-083ff7-seles-labs.vercel.app`
 - `http://127.0.0.1:4173`
 
+Add matching **Authorized redirect URIs** (GIS One Tap does not use them;
+the Safari/OIDC fallback does):
+
+- `https://islandtrainingclub.app/app/`
+- `https://island-training-club.vercel.app/app/`
+- `https://island-training-club-app-git-testing-seles-labs.vercel.app/app/`
+- `https://island-training-club-app-git-feature-hyrox-is-083ff7-seles-labs.vercel.app/app/`
+- `http://127.0.0.1:4173/app/`
+
 Leave the existing Authorized redirect URI that points at Supabase’s
 `/auth/v1/callback` in place. GIS does not use it. Do not rotate the client
-ID or secret. Do not disable the Google provider in Supabase.
+ID or secret. Do not disable the Google provider in Supabase. Remove any
+`/api/auth/callback/google` URI — this app has no Auth.js route.
 
 The public Google client ID is `window.GOOGLE_CLIENT_ID` in `app/index.html`.
 The client secret stays only in Supabase.
