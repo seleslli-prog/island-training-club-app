@@ -6699,7 +6699,13 @@ console.log("ok  reset");
     { id: "roster-expected-booking", userId: "roster-expected", sessionId: paidSessions[0].id, status: "confirmed", paymentMarkedAt: 10, paidAt: 20, attendedAt: null, attendedBy: null, snapshot: { name: "ITC HYROX", dateISO: paidSessions[0].dateISO, time: paidSessions[0].time, price: 180 } },
   );
   localStorage.setItem("itc.prototype.v1", JSON.stringify(rosterRaw));
-  store.load();
+  const originalLoadNow = Date.now;
+  try {
+    Date.now = () => data.islandEccSignupOpensAt(paidSessions[0].dateISO);
+    store.load();
+  } finally {
+    Date.now = originalLoadNow;
+  }
   const rosterAdminHtml = await views.viewAdmin("payments");
   const rosterStart = rosterAdminHtml.indexOf(`data-payment-roster="${paidSessions[0].id}"`);
   const rosterEnd = rosterAdminHtml.indexOf(`<!-- payment-roster-end:${paidSessions[0].id} -->`, rosterStart);
@@ -7161,7 +7167,16 @@ mem.set("itc.prototype.v1", JSON.stringify({
   ...JSON.parse(mem.get("itc.prototype.v1")),
   users: givingFixture.users,
 }));
-store.load();
+const reloadAtPaymentGateTime = () => {
+  const originalNow = Date.now;
+  try {
+    Date.now = () => data.islandEccSignupOpensAt(paymentGateSession.dateISO);
+    store.load();
+  } finally {
+    Date.now = originalNow;
+  }
+};
+reloadAtPaymentGateTime();
 try {
   store.markBookingPaid(approvedReservation.id, "FPS", "BLOCKED-PAYMENT");
   throw new Error("declined reservation owner should not mark payment paid");
@@ -7173,7 +7188,7 @@ mem.set("itc.prototype.v1", JSON.stringify({
   ...JSON.parse(mem.get("itc.prototype.v1")),
   users: givingFixture.users,
 }));
-store.load();
+reloadAtPaymentGateTime();
 store.signIn("giving-member@example.test");
 if (!store.markBookingPaid(approvedReservation.id, "FPS", "APPROVED-PAYMENT")) {
   throw new Error("approved booking owner should retain self-service payment access");
