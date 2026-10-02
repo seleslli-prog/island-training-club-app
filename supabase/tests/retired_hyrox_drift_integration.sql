@@ -160,6 +160,12 @@ select pg_temp.drift_assert(bool_and(has_function_privilege('authenticated',f,'E
  'public.set_operational_attendance(uuid,boolean)',
  'public.suppress_opted_out_hyrox_payment_reminder()']) f;
 select pg_temp.drift_assert(exists(select 1 from public.operational_sessions where id='hyrox-quarry-bay-2098-01-04'));
+select set_config(
+  'itc.clock',
+  ((((select session_date from public.operational_sessions where id='hyrox-quarry-bay-2098-01-04') - 5)
+    + time '18:00') at time zone 'Asia/Hong_Kong')::text,
+  true
+);
 select pg_temp.drift_assert((public.reserve_operational_session('hyrox-quarry-bay-2098-01-04')).session_id='hyrox-quarry-bay-2098-01-04');
 reset role;
 -- Independent inherited PUBLIC grants must also be closed; no default ACL fix.

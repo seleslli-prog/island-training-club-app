@@ -567,6 +567,11 @@ begin
 
   -- Island ECC direct reservation, payment, receipt, waitlist, gym and
   -- replacement behavior remains available through the same public RPCs.
+  perform set_config(
+    'itc.clock',
+    (((v_ecc_date - 5) + time '18:00') at time zone 'Asia/Hong_Kong')::text,
+    true
+  );
   perform set_config('request.jwt.claim.sub', v_member::text, true);
   set local role authenticated;
   select id into v_ecc_booking_id

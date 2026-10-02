@@ -2002,6 +2002,11 @@ begin
   reset role;
 
   -- Quarry Bay remains separately bookable but cannot overlap the pool.
+  perform set_config(
+    'itc.clock',
+    (((v_date - 5) + time '18:00') at time zone 'Asia/Hong_Kong')::text,
+    true
+  );
   perform set_config('request.jwt.claim.sub', v_quarry_member::text, true);
   set local role authenticated;
   perform public.reserve_operational_session(v_quarry_session);
