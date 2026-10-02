@@ -28,7 +28,7 @@ For a **clean disposable database only**, replay every repository migration once
 3. `20260808000003_operational_admin_rpcs.sql`
 4. `20260808000004_operational_realtime_seed.sql`
 5. all later migrations in filename order, including the historical pool schema/RPC migrations `20260903000001`–`20260904000002`, attendance `20260909000001`, replacement migrations `20260910000001`–`20260910000006`, free-event migration `20260920000001`, prayer migration `20260921000001`, decision repair `20260921000002`, the immutable retirement boundary `20260922000001`–`20260922000003`, and all subsequent forward migrations;
-6. `20260929000001_island_ecc_hyrox_slots.sql` last.
+6. `20261002000001_island_ecc_signup_windows.sql` last.
 
 Do not skip or rewrite historical files in a clean replay: the retirement migrations depend on the schema they close, and later forward migrations depend on that closed browser boundary.
 
@@ -42,6 +42,10 @@ This change is backend-first. Do not promote a frontend that expects the 9:15 AM
 2. Apply only `20260929000001_island_ecc_hyrox_slots.sql` through the reviewed migration process.
 3. Verify read-only that both active Island ECC templates exist with start times 09:15 and 10:30, duration 60, capacity 30 and price HK$180; future generated sessions match; and no future exact-default 11:00 Island ECC session remains.
 4. Verify the one-slot-per-Saturday guards for reservations, queues and confirmed replacements, then promote the matching frontend artifact.
+
+## Island ECC signup windows
+
+Forward migration `20261002000001_island_ecc_signup_windows.sql` locks both Saturday Island ECC slots until Monday 18:00 HKT of that week, stamps unpaid original holds to Thursday 18:00 HKT, leftover/promoted holds to Friday 21:00 HKT, and sends Friday 18:00 member/collector reminders plus a Friday 21:00 collector finalize nudge. Apply it after `20260929000001`. Do not revive pool reminder RPCs. The sweep job `sweep_operational_deadlines` now promotes Island ECC waitlist rows into reserved bookings and invokes `sweep_island_ecc_reminders`.
 
 ## HYROX pool retirement: backend-first deployment
 

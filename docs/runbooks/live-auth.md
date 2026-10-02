@@ -224,6 +224,9 @@ Supabase Admin; this cleanup does not change the schema or delete live users.
 Island ECC is the only active HYROX venue, with 9:15 AM and 10:30 AM Saturday
 sessions. Both keep the direct paid-session reservation, waitlist, payment,
 receipt, attendance, replacement, collector, and venue-confirmation behavior.
+Sign-up for each Saturday opens Monday at 6 PM HKT; unpaid original holds expire
+Thursday 6 PM HKT; leftover unpaid holders and the collector are reminded Friday
+6 PM HKT; the collector is nudged Friday 9 PM HKT if either slot is not gym-finalized.
 Retained BFT/Midtown pool test records are
 hidden from browser roles, not deleted. Retirement sends no cancellation or
 member notification.

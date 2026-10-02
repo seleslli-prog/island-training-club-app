@@ -83,6 +83,9 @@ assert.equal(isRetiredHyroxNotification({ kind: "payment_confirmed", destination
 assert.equal(isRetiredHyroxNotification({ kind: "payment_confirmed", destination: "#/booking/ecc-booking" }, getBooking), false,
   "Island ECC payment notifications remain visible");
 assert.equal(isRetiredHyroxNotification({ kind: "operational_payment_confirmed", destination: "#/pay/ecc-booking" }, getBooking), false);
+assert.equal(isRetiredHyroxNotification({ kind: "operational_island_ecc_payment_reminder" }, getBooking), false);
+assert.equal(isRetiredHyroxNotification({ kind: "operational_island_ecc_collector_finalize_reminder" }, getBooking), false);
+assert.equal(isRetiredHyroxNotification({ kind: "operational_island_ecc_collector_finalize_nudge" }, getBooking), false);
 assert.equal(isRetiredHyroxNotification({ kind: "event-hyrox-bft-party" }, getBooking, getSession), false);
 
 assert.equal(isRetiredHyroxLegacyRouteId("hyrox-bft"), true);

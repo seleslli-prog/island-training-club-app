@@ -4,6 +4,9 @@
 
 export const RETIRED_HYROX_ACTIVITY_IDS = new Set(["hyrox-bft", "hyrox-midtown"]);
 
+// Island ECC window kinds (operational_island_ecc_payment_reminder,
+// operational_island_ecc_collector_finalize_reminder,
+// operational_island_ecc_collector_finalize_nudge) must never be added here.
 const RETIRED_POOL_NOTIFICATION_KINDS = new Set([
   "hyrox-collector-payment-reminder",
   "hyrox-cycle-cancelled",
