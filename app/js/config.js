@@ -8,6 +8,7 @@
 export const config = {
   url: typeof window !== "undefined" ? window.SUPABASE_URL || null : null,
   anonKey: typeof window !== "undefined" ? window.SUPABASE_ANON_KEY || null : null,
+  googleClientId: typeof window !== "undefined" ? String(window.GOOGLE_CLIENT_ID || "").trim() || null : null,
 };
 
 export const supabase = config.url && config.anonKey && typeof window !== "undefined" && window.supabase

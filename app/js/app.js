@@ -15,6 +15,7 @@ import {
   TAMAR_DEFAULT_MEETING_POINT,
 } from "./venue.js";
 import { syncWebPushSubscription } from "./web-push.js";
+import { preloadGoogleGis } from "./google-gis.js";
 
 const viewEl = document.getElementById("view");
 const navEl = document.getElementById("bottom-nav");
@@ -2293,6 +2294,7 @@ async function boot() {
   // Refresh identity without replacing the current route; only a pending
   // applicant still needs the follow-up redirect to /apply.
   if (isLive() && supabase) {
+    void preloadGoogleGis().catch(() => {});
     supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN") return;
       setTimeout(async () => {

@@ -31,6 +31,7 @@ import {
   donorIdProblem,
 } from "./data.js";
 import { config, supabase, isLive } from "./config.js";
+import { requestGoogleIdCredential, GIS_CANCELLED } from "./google-gis.js";
 import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
 import {
@@ -4348,9 +4349,17 @@ export async function signInWithGoogle() {
   if (!isLive() || !supabase) {
     throw new Error("signInWithGoogle requires SUPABASE_URL and SUPABASE_ANON_KEY");
   }
-  const { error } = await supabase.auth.signInWithOAuth({
+  let credential;
+  try {
+    credential = await requestGoogleIdCredential();
+  } catch (error) {
+    if (error?.code === GIS_CANCELLED) return;
+    throw error;
+  }
+  const { error } = await supabase.auth.signInWithIdToken({
     provider: "google",
-    options: { redirectTo: authCallbackUrl() },
+    token: credential.token,
+    nonce: credential.nonce,
   });
   if (error) throw error;
 }

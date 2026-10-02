@@ -362,6 +362,11 @@ let authCallbackLocked = false;
 let oauthCalls = 0;
 let oauthOptions = null;
 let releaseOAuth = null;
+let idTokenCalls = 0;
+let idTokenOptions = null;
+let releaseIdToken = null;
+let gisMode = "success";
+let gisInitializeOptions = null;
 let magicLinkCalls = 0;
 let magicLinkOptions = null;
 let releaseMagicLink = null;
@@ -462,6 +467,11 @@ const fakeSupabase = {
       oauthCalls++;
       oauthOptions = options;
       return new Promise((resolve) => { releaseOAuth = resolve; });
+    },
+    signInWithIdToken(options) {
+      idTokenCalls++;
+      idTokenOptions = options;
+      return new Promise((resolve) => { releaseIdToken = resolve; });
     },
     signInWithOtp(options) {
       magicLinkCalls++;
@@ -850,8 +860,29 @@ const fakeSupabase = {
 globalThis.window = {
   SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_ANON_KEY: "test-anon-key",
+  GOOGLE_CLIENT_ID: "test-google-client.apps.googleusercontent.com",
   supabase: { createClient: () => fakeSupabase },
+  google: {
+    accounts: {
+      id: {
+        initialize(options) { gisInitializeOptions = options; },
+        prompt(callback) {
+          if (gisMode === "cancel") {
+            callback?.({
+              isSkippedMoment: () => true,
+              isNotDisplayed: () => false,
+              isDismissedMoment: () => false,
+              getNotDisplayedReason: () => "",
+            });
+            return;
+          }
+          gisInitializeOptions?.callback?.({ credential: "gis-id-token" });
+        },
+      },
+    },
+  },
 };
+globalThis.google = globalThis.window.google;
 
 globalThis.fetch = async (url, options = {}) => {
   const parsed = new URL(url);
@@ -2450,6 +2481,8 @@ assert.match(appSource, /store\.clearApplyDraft/);
 assert.match(appSource, /function consumeAuthCallbackError\(/);
 assert.match(appSource, /bad_oauth_state/);
 assert.match(appSource, /That Google sign-in expired/);
+assert.match(appSource, /preloadGoogleGis/);
+assert.doesNotMatch(appSource, /signInWithIdToken/);
 
 await store.setWeekVenue("wnt-2026-08-05", {
   location: "Central Harbourfront — 7pm sharp",
@@ -7388,19 +7421,36 @@ assert.equal(googleControl.disabled, true);
 assert.equal(googleControl.textContent, "Connecting…");
 assert.equal(googleControl.getAttribute("aria-busy"), "true");
 const duplicateGoogleClick = click({ target: googleControl });
-assert.equal(oauthCalls, 1, "pending control must prevent a duplicate store action");
-assert.equal(
-  oauthOptions?.options?.redirectTo,
-  `${location.origin}/app/`,
-  "Google OAuth must use the allowlisted /app/ callback before canonical-root routing"
-);
-releaseOAuth({ error: new Error("OAuth unavailable") });
+for (let i = 0; i < 40 && idTokenCalls === 0; i++) {
+  await new Promise(setImmediate);
+}
+assert.equal(oauthCalls, 0, "Google sign-in must not use the Supabase OAuth redirect");
+assert.equal(idTokenCalls, 1, "pending control must prevent a duplicate store action");
+assert.equal(idTokenOptions?.provider, "google");
+assert.equal(idTokenOptions?.token, "gis-id-token");
+assert.equal(typeof idTokenOptions?.nonce, "string");
+assert.ok(idTokenOptions.nonce.length > 0);
+releaseIdToken({ error: new Error("OAuth unavailable") });
 await Promise.all([firstGoogleClick, duplicateGoogleClick]);
 assert.equal(googleControl.disabled, false);
 assert.equal(googleControl.textContent, "Continue with Google");
 assert.equal(googleControl.hasAttribute("aria-busy"), false);
 assert.deepEqual(toastStack.children.map((item) => item.textContent), ["OAuth unavailable"]);
 assert.equal(toastStack.children[0].getAttribute("role"), "alert");
+
+gisMode = "cancel";
+idTokenCalls = 0;
+toastStack.children.length = 0;
+const cancelGoogleControl = makeElement();
+cancelGoogleControl.textContent = "Continue with Google";
+cancelGoogleControl.dataset = { action: "sign-in-google" };
+cancelGoogleControl.closest = () => cancelGoogleControl;
+await click({ target: cancelGoogleControl });
+assert.equal(idTokenCalls, 0, "cancelled GIS prompt must not create a session");
+assert.deepEqual(toastStack.children.map((item) => item.textContent), []);
+assert.equal(cancelGoogleControl.disabled, false);
+assert.equal(cancelGoogleControl.textContent, "Continue with Google");
+gisMode = "success";
 
 // Exercise a second delegated path: sign-out must also suppress duplicate
 // clicks, recover its control on rejection, and withhold the success toast.

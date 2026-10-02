@@ -92,10 +92,32 @@ canonical root without reloading. The previous Vercel hostnames and exact
 retained so authentication callbacks are not discarded; hash routes remain
 browser-side.
 
-## Authentication redirect URLs
+## Google sign-in (Identity Services)
 
-Google OAuth and email magic links deliberately request the allowlisted
-`/app/` callback trampoline on the current origin:
+Google sign-in uses Google Identity Services on the current origin, then
+Supabase `signInWithIdToken`. The browser must **not** open
+`https://krxbvgyolxvmzgysfjkj.supabase.co/auth/v1/callback`.
+
+In Google Cloud Console, on the existing Web client, add these **Authorized
+JavaScript origins** (no path):
+
+- `https://islandtrainingclub.app`
+- `https://island-training-club.vercel.app`
+- `https://island-training-club-app-git-testing-seles-labs.vercel.app`
+- `https://island-training-club-app-git-feature-hyrox-is-083ff7-seles-labs.vercel.app`
+- `http://127.0.0.1:4173`
+
+Leave the existing Authorized redirect URI that points at Supabase’s
+`/auth/v1/callback` in place. GIS does not use it. Do not rotate the client
+ID or secret. Do not disable the Google provider in Supabase.
+
+The public Google client ID is `window.GOOGLE_CLIENT_ID` in `app/index.html`.
+The client secret stays only in Supabase.
+
+## Email magic-link redirect URLs
+
+Email magic links still request the allowlisted `/app/` callback trampoline
+on the current origin:
 
 ```js
 new URL("/app/", window.location.origin).toString()
@@ -103,11 +125,12 @@ new URL("/app/", window.location.origin).toString()
 
 In Supabase Dashboard → Authentication → URL Configuration, set the Site URL
 to `https://island-training-club.vercel.app/` and add the exact production
-callback `https://island-training-club.vercel.app/app/` to Redirect URLs.
-Vercel then redirects that callback to the canonical root while preserving its
-query string. Preview and production domains are different origins, so add
-every deployed preview URL that will be tested. A missing or mismatched
-trailing `/app/` path causes an OAuth or magic-link callback to return to an
+callback `https://islandtrainingclub.app/app/` and
+`https://island-training-club.vercel.app/app/` to Redirect URLs for **email**
+links. Vercel then redirects that callback to the canonical root while
+preserving its query string. Preview and production domains are different
+origins, so add every deployed preview URL that will be tested. A missing or
+mismatched trailing `/app/` path causes a magic-link callback to return to an
 unapproved URL.
 
 For local authentication testing, also add `http://127.0.0.1:4173/app/` (and
