@@ -225,6 +225,46 @@ export function hktEventStartMs(dateISO, time) {
   return Date.parse(`${dateISO}T${normalizedTime}+08:00`);
 }
 
+function shiftIsoDate(isoDate, days) {
+  const [year, month, day] = String(isoDate).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function islandEccClockAt(sessionDateISO, daysBefore, hhmm) {
+  return Date.parse(`${shiftIsoDate(sessionDateISO, daysBefore)}T${hhmm}:00+08:00`);
+}
+
+export function islandEccSignupOpensAt(sessionDateISO) {
+  return islandEccClockAt(sessionDateISO, -5, "18:00");
+}
+
+export function islandEccPaymentDeadlineAt(sessionDateISO) {
+  return islandEccClockAt(sessionDateISO, -2, "18:00");
+}
+
+export function islandEccLeftoverPayByAt(sessionDateISO) {
+  return islandEccClockAt(sessionDateISO, -1, "21:00");
+}
+
+export function islandEccMemberReminderAt(sessionDateISO) {
+  return islandEccClockAt(sessionDateISO, -1, "18:00");
+}
+
+export function islandEccCollectorFinalizeNudgeAt(sessionDateISO) {
+  return islandEccClockAt(sessionDateISO, -1, "21:00");
+}
+
+export function islandEccSignupOpen(sessionDateISO, now = Date.now()) {
+  return now >= islandEccSignupOpensAt(sessionDateISO);
+}
+
+export function islandEccNextPayDeadline(sessionDateISO, now = Date.now()) {
+  const thursday = islandEccPaymentDeadlineAt(sessionDateISO);
+  return now < thursday ? thursday : islandEccLeftoverPayByAt(sessionDateISO);
+}
+
+export const ISLAND_ECC_SIGNUP_LOCKED_ERROR = "HYROX sign-up opens Monday at 6 PM HKT.";
+
 export function todayLocal() {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -382,7 +422,7 @@ export function sessionStarted(s) {
 
 export function findSession(activities, sessionId) {
   // sessionId = `${activityId}-${YYYY-MM-DD}`; split off the date part
-  const match = sessionId.match(/^(.*)-(\d{4}-\d{2}-\d{2})$/);
+  const match = String(sessionId || "").match(/^(.*)-(\d{4}-\d{2}-\d{2})$/);
   if (!match) return null;
   const [, activityId, dateISO] = match;
   const act = activities.find((a) => a.id === activityId);
@@ -563,6 +603,9 @@ export const WEB_PUSH_OPS_KINDS = Object.freeze([
   "operational_session_cancelled_no_defer",
   "operational_session_venue_updated",
   "community_announcement_published",
+  "operational_island_ecc_payment_reminder",
+  "operational_island_ecc_collector_finalize_reminder",
+  "operational_island_ecc_collector_finalize_nudge",
 ]);
 
 const NOTIFICATION_DESTINATIONS = new Map([
@@ -585,6 +628,9 @@ const NOTIFICATION_DESTINATIONS = new Map([
   ["giving_campaign_published", "#/giving"],
   ["community_announcement_published", "#/community/announcements"],
   ["community_announcement_audit", "#/community/announcements"],
+  ["operational_island_ecc_payment_reminder", "#/account/payments"],
+  ["operational_island_ecc_collector_finalize_reminder", "#/admin/payments"],
+  ["operational_island_ecc_collector_finalize_nudge", "#/admin/payments"],
   ["welcome", "#/account"],
 ]);
 
