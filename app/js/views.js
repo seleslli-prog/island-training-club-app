@@ -1075,6 +1075,24 @@ function communityHome() {
       <h1 class="display">${esc(communityHeading(user))}</h1>
       <p class="subcopy mt8">Island Training Club is a Hong Kong training community with a Christian foundation — open to everyone. Training is the doorway; find your next way to connect.</p>
 
+      <div class="community-section-head"><h2>Ways to connect</h2></div>
+      <div class="community-action-grid">
+        <a class="community-action-card" href="#/community/prayers">
+          <span class="community-action-icon">${ICONS.heart}</span>
+          <div>
+            <h3>Prayer</h3>
+            <p>Share privately with our leaders.</p>
+          </div>
+        </a>
+        <a class="community-action-card" href="#/community/fellowship">
+          <span class="community-action-icon">${ICONS.people}</span>
+          <div>
+            <h3>Fellowship</h3>
+            <p>Small groups and community life.</p>
+          </div>
+        </a>
+      </div>
+
       <section class="community-feature" aria-labelledby="next-connection-title">
         <span class="kicker">Socials</span>
         <h2 id="next-connection-title">Connect beyond training</h2>
@@ -1096,20 +1114,6 @@ function communityHome() {
           <p>${esc(announcement.lead)}</p>
         </a>` : `
         <div class="community-announcement-preview empty">No announcements yet.</div>`}
-
-      <div class="community-section-head"><h2>Ways to connect</h2></div>
-      <div class="community-action-grid">
-        <a class="community-action-card" href="#/community/prayers">
-          <span class="community-action-icon">${ICONS.heart}</span>
-          <h3>Prayer</h3>
-          <p>Share privately with our leaders.</p>
-        </a>
-        <a class="community-action-card" href="#/community/fellowship">
-          <span class="community-action-icon">${ICONS.people}</span>
-          <h3>Fellowship</h3>
-          <p>Small groups and community life.</p>
-        </a>
-      </div>
 
       <div class="community-section-head"><h2>Explore</h2></div>
       <nav class="community-explore" aria-label="Explore the ITC community">
@@ -1145,8 +1149,7 @@ function communityAbout() {
     <div class="section-head"><h2>Culture</h2></div>
     <div class="card"><div class="card-body prose">
       ${CULTURE.map((c) => `<h3>${esc(c.title)}</h3><p>${esc(c.body)}</p>`).join("")}
-    </div></div>
-    <p class="muted small mt16">Community copy is draft placeholder text for review with ITC leadership.</p>`;
+    </div></div>`;
 }
 
 const PRAYER_STATUS_LABELS = {
