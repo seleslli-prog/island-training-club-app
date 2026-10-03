@@ -1350,11 +1350,6 @@ document.addEventListener("click", async (e) => {
       break;
     }
 
-    case "connect-interest":
-      // Stub for fellowship/meal sign-ups — the real flow will notify leaders.
-      toast(`Noted — a leader will reach out about ${el.dataset.topic}`);
-      break;
-
     case "giving-amount": {
       const input = document.getElementById("give-amount");
       if (input) input.value = el.dataset.amount;

@@ -255,6 +255,10 @@ input, select, textarea { font: inherit; }
 
 .kicker.dim { color: var(--muted); }
 
+h1.kicker {
+  margin-bottom: 0;
+}
+
 .display {
   margin: 8px 0 0;
   font-family: var(--font-display);
@@ -1737,6 +1741,12 @@ img.detail-photo[src*="itc-hyrox-mood"] {
 .stack { display: grid; gap: 12px; margin-top: 12px; }
 
 .anniversary-story { margin-top: 18px; }
+.anniversary-story > h2 {
+  margin: 8px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
 .anniversary-story .anniversary-hero {
   display: flex;
   align-items: center;

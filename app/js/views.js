@@ -1033,7 +1033,7 @@ function anniversaryStoryMarkup() {
   return `
     <article class="anniversary-story">
       <div class="kicker">${esc(fmtDay(announcement.postedAt))} · ITC Anniversary</div>
-      <h1 class="display sm">${esc(announcement.title)}.</h1>
+      <h2>${esc(announcement.title)}.</h2>
       <p class="subcopy mt8">${esc(announcement.lead)}</p>
       <div class="anniversary-hero">
         <strong aria-label="2 years">2<span>yrs</span></strong>
@@ -1137,8 +1137,8 @@ function communityHome() {
 function communityAbout() {
   return `
     <a class="back-link" href="#/community">← Community</a>
-    <div class="kicker mt16">Community · About Island Training Club</div>
-    <h1 class="display sm">More than a workout.</h1>
+    <h1 class="kicker mt16">About Island Training Club</h1>
+    <h2 class="display sm">More than a workout.</h2>
     <p class="subcopy mt8">Island Training Club is a Hong Kong training community with a Christian foundation — open to everyone.</p>
     <div class="section-head"><h2>Leaders</h2></div>
     <div class="stack">
@@ -1232,8 +1232,7 @@ async function communityPrayers() {
     && ["member", "admin", "superadmin", "super_admin"].includes(user.role);
   const intro = `
     <a class="back-link" href="#/community">← Community</a>
-    <div class="kicker mt16">Community · Prayers</div>
-    <h1 class="display sm">Prayers.</h1>
+    <h1 class="display sm mt16">Prayers.</h1>
     <p class="subcopy mt8">We pray for each other — injuries, exams, work, family, anything. Send a request and the leaders will pray with you this week; you’re also welcome to pray along.</p>`;
   if (!approved) {
     const gateCopy = user
@@ -1280,8 +1279,7 @@ async function communityPrayers() {
 function communityFellowship() {
   return `
     <a class="back-link" href="#/community">← Community</a>
-    <div class="kicker mt16">Community · Fellowship</div>
-    <h1 class="display sm">Fellowship.</h1>
+    <h1 class="display sm mt16">Fellowship.</h1>
     <p class="subcopy mt8">Sessions are where we train; fellowship is where we become friends. Whatever you believe, you’re welcome at every one of these.</p>
     <div class="card mt16"><div class="card-body prose">
       <h3>Small groups</h3>
@@ -1290,24 +1288,25 @@ function communityFellowship() {
       <p>Many of us worship at Island Evangelical Community Church on Sundays. Come along and sit with the ITC crowd — services are at 9:30 AM, 11:30 AM and 3:30 PM.</p>
       <h3>First-timers</h3>
       <p>New to church entirely? Say so at any session and a leader will happily walk you through what to expect — zero pressure, zero jargon.</p>
-    </div></div>
-    <button class="btn mt16" type="button" data-action="connect-interest" data-topic="fellowship groups">I’m interested — tell me more</button>`;
+    </div></div>`;
+}
+
+function announcementPublishAction() {
+  const user = store.currentUser();
+  if (!user || !isAdminRole(user.role)) return "";
+  return `<a class="btn sm mt16" href="#/admin/announcements/new">Publish announcement</a>`;
 }
 
 function communityAnnouncements() {
-  const user = store.currentUser();
   const anniversary = anniversaryStoryMarkup();
   const published = publishedAnnouncementListMarkup();
-  const adminCompose = user && isAdminRole(user.role)
-    ? `<a class="btn sm mt16" href="#/admin/announcements/new">Publish announcement</a>`
-    : "";
+  const adminCompose = announcementPublishAction();
   if (!anniversary && !published) {
     return `
       <a class="back-link" href="#/community">← Community</a>
-      <div class="kicker mt16">Community · Announcements</div>
-      <h1 class="display sm">Announcements.</h1>
-      ${adminCompose}
-      <div class="empty mt16">No announcements yet.</div>`;
+      <h1 class="display sm mt16">Announcements.</h1>
+      <div class="empty mt16">No announcements yet.</div>
+      ${adminCompose}`;
   }
   const publishedSection = published
     ? `<div class="section-head mt24"><h2>Club news</h2></div>
@@ -1315,10 +1314,10 @@ function communityAnnouncements() {
     : "";
   return `
     <a class="back-link" href="#/community">← Community</a>
-    <div class="kicker mt16">Community · Announcements</div>
-    ${adminCompose}
+    <h1 class="display sm mt16">Announcements.</h1>
     ${anniversary}
-    ${publishedSection}`;
+    ${publishedSection}
+    ${adminCompose}`;
 }
 
 export async function viewAdminAnnouncementCompose() {
