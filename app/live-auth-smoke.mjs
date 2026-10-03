@@ -379,6 +379,7 @@ let idTokenOptions = null;
 let releaseIdToken = null;
 let gisMode = "success";
 let gisInitializeOptions = null;
+let gisPromptCalls = 0;
 let magicLinkCalls = 0;
 let magicLinkOptions = null;
 let releaseMagicLink = null;
@@ -881,6 +882,7 @@ globalThis.window = {
       id: {
         initialize(options) { gisInitializeOptions = options; },
         prompt(callback) {
+          gisPromptCalls += 1;
           if (gisMode === "cancel") {
             callback?.({
               isSkippedMoment: () => true,
@@ -2495,7 +2497,7 @@ assert.match(appSource, /store\.clearApplyDraft/);
 assert.match(appSource, /function consumeAuthCallbackError\(/);
 assert.match(appSource, /bad_oauth_state/);
 assert.match(appSource, /That Google sign-in expired/);
-assert.match(appSource, /preloadGoogleGis/);
+assert.doesNotMatch(appSource, /preloadGoogleGis/);
 assert.match(appSource, /completeGoogleSignInFromRedirect/);
 assert.doesNotMatch(appSource, /signInWithIdToken/);
 
@@ -7432,67 +7434,47 @@ approvedProfiles.find((item) => item.id === "approved-member").role = "member";
 location.hash = "#/admin";
 await windowListeners.get("hashchange")();
 
-// Delegated async controls expose exact progress copy, suppress a duplicate
-// action, and recover without a success toast when the store rejects.
+// Delegated Google sign-in uses exactly one full-page OIDC redirect,
+// suppresses a duplicate click while the first redirect is pending, and
+// never initializes GIS or creates a Supabase session in the current page.
 const googleControl = makeElement();
 googleControl.textContent = "Continue with Google";
 googleControl.dataset = { action: "sign-in-google" };
 googleControl.closest = () => googleControl;
 toastStack.children.length = 0;
 googleAssigns.length = 0;
+idTokenCalls = 0;
 const firstGoogleClick = click({ target: googleControl });
 assert.equal(googleControl.disabled, true);
 assert.equal(googleControl.textContent, "Connecting…");
 assert.equal(googleControl.getAttribute("aria-busy"), "true");
 const duplicateGoogleClick = click({ target: googleControl });
-for (let i = 0; i < 40 && idTokenCalls === 0; i++) {
-  await new Promise(setImmediate);
-}
-assert.equal(oauthCalls, 0, "Google sign-in must not use the Supabase OAuth redirect");
-assert.equal(googleAssigns.length, 0, "GIS success must not leave this origin");
-assert.equal(idTokenCalls, 1, "pending control must prevent a duplicate store action");
-assert.equal(idTokenOptions?.provider, "google");
-assert.equal(idTokenOptions?.token, "gis-id-token");
-assert.equal(typeof idTokenOptions?.nonce, "string");
-assert.ok(idTokenOptions.nonce.length > 0);
-releaseIdToken({ error: new Error("OAuth unavailable") });
 await Promise.all([firstGoogleClick, duplicateGoogleClick]);
+assert.equal(oauthCalls, 0, "Google sign-in must not use the Supabase OAuth redirect");
+assert.equal(idTokenCalls, 0, "redirect mode must not create a session before Google returns");
+assert.equal(googleAssigns.length, 1, "one click must produce one Google redirect");
+assert.match(googleAssigns[0], /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/);
+assert.doesNotMatch(googleAssigns[0], /supabase\.co/);
+const googleOidc = new URL(googleAssigns[0]);
+assert.equal(googleOidc.searchParams.get("response_type"), "id_token");
+assert.equal(googleOidc.searchParams.get("redirect_uri"), "https://payment-preview.example/app/");
+assert.equal(googleOidc.searchParams.get("client_id"), window.GOOGLE_CLIENT_ID);
+const googleRawNonce = globalThis.sessionStorage.getItem("itc.gis.nonce");
+assert.equal(typeof googleRawNonce, "string");
+assert.ok(googleRawNonce.length > 0);
+assert.equal(
+  googleOidc.searchParams.get("nonce"),
+  createHash("sha256").update(googleRawNonce, "utf8").digest("hex"),
+  "OIDC nonce must be the SHA-256 hash so signInWithIdToken matches the ID token"
+);
+assert.notEqual(googleOidc.searchParams.get("nonce"), googleRawNonce);
 assert.equal(googleControl.disabled, false);
 assert.equal(googleControl.textContent, "Continue with Google");
 assert.equal(googleControl.hasAttribute("aria-busy"), false);
-assert.deepEqual(toastStack.children.map((item) => item.textContent), ["OAuth unavailable"]);
-assert.equal(toastStack.children[0].getAttribute("role"), "alert");
-
-gisMode = "cancel";
-idTokenCalls = 0;
-toastStack.children.length = 0;
-googleAssigns.length = 0;
-const cancelGoogleControl = makeElement();
-cancelGoogleControl.textContent = "Continue with Google";
-cancelGoogleControl.dataset = { action: "sign-in-google" };
-cancelGoogleControl.closest = () => cancelGoogleControl;
-await click({ target: cancelGoogleControl });
-assert.equal(idTokenCalls, 0, "skipped GIS prompt must not create a session before Google returns");
-assert.equal(oauthCalls, 0, "Safari/skip fallback must not use the Supabase OAuth redirect");
-assert.equal(googleAssigns.length, 1, "skipped GIS prompt must open Google on this origin");
-assert.match(googleAssigns[0], /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/);
-assert.doesNotMatch(googleAssigns[0], /supabase\.co/);
-const skippedOidc = new URL(googleAssigns[0]);
-assert.equal(skippedOidc.searchParams.get("response_type"), "id_token");
-assert.equal(skippedOidc.searchParams.get("redirect_uri"), "https://payment-preview.example/app/");
-assert.equal(skippedOidc.searchParams.get("client_id"), window.GOOGLE_CLIENT_ID);
-const skippedRawNonce = globalThis.sessionStorage.getItem("itc.gis.nonce");
-assert.equal(typeof skippedRawNonce, "string");
-assert.ok(skippedRawNonce.length > 0);
-assert.equal(
-  skippedOidc.searchParams.get("nonce"),
-  createHash("sha256").update(skippedRawNonce, "utf8").digest("hex"),
-  "OIDC nonce must be the SHA-256 hash so signInWithIdToken matches the ID token"
-);
-assert.notEqual(skippedOidc.searchParams.get("nonce"), skippedRawNonce);
 assert.deepEqual(toastStack.children.map((item) => item.textContent), []);
-assert.equal(cancelGoogleControl.disabled, false);
-assert.equal(cancelGoogleControl.textContent, "Continue with Google");
+assert.equal(gisInitializeOptions, null, "pure redirect must not initialize GIS");
+assert.equal(gisPromptCalls, 0, "pure redirect must not invoke a GIS prompt");
+
 gisMode = "success";
 
 location.hash = "#id_token=aaa.bbb.ccc&authuser=0";

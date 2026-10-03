@@ -37,7 +37,6 @@ import { config, supabase, isLive } from "./config.js";
 import {
   requestGoogleIdCredential,
   consumeGoogleRedirectCredential,
-  GIS_CANCELLED,
 } from "./google-gis.js";
 import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
@@ -4443,13 +4442,7 @@ export async function signInWithGoogle() {
   if (!isLive() || !supabase) {
     throw new Error("signInWithGoogle requires SUPABASE_URL and SUPABASE_ANON_KEY");
   }
-  let credential;
-  try {
-    credential = await requestGoogleIdCredential();
-  } catch (error) {
-    if (error?.code === GIS_CANCELLED) return;
-    throw error;
-  }
+  const credential = await requestGoogleIdCredential();
   if (!credential?.token || credential.redirected) return;
   await createGoogleSupabaseSession(credential);
 }
