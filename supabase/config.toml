@@ -30,3 +30,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/send-web-push/index.ts"
+
+[functions.send-email-receipt]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/send-email-receipt/index.ts"

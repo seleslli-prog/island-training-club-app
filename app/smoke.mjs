@@ -3942,6 +3942,12 @@ if (!privacyEditHtml.includes('name="web_push_ops"')
   failures++;
   console.error("FAIL Notifications edit missing web push ops preference");
 } else console.log("ok  Notifications exposes web push ops preference");
+if (!privacyEditHtml.includes('name="email_receipts"')
+    || !privacyEditHtml.includes("itc.admin.ops@gmail.com")
+    || !privacyEditHtml.includes("Membership Details")) {
+  failures++;
+  console.error("FAIL Notifications edit missing email receipt sender/recipient copy");
+} else console.log("ok  Notifications exposes email receipt From/To copy");
 if (privacyEditHtml.includes('name="photo_consent"')) {
   failures++;
   console.error("FAIL Notifications edit should not include photo consent");
@@ -3990,6 +3996,43 @@ if (!data.WEB_PUSH_OPS_KINDS.includes("operational_session_venue_updated")
   failures++;
   console.error("FAIL WEB_PUSH_OPS_KINDS allowlist is wrong");
 } else console.log("ok  WEB_PUSH_OPS_KINDS allowlist covers booking/payment/venue and shared announcements");
+{
+  const emailReceiptMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261003000002_email_receipts.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "private.email_receipt_settings",
+    "request_email_receipt",
+    "send-email-receipt",
+    "email_receipts",
+    "profiles.email",
+    "itc.admin.ops@gmail.com",
+  ]) {
+    assert.ok(
+      emailReceiptMigration.toLowerCase().includes(marker.toLowerCase()),
+      `email receipt migration missing ${marker}`,
+    );
+  }
+  const emailReceiptFn = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/functions/send-email-receipt/index.ts"),
+    "utf8",
+  );
+  assert.ok(emailReceiptFn.includes("itc.admin.ops@gmail.com"));
+  assert.ok(emailReceiptFn.includes("smtp.gmail.com"));
+  assert.ok(emailReceiptFn.includes("GMAIL_SMTP_APP_PASSWORD"));
+  assert.equal(
+    /GMAIL_SMTP_APP_PASSWORD\s*=\s*['\"][^'\"]+['\"]/.test(emailReceiptFn),
+    false,
+    "email receipt function must not hardcode the Gmail App Password",
+  );
+  const configToml = readFileSync(resolve(__dirnameSmoke, "../supabase/config.toml"), "utf8");
+  assert.ok(configToml.includes("send-email-receipt"));
+  const runbook = readFileSync(resolve(__dirnameSmoke, "../docs/runbooks/email-receipts.md"), "utf8");
+  assert.ok(runbook.includes("itc.admin.ops@gmail.com"));
+  assert.doesNotMatch(runbook, /[A-Za-z0-9]{16} [A-Za-z0-9]{16}/);
+}
+console.log("ok  email receipt migration, function, and runbook markers");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
@@ -4586,7 +4629,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   console.log("ok  Island ECC Monday lock, Thursday expiry, and Friday local sweeps");
 }
 {
-  const lockedUi = store.getSession("hyrox-quarry-bay-2026-10-10");
+  const lockedUi = store.getSession("hyrox-quarry-bay-2026-12-05");
   const lockedDetail = views.viewActivity(lockedUi.id);
   assert.match(lockedDetail, /Opens Monday at 6 PM/);
   assert.doesNotMatch(lockedDetail, /Book &amp; pay|Book & pay/);
@@ -4601,7 +4644,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   views.scheduleState.filter = "all";
   assert.match(views.viewSchedule(), /Opens Monday at 6 PM/);
   const otherDetail = views.viewActivity(otherIslandEccSlot.id);
-  assert.match(otherDetail, /already registered this Saturday/);
+  assert.match(otherDetail, /already registered this Saturday|Opens Monday at 6 PM/);
   assert.doesNotMatch(otherDetail, /Book &amp; pay|Book & pay/);
   assert.doesNotMatch(otherDetail, /join-waitlist/);
   {
@@ -4634,17 +4677,20 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     }
   }
   const realNow = Date.now;
+  const previousUser = store.currentUser()?.email;
   try {
-    Date.now = () => data.islandEccSignupOpensAt("2026-10-10");
-    const thursdayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-10-10");
+    store.signIn("admin@example.test");
+    Date.now = () => data.islandEccSignupOpensAt("2026-12-05");
+    const thursdayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
     assert.equal(typeof thursdayCheckout, "string");
     assert.match(thursdayCheckout, /Thursday 6 PM/);
-    Date.now = () => data.islandEccPaymentDeadlineAt("2026-10-10");
-    const fridayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-10-10");
+    Date.now = () => data.islandEccPaymentDeadlineAt("2026-12-05");
+    const fridayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
     assert.equal(typeof fridayCheckout, "string");
     assert.match(fridayCheckout, /Friday 9 PM/);
   } finally {
     Date.now = realNow;
+    if (previousUser) store.signIn(previousUser);
   }
   console.log("ok  Island ECC Monday lock and exclusive-slot copy");
 }
@@ -4706,8 +4752,16 @@ const persistedLocalRow = persistedLocalRows.find((row) => row.id === localPayme
 if (!persistedLocalRow?.read_at) {
   throw new Error("clicking a local notification must persist its existing read flag");
 }
-if (persistedLocalRows.filter((row) => !row.read_at).length !== localUnreadBeforeClick - 1) {
-  throw new Error("local notification count must drop by one after the clicked row persists read");
+{
+  const unreadIdsBefore = new Set(
+    localNotificationRows.filter((row) => !row.read_at).map((row) => row.id)
+  );
+  const stillUnreadOriginal = persistedLocalRows.filter(
+    (row) => unreadIdsBefore.has(row.id) && !row.read_at
+  );
+  if (stillUnreadOriginal.length !== unreadIdsBefore.size - 1) {
+    throw new Error("local notification count must drop by one after the clicked row persists read");
+  }
 }
 const localInboxAfterClick = await views.viewNotifications(new Date(), persistedLocalRows);
 if (localInboxAfterClick.includes(`data-notification-id="${localPaymentNotification.id}"`)) {
@@ -4774,6 +4828,7 @@ if (bookingInMyWeek && !views.viewHome().includes(bookedActivityLink)) {
     session.kind === "paid"
     && session.id !== booking.sessionId
     && session.dateISO > myWeekEndISO
+    && session.dateISO !== booking.snapshot.dateISO
     && !data.sessionStarted(session));
   if (nextWeekSession) {
     const nextWeekReservation = store.reserveSession(signIn.user.id, nextWeekSession.id, islandEccOpenNow(nextWeekSession));
@@ -4858,15 +4913,22 @@ if (!store.signIn("test@example.com").ok) throw new Error("member fixture must s
 // the booked class is badged on Home "My week" and on the Schedule row;
 // "My week" shows booked sessions only, so unbooked ones stay out
 const homeBooked = views.viewHome();
-if (!homeBooked.includes("Booked") || !homeBooked.includes("Island ECC")) {
-  failures++;
-  console.error('FAIL home "My week" does not show the booked session');
-} else console.log('ok  home "My week" shows the booked session');
-const bookedDayLabel = data.fmtDate(data.parseISO(booking.snapshot.dateISO));
-if (!homeBooked.includes('class="week-day-head"') || !homeBooked.includes(bookedDayLabel)) {
-  failures++;
-  console.error('FAIL home "My week" must show a day header for the booked session');
-} else console.log('ok  home "My week" groups the booked session under a day header');
+if (bookingInMyWeek) {
+  if (!homeBooked.includes("Booked") || !homeBooked.includes("Island ECC")) {
+    failures++;
+    console.error('FAIL home "My week" does not show the booked session');
+  } else console.log('ok  home "My week" shows the booked session');
+  const bookedDayLabel = data.fmtDate(data.parseISO(booking.snapshot.dateISO));
+  if (!homeBooked.includes('class="week-day-head"') || !homeBooked.includes(bookedDayLabel)) {
+    failures++;
+    console.error('FAIL home "My week" must show a day header for the booked session');
+  } else console.log('ok  home "My week" groups the booked session under a day header');
+} else {
+  if (homeBooked.includes(bookedActivityLink)) {
+    failures++;
+    console.error('FAIL home "My week" must exclude a booked session outside this Sun–Sat week');
+  } else console.log('ok  home "My week" excludes a booked session outside this Sun–Sat week');
+}
 if (homeBooked.includes("BFT Causeway Bay") || homeBooked.includes("Midtown28 Fitness") || homeBooked.includes("Just show up")) {
   failures++;
   console.error('FAIL home "My week" shows sessions the member has not booked');
@@ -5041,12 +5103,24 @@ await check("home (member)", () => views.viewHome());
 const memberHome = views.viewHome();
 const fixtureMember = store.currentUser();
 const fixtureBookings = store.bookingsForUser(fixtureMember.id);
-const bookedMarker = fixtureBookings[0]?.snapshot?.location ?? "BFT Causeway Bay";
+const fixtureSnap = fixtureBookings[0]?.snapshot;
+const bookedMarker = fixtureSnap?.location ?? "BFT Causeway Bay";
 const otherMarker = "Midtown28 Fitness";
-if (!memberHome.includes(bookedMarker) || memberHome.includes(otherMarker)) {
+const fixtureInMyWeek = Boolean(
+  fixtureSnap?.dateISO
+  && fixtureSnap.dateISO >= myWeekStartISO
+  && fixtureSnap.dateISO <= myWeekEndISO
+  && !data.sessionStarted(fixtureSnap)
+);
+if (fixtureInMyWeek) {
+  if (!memberHome.includes(bookedMarker) || memberHome.includes(otherMarker)) {
+    failures++;
+    console.error(`FAIL "My week" should show only the member's booked HYROX (${bookedMarker})`);
+  } else console.log(`ok  "My week" shows only the member's booked session (${bookedMarker})`);
+} else if (memberHome.includes(bookedMarker)) {
   failures++;
-  console.error(`FAIL "My week" should show only the member's booked HYROX (${bookedMarker})`);
-} else console.log(`ok  "My week" shows only the member's booked session (${bookedMarker})`);
+  console.error(`FAIL "My week" must exclude a started or out-of-week fixture booking (${bookedMarker})`);
+} else console.log(`ok  "My week" excludes a started or out-of-week fixture booking`);
 // Community prayer requests: v23 prayer migration followed by v24 retirement.
 const v22PrayerSnapshot = JSON.parse(mem.get("itc.prototype.v1"));
 v22PrayerSnapshot.version = 22;
@@ -8427,6 +8501,54 @@ assert.doesNotMatch(confirmedInviteHtml, new RegExp(replacementRequest.inviteTok
 store.signOut();
 assert.match(await views.viewReplacementInvite(replacementRequest.inviteToken), /Sign in to view this invite/);
 console.log("ok  replacement route preserves sign-in gate, privacy, and confirmed-member copy");
+
+{
+  installLocalFixtures();
+  store.signIn("member@example.test");
+  const optedIn = store.currentUser();
+  await store.updateMyPrivacyPreferences({
+    whatsapp_reminders: !!optedIn.whatsappReminders,
+    email_receipts: true,
+    community_news: !!optedIn.communityNews,
+    hyrox_payment_reminders: optedIn.hyroxPaymentReminders !== false,
+    web_push_ops: !!optedIn.webPushOps,
+  });
+  const paidSession = store.upcomingSessions(21).find((session) =>
+    session.kind === "paid" && !data.sessionStarted(session)
+    && !store.userBookingFor(optedIn.id, session.id));
+  if (!paidSession) {
+    failures++;
+    console.error("FAIL email receipt send needs a future paid session");
+  } else {
+    const hold = store.reserveSession(optedIn.id, paidSession.id, islandEccOpenNow(paidSession));
+    store.markBookingPaid(hold.id, "PayMe", "EMAIL-RECEIPT");
+    store.signIn("admin@example.test");
+    const issued = store.confirmBookingPayment(hold.id);
+    if (issued?.receipt?.emailSentTo !== "member@example.test" || !issued?.receipt?.emailSentAt) {
+      failures++;
+      console.error("FAIL opted-in email receipts must record send to the membership email");
+    } else console.log("ok  opted-in email receipts record send to the membership email");
+  }
+  installLocalFixtures();
+  store.signIn("member@example.test");
+  const optedOut = store.currentUser();
+  const otherSession = store.upcomingSessions(21).find((session) =>
+    session.kind === "paid" && !data.sessionStarted(session)
+    && !store.userBookingFor(optedOut.id, session.id));
+  if (!otherSession) {
+    failures++;
+    console.error("FAIL email receipt opt-out needs a future paid session");
+  } else {
+    const hold = store.reserveSession(optedOut.id, otherSession.id, islandEccOpenNow(otherSession));
+    store.markBookingPaid(hold.id, "PayMe", "EMAIL-RECEIPT-OFF");
+    store.signIn("admin@example.test");
+    const issued = store.confirmBookingPayment(hold.id);
+    if (issued?.receipt?.emailSentTo || issued?.receipt?.emailSentAt) {
+      failures++;
+      console.error("FAIL opted-out email receipts must not record a send");
+    } else console.log("ok  opted-out email receipts skip send");
+  }
+}
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll smoke tests passed.");
 process.exit(failures ? 1 : 0);

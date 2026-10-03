@@ -2221,11 +2221,22 @@ export function confirmBookingPayment(bookingId, now = Date.now()) {
     line: `${b.snapshot.name} — ${fmtDate(b.snapshot.dateISO)} ${fmtTime(b.snapshot.time)}`,
   };
   state.receipts.push(receipt);
+  queueReceiptEmail(receipt, now);
   notify(b.userId, "payment-confirmed",
     `Payment confirmed — you're booked for ${b.snapshot.name} · ${fmtDate(b.snapshot.dateISO)}.`,
     `#/booking/${b.id}`);
   save();
   return { booking: b, receipt };
+}
+
+function queueReceiptEmail(receipt, now = Date.now()) {
+  const payer = paymentUserById(receipt.userId)
+    || state.users.find((candidate) => candidate.id === receipt.userId);
+  if (!payer?.emailReceipts) return;
+  const to = String(payer.email || "").trim();
+  if (!to.includes("@")) return;
+  receipt.emailSentTo = to;
+  receipt.emailSentAt = now;
 }
 
 // Releasing an unpaid reservation is member self-service; confirmed booking

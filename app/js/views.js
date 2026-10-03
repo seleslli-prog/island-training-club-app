@@ -1873,6 +1873,7 @@ async function accountNotificationsEdit(user) {
       <label class="check"><input type="checkbox" name="hyrox_payment_reminders" ${hydrated.hyroxPaymentReminders !== false ? "checked" : ""}> HYROX payment reminders</label>
       <p class="muted small">Thursday payment reminders for unpaid HYROX reservations. You can still check payment status in the app.</p>
       <label class="check"><input type="checkbox" name="email_receipts" ${hydrated.emailReceipts ? "checked" : ""}> Email receipts</label>
+      <p class="muted small">When a receipt is issued, send it from itc.admin.ops@gmail.com to the email on Membership Details. Off by default. Local mode records the send without contacting Gmail.</p>
       <label class="check"><input type="checkbox" name="community_news" ${hydrated.communityNews ? "checked" : ""}> Community news</label>
       <label class="check"><input type="checkbox" name="web_push_ops" ${hydrated.webPushOps ? "checked" : ""}> Web push for bookings, venue &amp; announcements</label>
       <p class="muted small">Browser alerts for booking, payment, and venue updates (live mode, HTTPS). Off by default. iPhone needs Add to Home Screen. In-app inbox still works either way.</p>

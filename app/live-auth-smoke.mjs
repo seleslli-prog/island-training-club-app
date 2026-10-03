@@ -4364,6 +4364,9 @@ if (/name="whatsapp_reminders"[^>]*checked/.test(privacyEdit)) {
 if (!/name="email_receipts"[^>]*checked/.test(privacyEdit)) {
   throw new Error("Live privacy edit route should prefill checked email receipts");
 }
+if (!privacyEdit.includes("itc.admin.ops@gmail.com") || !privacyEdit.includes("Membership Details")) {
+  throw new Error("Live email receipts copy must name the Gmail sender and membership email");
+}
 if (!/name="community_news"[^>]*checked/.test(privacyEdit)) {
   throw new Error("Live privacy edit route should prefill checked community news");
 }
