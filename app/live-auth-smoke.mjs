@@ -2,6 +2,7 @@
 // Run directly with: node app/live-auth-smoke.mjs
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7476,6 +7477,15 @@ const skippedOidc = new URL(googleAssigns[0]);
 assert.equal(skippedOidc.searchParams.get("response_type"), "id_token");
 assert.equal(skippedOidc.searchParams.get("redirect_uri"), "https://payment-preview.example/app/");
 assert.equal(skippedOidc.searchParams.get("client_id"), window.GOOGLE_CLIENT_ID);
+const skippedRawNonce = globalThis.sessionStorage.getItem("itc.gis.nonce");
+assert.equal(typeof skippedRawNonce, "string");
+assert.ok(skippedRawNonce.length > 0);
+assert.equal(
+  skippedOidc.searchParams.get("nonce"),
+  createHash("sha256").update(skippedRawNonce, "utf8").digest("hex"),
+  "OIDC nonce must be the SHA-256 hash so signInWithIdToken matches the ID token"
+);
+assert.notEqual(skippedOidc.searchParams.get("nonce"), skippedRawNonce);
 assert.deepEqual(toastStack.children.map((item) => item.textContent), []);
 assert.equal(cancelGoogleControl.disabled, false);
 assert.equal(cancelGoogleControl.textContent, "Continue with Google");

@@ -148,8 +148,11 @@ assert.equal(
   assert.equal(oidc.searchParams.get("redirect_uri"), "https://feature.example/app/");
   assert.equal(oidc.searchParams.get("client_id"), window.GOOGLE_CLIENT_ID);
   assert.doesNotMatch(assignedHrefs[0], /supabase\.co/);
-  assert.equal(typeof oidc.searchParams.get("nonce"), "string");
-  assert.ok(oidc.searchParams.get("nonce").length > 0);
+  const storedNonce = window.sessionStorage.getItem(gis.GIS_NONCE_KEY);
+  assert.equal(typeof storedNonce, "string");
+  assert.ok(storedNonce.length > 0);
+  assert.equal(oidc.searchParams.get("nonce"), await gis.hashGoogleNonce(storedNonce));
+  assert.notEqual(oidc.searchParams.get("nonce"), storedNonce);
   console.log("ok  skipped prompt falls back to origin OIDC redirect");
 }
 

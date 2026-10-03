@@ -81,6 +81,8 @@ export function buildGoogleOidcUrl({ clientId, nonce }) {
   url.searchParams.set("redirect_uri", googleRedirectUri());
   url.searchParams.set("response_type", "id_token");
   url.searchParams.set("scope", "openid email profile");
+  // Google copies this into the ID token. Supabase hashes the raw nonce
+  // before comparing, so this must be the SHA-256 hex — not the raw value.
   url.searchParams.set("nonce", nonce);
   url.searchParams.set("prompt", "select_account");
   return url.toString();
@@ -192,10 +194,10 @@ export async function requestGoogleIdCredential() {
   if (!clientId) throw new Error("signInWithGoogle requires GOOGLE_CLIENT_ID");
   const nonce = createGoogleNonce();
   persistNonce(nonce);
+  const nonceHash = await hashGoogleNonce(nonce);
   await preloadGoogleGis().catch(() => {});
   const api = gisApi();
   if (api?.initialize && api.prompt) {
-    const nonceHash = await hashGoogleNonce(nonce);
     const prompted = await tryGisPrompt(api, clientId, nonce, nonceHash);
     if (prompted?.token) {
       clearNonce();
@@ -206,6 +208,6 @@ export async function requestGoogleIdCredential() {
       throw originUnavailableError();
     }
   }
-  navigateTo(buildGoogleOidcUrl({ clientId, nonce }));
+  navigateTo(buildGoogleOidcUrl({ clientId, nonce: nonceHash }));
   return { redirected: true };
 }
