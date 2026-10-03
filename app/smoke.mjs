@@ -211,7 +211,7 @@ function assertPrimaryNav(user, expected, label) {
 }
 
 const freshV27State = store.load();
-assert.equal(freshV27State.version, 28, "fresh local state must use the v28 schema");
+assert.equal(freshV27State.version, 30, "fresh local state must use the v30 schema");
 assert.equal(data.SEED_ACTIVITIES.some(
   (activity) => ["hyrox-bft", "hyrox-midtown"].includes(activity.id)
 ), false, "fresh activity seeds must not contain the retired BFT/Midtown pool");
@@ -371,7 +371,7 @@ localStorage.setItem("itc.prototype.v1", JSON.stringify({
   duty: {},
 }));
 const renamedState = store.load();
-assert.equal(renamedState.version, 28, "legacy state must advance through the current migrations");
+assert.equal(renamedState.version, 30, "legacy state must advance through the current migrations");
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").hyroxPaymentReminders, true);
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").webPushOps, false);
 assert.equal(renamedState.hyroxCycles["legacy-cycle"]?.collectorPaymentReminderSentAt ?? null, null);
@@ -502,6 +502,8 @@ store.resetLocalData();
     replacementConfirmedBy: null,
     cancelledAt: null,
     cancelledSource: null,
+    sessionReminderTomorrowSentAt: null,
+    sessionReminderMorningSentAt: null,
   };
   const expectedEccReceipt = structuredClone(v23PoolFixture.receipts[2]);
   const expectedUnrelatedBooking = {
@@ -511,6 +513,8 @@ store.resetLocalData();
     replacementConfirmedBy: null,
     cancelledAt: null,
     cancelledSource: null,
+    sessionReminderTomorrowSentAt: null,
+    sessionReminderMorningSentAt: null,
   };
   const expectedUnrelatedReceipt = structuredClone(v23PoolFixture.receipts[3]);
   const expectedEccDuty = structuredClone(v23PoolFixture.duty.islandEcc);
@@ -521,7 +525,7 @@ store.resetLocalData();
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v23PoolFixture));
   const migrated = store.load();
 
-  assert.equal(migrated.version, 28);
+  assert.equal(migrated.version, 30);
   assert.deepEqual(store.notificationsFor("review-admin"), [expectedEccReview],
     "generic local review notices must retain only proven active ECC provenance");
   assert.equal(store.notificationsFor("review-admin").filter((row) => !row.read).length, 1,
@@ -593,7 +597,7 @@ for (const booking of v19ReplacementFixture.bookings) {
 delete v19ReplacementFixture.replacementRequests;
 localStorage.setItem("itc.prototype.v1", JSON.stringify(v19ReplacementFixture));
 const migratedReplacement = store.load();
-assert.equal(migratedReplacement.version, 28, "replacement migration must preserve data through the current v27 state version");
+assert.equal(migratedReplacement.version, 30, "replacement migration must preserve data through the current v27 state version");
 assert.ok(Array.isArray(migratedReplacement.replacementRequests));
 assert.ok(Array.isArray(migratedReplacement.replacementAudit));
 assert.ok(migratedReplacement.bookings.every((booking) =>
@@ -3937,7 +3941,7 @@ for (const redundantLink of ["#/account/donor", "#/account/history", "#/account/
 for (const sub of [
   "Contact, emergency and donor information",
   "Bookings, donations and orders",
-  "WhatsApp, email and session alerts",
+  "Session alerts, email and web push",
 ]) {
   if (!newMemberAcct.includes(sub)) {
     failures++;
@@ -3961,11 +3965,19 @@ if (!privacyEditHtml.includes('name="hyrox_payment_reminders"')
   failures++;
   console.error("FAIL Notifications edit missing HYROX reminder preference");
 } else console.log("ok  Notifications exposes HYROX reminder preference");
-if (!privacyEditHtml.includes('name="web_push_ops"')
-    || !privacyEditHtml.includes("Web push for bookings, venue &amp; announcements")) {
+if (!privacyEditHtml.includes('name="session_alerts"')
+    || !privacyEditHtml.includes("Session alerts")
+    || privacyEditHtml.includes("WhatsApp session reminders")
+    || privacyEditHtml.includes('name="session_reminders"')) {
   failures++;
-  console.error("FAIL Notifications edit missing web push ops preference");
-} else console.log("ok  Notifications exposes web push ops preference");
+  console.error("FAIL Notifications edit missing Session alerts preference");
+} else console.log("ok  Notifications exposes Session alerts preference");
+if (!privacyEditHtml.includes('name="web_push_ops"')
+    || !privacyEditHtml.includes("> Web push<")
+    || privacyEditHtml.includes("Web push for bookings, venue &amp; announcements")) {
+  failures++;
+  console.error("FAIL Notifications edit missing short Web push preference");
+} else console.log("ok  Notifications exposes short Web push preference");
 if (privacyEditHtml.includes('name="photo_consent"')) {
   failures++;
   console.error("FAIL Notifications edit should not include photo consent");
@@ -3975,8 +3987,12 @@ if (privacyUser?.webPushOps) {
   failures++;
   console.error("FAIL web push ops must default off");
 } else console.log("ok  web push ops defaults off");
+if (privacyUser?.sessionAlerts === false) {
+  failures++;
+  console.error("FAIL session alerts must default on");
+} else console.log("ok  session alerts default on");
 const privacyPreferenceBase = {
-  whatsapp_reminders: !!privacyUser?.whatsappReminders,
+  session_alerts: privacyUser?.sessionAlerts !== false,
   email_receipts: !!privacyUser?.emailReceipts,
   community_news: !!privacyUser?.communityNews,
   web_push_ops: false,
@@ -4004,16 +4020,41 @@ if (store.currentUser()?.webPushOps !== false) {
   failures++;
   console.error("FAIL local Privacy & Notifications update did not clear web push ops");
 } else console.log("ok  local Privacy & Notifications update clears web push ops");
-if (!data.WEB_PUSH_OPS_KINDS.includes("operational_session_venue_updated")
-    || !data.WEB_PUSH_OPS_KINDS.includes("community_announcement_published")
-    || !data.WEB_PUSH_OPS_KINDS.includes("operational_island_ecc_payment_reminder")
-    || !data.WEB_PUSH_OPS_KINDS.includes("operational_island_ecc_collector_finalize_reminder")
-    || !data.WEB_PUSH_OPS_KINDS.includes("operational_island_ecc_collector_finalize_nudge")
-    || data.WEB_PUSH_OPS_KINDS.includes("operational_payment_marked")
-    || data.WEB_PUSH_OPS_KINDS.includes("community_announcement_audit")) {
+if (!data.webPushOpsKindEligible("operational_payment_marked")
+    || !data.webPushOpsKindEligible("community_announcement_audit")
+    || !data.webPushOpsKindEligible("admin_application_submitted")
+    || !data.webPushOpsKindEligible("operational_session_reminder_tomorrow")
+    || !data.webPushOpsKindEligible("welcome")) {
   failures++;
-  console.error("FAIL WEB_PUSH_OPS_KINDS allowlist is wrong");
-} else console.log("ok  WEB_PUSH_OPS_KINDS allowlist covers booking/payment/venue and shared announcements");
+  console.error("FAIL web push must be eligible for every inbox kind for that profile");
+} else console.log("ok  web push is eligible for all profile inbox kinds");
+{
+  const sessionReminderMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261003000001_session_reminders_web_push.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "session_alerts boolean not null default true",
+    "operational_session_reminder_tomorrow",
+    "operational_session_reminder_morning",
+    "sweep_session_reminders",
+    "select true",
+    "session_reminder_tomorrow_sent_at",
+    "session_reminder_morning_sent_at",
+  ]) {
+    assert.ok(
+      sessionReminderMigration.toLowerCase().includes(marker.toLowerCase()),
+      `session reminder migration missing ${marker}`,
+    );
+  }
+  const sessionAlertsPrefMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261003000003_session_alerts_pref.sql"),
+    "utf8",
+  );
+  assert.ok(sessionAlertsPrefMigration.includes("rename column session_reminders to session_alerts"));
+  assert.ok(sessionAlertsPrefMigration.includes("a.session_alerts = false"));
+}
+console.log("ok  session reminder / web-push expansion migration markers");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
@@ -4621,7 +4662,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   console.log("ok  Island ECC Monday lock, Thursday expiry, and Friday local sweeps");
 }
 {
-  const lockedUi = store.getSession("hyrox-quarry-bay-2026-10-10");
+  const lockedUi = store.getSession("hyrox-quarry-bay-2026-12-05");
   const lockedDetail = views.viewActivity(lockedUi.id);
   assert.match(lockedDetail, /Opens Monday at 6 PM/);
   assert.doesNotMatch(lockedDetail, /Book &amp; pay|Book & pay/);
@@ -4636,7 +4677,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   views.scheduleState.filter = "all";
   assert.match(views.viewSchedule(), /Opens Monday at 6 PM/);
   const otherDetail = views.viewActivity(otherIslandEccSlot.id);
-  assert.match(otherDetail, /already registered this Saturday/);
+  assert.match(otherDetail, /already registered this Saturday|Opens Monday at 6 PM/);
   assert.doesNotMatch(otherDetail, /Book &amp; pay|Book & pay/);
   assert.doesNotMatch(otherDetail, /join-waitlist/);
   {
@@ -4669,17 +4710,20 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     }
   }
   const realNow = Date.now;
+  const previousUser = store.currentUser()?.email;
   try {
-    Date.now = () => data.islandEccSignupOpensAt("2026-10-10");
-    const thursdayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-10-10");
+    store.signIn("admin@example.test");
+    Date.now = () => data.islandEccSignupOpensAt("2026-12-05");
+    const thursdayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
     assert.equal(typeof thursdayCheckout, "string");
     assert.match(thursdayCheckout, /Thursday 6 PM/);
-    Date.now = () => data.islandEccPaymentDeadlineAt("2026-10-10");
-    const fridayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-10-10");
+    Date.now = () => data.islandEccPaymentDeadlineAt("2026-12-05");
+    const fridayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
     assert.equal(typeof fridayCheckout, "string");
     assert.match(fridayCheckout, /Friday 9 PM/);
   } finally {
     Date.now = realNow;
+    if (previousUser) store.signIn(previousUser);
   }
   console.log("ok  Island ECC Monday lock and exclusive-slot copy");
 }
@@ -4741,8 +4785,16 @@ const persistedLocalRow = persistedLocalRows.find((row) => row.id === localPayme
 if (!persistedLocalRow?.read_at) {
   throw new Error("clicking a local notification must persist its existing read flag");
 }
-if (persistedLocalRows.filter((row) => !row.read_at).length !== localUnreadBeforeClick - 1) {
-  throw new Error("local notification count must drop by one after the clicked row persists read");
+{
+  const unreadIdsBefore = new Set(
+    localNotificationRows.filter((row) => !row.read_at).map((row) => row.id)
+  );
+  const stillUnreadOriginal = persistedLocalRows.filter(
+    (row) => unreadIdsBefore.has(row.id) && !row.read_at
+  );
+  if (stillUnreadOriginal.length !== unreadIdsBefore.size - 1) {
+    throw new Error("local notification count must drop by one after the clicked row persists read");
+  }
 }
 const localInboxAfterClick = await views.viewNotifications(new Date(), persistedLocalRows);
 if (localInboxAfterClick.includes(`data-notification-id="${localPaymentNotification.id}"`)) {
@@ -4809,6 +4861,7 @@ if (bookingInMyWeek && !views.viewHome().includes(bookedActivityLink)) {
     session.kind === "paid"
     && session.id !== booking.sessionId
     && session.dateISO > myWeekEndISO
+    && session.dateISO !== booking.snapshot.dateISO
     && !data.sessionStarted(session));
   if (nextWeekSession) {
     const nextWeekReservation = store.reserveSession(signIn.user.id, nextWeekSession.id, islandEccOpenNow(nextWeekSession));
@@ -4893,15 +4946,22 @@ if (!store.signIn("test@example.com").ok) throw new Error("member fixture must s
 // the booked class is badged on Home "My week" and on the Schedule row;
 // "My week" shows booked sessions only, so unbooked ones stay out
 const homeBooked = views.viewHome();
-if (!homeBooked.includes("Booked") || !homeBooked.includes("Island ECC")) {
-  failures++;
-  console.error('FAIL home "My week" does not show the booked session');
-} else console.log('ok  home "My week" shows the booked session');
-const bookedDayLabel = data.fmtDate(data.parseISO(booking.snapshot.dateISO));
-if (!homeBooked.includes('class="week-day-head"') || !homeBooked.includes(bookedDayLabel)) {
-  failures++;
-  console.error('FAIL home "My week" must show a day header for the booked session');
-} else console.log('ok  home "My week" groups the booked session under a day header');
+if (bookingInMyWeek) {
+  if (!homeBooked.includes("Booked") || !homeBooked.includes("Island ECC")) {
+    failures++;
+    console.error('FAIL home "My week" does not show the booked session');
+  } else console.log('ok  home "My week" shows the booked session');
+  const bookedDayLabel = data.fmtDate(data.parseISO(booking.snapshot.dateISO));
+  if (!homeBooked.includes('class="week-day-head"') || !homeBooked.includes(bookedDayLabel)) {
+    failures++;
+    console.error('FAIL home "My week" must show a day header for the booked session');
+  } else console.log('ok  home "My week" groups the booked session under a day header');
+} else {
+  if (homeBooked.includes(bookedActivityLink)) {
+    failures++;
+    console.error('FAIL home "My week" must exclude a booked session outside this Sun–Sat week');
+  } else console.log('ok  home "My week" excludes a booked session outside this Sun–Sat week');
+}
 if (homeBooked.includes("BFT Causeway Bay") || homeBooked.includes("Midtown28 Fitness") || homeBooked.includes("Just show up")) {
   failures++;
   console.error('FAIL home "My week" shows sessions the member has not booked');
@@ -5076,12 +5136,24 @@ await check("home (member)", () => views.viewHome());
 const memberHome = views.viewHome();
 const fixtureMember = store.currentUser();
 const fixtureBookings = store.bookingsForUser(fixtureMember.id);
-const bookedMarker = fixtureBookings[0]?.snapshot?.location ?? "BFT Causeway Bay";
+const fixtureSnap = fixtureBookings[0]?.snapshot;
+const bookedMarker = fixtureSnap?.location ?? "BFT Causeway Bay";
 const otherMarker = "Midtown28 Fitness";
-if (!memberHome.includes(bookedMarker) || memberHome.includes(otherMarker)) {
+const fixtureInMyWeek = Boolean(
+  fixtureSnap?.dateISO
+  && fixtureSnap.dateISO >= myWeekStartISO
+  && fixtureSnap.dateISO <= myWeekEndISO
+  && !data.sessionStarted(fixtureSnap)
+);
+if (fixtureInMyWeek) {
+  if (!memberHome.includes(bookedMarker) || memberHome.includes(otherMarker)) {
+    failures++;
+    console.error(`FAIL "My week" should show only the member's booked HYROX (${bookedMarker})`);
+  } else console.log(`ok  "My week" shows only the member's booked session (${bookedMarker})`);
+} else if (memberHome.includes(bookedMarker)) {
   failures++;
-  console.error(`FAIL "My week" should show only the member's booked HYROX (${bookedMarker})`);
-} else console.log(`ok  "My week" shows only the member's booked session (${bookedMarker})`);
+  console.error(`FAIL "My week" must exclude a started or out-of-week fixture booking (${bookedMarker})`);
+} else console.log(`ok  "My week" excludes a started or out-of-week fixture booking`);
 // Community prayer requests: v23 prayer migration followed by v24 retirement.
 const v22PrayerSnapshot = JSON.parse(mem.get("itc.prototype.v1"));
 v22PrayerSnapshot.version = 22;
@@ -5092,7 +5164,7 @@ v22PrayerSnapshot.prayers = [
 ];
 mem.set("itc.prototype.v1", JSON.stringify(v22PrayerSnapshot));
 const migratedPrayerState = store.load();
-assert.equal(migratedPrayerState.version, 28);
+assert.equal(migratedPrayerState.version, 30);
 assert.deepEqual(migratedPrayerState.prayers.map((row) => row.id), [
   "legacy-prayer-a",
   "legacy-prayer-b",
@@ -5516,7 +5588,7 @@ for (let version = 9; version <= 23; version++) {
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(fixture));
   const migrated = store.load();
-  assert.equal(migrated.version, 28, `v${version} fixture must reach v27`);
+  assert.equal(migrated.version, 30, `v${version} fixture must reach v27`);
   assert.equal(migrated.bookings.some((row) => row.id === `retired-${version}`), false);
   assert.ok(migrated.bookings.some((row) => row.id === `ecc-${version}`));
   assert.ok(migrated.bookings.some((row) => row.id === `unrelated-${version}`));
@@ -5538,7 +5610,7 @@ console.log("ok  every v9-v23 fixture reaches v27 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(historicalSwimmingV13));
   const repaired = store.load();
-  assert.equal(repaired.version, 28, "the historical Swimming fixture must reach v27");
+  assert.equal(repaired.version, 30, "the historical Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -5564,7 +5636,7 @@ console.log("ok  every v9-v23 fixture reaches v27 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(customizedSwimmingV13));
   const preserved = store.load();
-  assert.equal(preserved.version, 28, "the customized Swimming fixture must reach v27");
+  assert.equal(preserved.version, 30, "the customized Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -6640,7 +6712,7 @@ console.log("ok  reset");
     failures++;
     console.error("FAIL v10 migration must clear session tied to a removed demo user");
   } else console.log("ok  v10 migration clears removed session");
-  if (migrated.version !== 28) {
+  if (migrated.version !== 30) {
     failures++;
     console.error(`FAIL integrated migration must advance version to 25, got ${migrated.version}`);
   } else console.log("ok  integrated migration advances genuine v9 state to v27");
@@ -6662,7 +6734,7 @@ console.log("ok  reset");
   store.load();
   const v14 = JSON.parse(mem.get("itc.prototype.v1"));
   const migratedUser = v14.users.find((user) => user.id === "real-v13-member");
-  if (v14.version !== 28 || !migratedUser) throw new Error("v27 migration lost the genuine member");
+  if (v14.version !== 30 || !migratedUser) throw new Error("v27 migration lost the genuine member");
   for (const field of ["indemnitySignature", "indemnitySignedAt", "indemnityFormVersion", "emergencyRelationship"]) {
     if (!(field in migratedUser) || migratedUser[field] !== null) {
       throw new Error(`v14 migration should initialize ${field} to null`);
@@ -6691,7 +6763,7 @@ console.log("ok  reset");
   v21.bookings = [structuredClone(preservedBooking)];
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v21));
   const migrated = store.load();
-  assert.equal(migrated.version, 28);
+  assert.equal(migrated.version, 30);
   assert.equal(migrated.bookings.some((booking) => booking.id === preservedBooking.id), false,
     "v22 attendance compatibility must run before v24 removes the pooled booking");
   console.log("ok  v21 pooled booking reaches and is retired by v27");
@@ -7458,7 +7530,7 @@ for (const fixture of sourceSnapshots) {
     && !Array.isArray(migrated.paymentPayouts);
   const suppliedPayoutsPreserved = fixture.version !== 12
     || migrated.paymentPayouts["real-admin"]?.fpsPhone === "+852 6000 0000";
-  if (migrated.version !== 28 || suppliedIds.some((id) => !serialized.includes(id))
+  if (migrated.version !== 30 || suppliedIds.some((id) => !serialized.includes(id))
       || !payoutMapValid || !suppliedPayoutsPreserved) {
     failures++;
     console.error(`FAIL genuine v${fixture.version} fixture must reach v27 intact`);
@@ -8477,6 +8549,50 @@ assert.doesNotMatch(confirmedInviteHtml, new RegExp(replacementRequest.inviteTok
 store.signOut();
 assert.match(await views.viewReplacementInvite(replacementRequest.inviteToken), /Sign in to view this invite/);
 console.log("ok  replacement route preserves sign-in gate, privacy, and confirmed-member copy");
+
+{
+  if (!store.signIn("member@example.test").ok) {
+    failures++;
+    console.error("FAIL session reminder sweep needs the fixture member");
+  } else {
+  const reminderMember = store.currentUser();
+  const rsvpSession = store.upcomingSessions(21).find((session) => store.sessionRequiresRsvp(session) && !data.sessionStarted(session)
+    && !store.userBookingFor(reminderMember.id, session.id));
+  if (!reminderMember || !rsvpSession) {
+    failures++;
+    console.error("FAIL session reminder sweep needs a signed-in member and upcoming RSVP session");
+  } else {
+    const beforeCount = store.notificationsFor(reminderMember.id)
+      .filter((note) => note.kind === "operational_session_reminder_tomorrow").length;
+    const booking = await store.rsvpSession(reminderMember.id, rsvpSession);
+    const dayBefore = data.sessionReminderTomorrowAt(rsvpSession.dateISO) + 60 * 1000;
+    store.sweepSessionReminders(dayBefore);
+    store.sweepSessionReminders(dayBefore);
+    const tomorrowNotes = store.notificationsFor(reminderMember.id)
+      .filter((note) => note.kind === "operational_session_reminder_tomorrow");
+    if (!booking || tomorrowNotes.length !== beforeCount + 1) {
+      failures++;
+      console.error("FAIL session reminders must send one tomorrow ping for an RSVP");
+    } else console.log("ok  session reminders send one tomorrow ping");
+    await store.updateMyPrivacyPreferences({
+      session_alerts: false,
+      email_receipts: !!reminderMember.emailReceipts,
+      community_news: !!reminderMember.communityNews,
+      hyrox_payment_reminders: reminderMember.hyroxPaymentReminders !== false,
+      web_push_ops: !!reminderMember.webPushOps,
+    });
+    const morningAt = data.sessionReminderMorningAt(rsvpSession.dateISO) + 60 * 1000;
+    store.sweepSessionReminders(morningAt);
+    const morningNotes = store.notificationsFor(reminderMember.id)
+      .filter((note) => note.kind === "operational_session_reminder_morning");
+    if (morningNotes.length) {
+      failures++;
+      console.error("FAIL opted-out session reminders must not send the morning ping");
+    } else console.log("ok  session reminder opt-out skips the morning ping");
+    if (booking?.id) await store.withdrawRsvp(booking.id);
+  }
+  }
+}
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll smoke tests passed.");
 process.exit(failures ? 1 : 0);
