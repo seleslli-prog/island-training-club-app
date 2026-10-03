@@ -1454,6 +1454,8 @@ async function hydrateLiveUser(user) {
       guardianPhone: app.guardian_phone ?? user.guardianPhone ?? "",
       mediaConsent: app.photo_consent !== undefined ? !!app.photo_consent : user.mediaConsent,
       whatsappReminders: app.whatsapp_reminders !== undefined ? !!app.whatsapp_reminders : user.whatsappReminders,
+      sessionReminders: app.session_reminders !== undefined
+        ? !!app.session_reminders : user.sessionReminders !== false,
       hyroxPaymentReminders: app.hyrox_payment_reminders !== undefined
         ? !!app.hyrox_payment_reminders : user.hyroxPaymentReminders !== false,
       emailReceipts: app.email_receipts !== undefined ? !!app.email_receipts : user.emailReceipts,
@@ -1869,13 +1871,14 @@ async function accountNotificationsEdit(user) {
       title: "Edit Notifications",
     })}
     <form id="form-privacy" data-form="privacy-preferences" class="card mt16"><div class="card-body">
-      <label class="check"><input type="checkbox" name="whatsapp_reminders" ${hydrated.whatsappReminders ? "checked" : ""}> WhatsApp session reminders</label>
+      <label class="check"><input type="checkbox" name="session_reminders" ${hydrated.sessionReminders !== false ? "checked" : ""}> Session reminders</label>
+      <p class="muted small">Bookings, RSVPs, venue updates, cancellations, plus a reminder the day before and on the morning of your session. In-app, and web push when that is on.</p>
       <label class="check"><input type="checkbox" name="hyrox_payment_reminders" ${hydrated.hyroxPaymentReminders !== false ? "checked" : ""}> HYROX payment reminders</label>
       <p class="muted small">Thursday payment reminders for unpaid HYROX reservations. You can still check payment status in the app.</p>
       <label class="check"><input type="checkbox" name="email_receipts" ${hydrated.emailReceipts ? "checked" : ""}> Email receipts</label>
       <label class="check"><input type="checkbox" name="community_news" ${hydrated.communityNews ? "checked" : ""}> Community news</label>
-      <label class="check"><input type="checkbox" name="web_push_ops" ${hydrated.webPushOps ? "checked" : ""}> Web push for bookings, venue &amp; announcements</label>
-      <p class="muted small">Browser alerts for booking, payment, and venue updates (live mode, HTTPS). Off by default. iPhone needs Add to Home Screen. In-app inbox still works either way.</p>
+      <label class="check"><input type="checkbox" name="web_push_ops" ${hydrated.webPushOps ? "checked" : ""}> Web push</label>
+      <p class="muted small">Browser alerts for notifications in your inbox (live mode, HTTPS). Off by default. iPhone needs Add to Home Screen. In-app inbox still works either way.</p>
       <div class="actions">
         <button class="btn" type="submit">Save changes</button>
         <a class="btn ghost" href="#/account/notifications">Cancel</a>
@@ -1890,11 +1893,11 @@ async function accountNotifications(user) {
     ${profileSubpageHeader({ title: "Notifications" })}
     <div class="card mt16"><div class="card-body">
       <div class="receipt-lines" style="margin-top:0;border-top:0">
-        <div class="line"><span>WhatsApp session reminders</span><strong>${onOff(hydrated.whatsappReminders)}</strong></div>
+        <div class="line"><span>Session reminders</span><strong>${onOff(hydrated.sessionReminders !== false)}</strong></div>
         <div class="line"><span>HYROX payment reminders</span><strong>${onOff(hydrated.hyroxPaymentReminders !== false)}</strong></div>
         <div class="line"><span>Email receipts</span><strong>${onOff(hydrated.emailReceipts)}</strong></div>
         <div class="line"><span>Community news</span><strong>${onOff(hydrated.communityNews)}</strong></div>
-        <div class="line"><span>Web push for bookings, venue &amp; announcements</span><strong>${onOff(!!hydrated.webPushOps)}</strong></div>
+        <div class="line"><span>Web push</span><strong>${onOff(!!hydrated.webPushOps)}</strong></div>
       </div>
       <a class="btn ghost sm mt16" href="#/account/notifications/edit">Edit notification preferences</a>
       <p class="muted small mt16">You can update these communication preferences at any time.</p>

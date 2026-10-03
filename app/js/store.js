@@ -26,6 +26,9 @@ import {
   islandEccMemberReminderAt,
   islandEccCollectorFinalizeNudgeAt,
   ISLAND_ECC_SIGNUP_LOCKED_ERROR,
+  sessionReminderTomorrowAt,
+  sessionReminderMorningAt,
+  isSessionReminderNotification,
   uid,
   normalizeDonorId,
   donorIdProblem,
@@ -54,7 +57,7 @@ const APPLY_DRAFT_VERSION = 2;
 const UNCLAIMED_DRAFT_OWNER = "__unclaimed__";
 const LAST_ROUTE_KEY = "itc.last-route.v1";
 const LAST_ROUTE_VERSION = 1;
-const STATE_VERSION = 28;
+const STATE_VERSION = 29;
 
 const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
@@ -273,6 +276,11 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
   await liveOps.hydrateOperationalState({ force, authenticated });
   await liveOps.startOperationalRealtime();
   if (authenticated) {
+    try {
+      await supabase.rpc("sweep_session_reminders");
+    } catch (err) {
+      console.warn("sweep_session_reminders failed", err);
+    }
     try {
       await refreshLivePublishedAnnouncements();
     } catch (err) {
@@ -502,6 +510,17 @@ function migrate() {
 
   const v = state.version || 0;
   if (v >= STATE_VERSION) return;
+  if (v < 29) {
+    for (const user of state.users) {
+      if (!Object.prototype.hasOwnProperty.call(user, "sessionReminders")) {
+        user.sessionReminders = true;
+      }
+    }
+    for (const booking of state.bookings) {
+      booking.sessionReminderTomorrowSentAt ??= null;
+      booking.sessionReminderMorningSentAt ??= null;
+    }
+  }
   if (v < 27) {
     // v27: Island ECC offers two independently capacitated Saturday slots.
     // Preserve the existing id for the later slot so every stored reference
@@ -2005,8 +2024,16 @@ export function receiptForBooking(bookingId) {
   return receipt && (!retirementBoundaryActive() || !receiptIsRetired(receipt)) ? receipt : null;
 }
 
-function notify(userId, kind, body, link) {
-  state.notifications.push({ id: uid("n"), userId, kind, body, link, read: false, createdAt: Date.now() });
+function wantsSessionReminders(userId) {
+  const user = paymentUserById(userId) || state.users.find((candidate) => candidate.id === userId);
+  return user?.sessionReminders !== false;
+}
+
+function notify(userId, kind, body, link, title = "") {
+  if (isSessionReminderNotification(kind, title) && !wantsSessionReminders(userId)) return;
+  state.notifications.push({
+    id: uid("n"), userId, kind, body, link, title: title || undefined, read: false, createdAt: Date.now(),
+  });
 }
 
 function canReceiveRsvpNotification(userId) {
@@ -2155,6 +2182,8 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
     deferredTo: null,
     deferredFrom: null,
     reminderSentAt: null,
+    sessionReminderTomorrowSentAt: null,
+    sessionReminderMorningSentAt: null,
     attendedAt: null,
     attendedBy: null,
     snapshot: snapshotFor(session),
@@ -2359,7 +2388,39 @@ export function sweepCheckpoints(now = Date.now()) {
       dirty = true;
     }
   }
+  dirty = sweepSessionReminders(now) || dirty;
   if (dirty) save();
+}
+
+export function sweepSessionReminders(now = Date.now()) {
+  let dirty = false;
+  for (const booking of state.bookings) {
+    if (booking.status !== "reserved" && booking.status !== "confirmed") continue;
+    const session = getSession(booking.sessionId);
+    if (!session || session.cancelled) continue;
+    const dateISO = session.dateISO || booking.snapshot?.dateISO;
+    if (!dateISO) continue;
+    const name = session.name || booking.snapshot?.name || "your session";
+    const when = fmtDate(dateISO);
+    if (!booking.sessionReminderTomorrowSentAt && now >= sessionReminderTomorrowAt(dateISO)
+        && now < sessionReminderMorningAt(dateISO)) {
+      booking.sessionReminderTomorrowSentAt = now;
+      notify(booking.userId, "operational_session_reminder_tomorrow",
+        `Your session is tomorrow: ${name} · ${when}.`,
+        `#/activity/${session.id}`);
+      dirty = true;
+    }
+    if (!booking.sessionReminderMorningSentAt && now >= sessionReminderMorningAt(dateISO)
+        && todayHktISO(now) === dateISO) {
+      booking.sessionReminderMorningSentAt = now;
+      notify(booking.userId, "operational_session_reminder_morning",
+        `Your session is this morning: ${name} · ${when}.`,
+        `#/activity/${session.id}`);
+      dirty = true;
+    }
+  }
+  if (dirty) save();
+  return dirty;
 }
 
 function islandEccDatesFromState() {
@@ -3132,6 +3193,8 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
     deferredTo: null,
     deferredFrom: null,
     reminderSentAt: null,
+    sessionReminderTomorrowSentAt: null,
+    sessionReminderMorningSentAt: null,
     attendedAt: null,
     attendedBy: null,
     cancelledAt: null,
@@ -3139,6 +3202,9 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
     snapshot: snapshotFor(session),
   };
   state.bookings.push(booking);
+  notify(userId, "operational_rsvp_confirmed",
+    `You're in for ${session.name} · ${fmtDate(session.dateISO)}.`,
+    `#/activity/${session.id}`);
   save();
   return booking;
 }
@@ -3514,16 +3580,7 @@ export function setWeekVenue(sessionId, {
       }
     }
     for (const userId of sharedRecipients) {
-      state.notifications.push({
-        id: uid("n"),
-        userId,
-        kind: "operational_session_venue_updated",
-        title: sharedTitle,
-        body: sharedBody,
-        link: destination,
-        read: false,
-        createdAt: Date.now(),
-      });
+      notify(userId, "operational_session_venue_updated", sharedBody, destination, sharedTitle);
     }
   } else {
     override.venueMemberNotifiedAt = previousNotified;
@@ -4507,7 +4564,7 @@ function localApplication(user) {
     privacy_accepted_at: user.privacyAcceptedAt || null,
     guidelines_accepted_at: user.guidelinesAcceptedAt || user.appliedAt || null,
     submitted_at: user.appliedAt || null,
-    whatsapp_reminders: !!user.whatsappReminders,
+    session_reminders: user.sessionReminders !== false,
     email_receipts: !!user.emailReceipts,
     community_news: !!user.communityNews,
     hyrox_payment_reminders: user.hyroxPaymentReminders !== false,
@@ -4548,7 +4605,7 @@ function membershipPatch(form) {
 
 function privacyPatch(form) {
   return {
-    whatsapp_reminders: !!form.whatsapp_reminders,
+    session_reminders: !!form.session_reminders,
     email_receipts: !!form.email_receipts,
     community_news: !!form.community_news,
     hyrox_payment_reminders: !!form.hyrox_payment_reminders,
@@ -4677,7 +4734,7 @@ export async function updateMyPrivacyPreferences(form) {
   if (!isLive() || !supabase) {
     const user = currentUser();
     if (!user) throw new Error("Not signed in");
-    user.whatsappReminders = patch.whatsapp_reminders;
+    user.sessionReminders = patch.session_reminders;
     user.emailReceipts = patch.email_receipts;
     user.communityNews = patch.community_news;
     user.hyroxPaymentReminders = patch.hyrox_payment_reminders;

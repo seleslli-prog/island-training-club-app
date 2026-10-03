@@ -230,6 +230,14 @@ function shiftIsoDate(isoDate, days) {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
+export function sessionReminderTomorrowAt(dateISO) {
+  return Date.parse(`${shiftIsoDate(dateISO, -1)}T00:00:00+08:00`);
+}
+
+export function sessionReminderMorningAt(dateISO) {
+  return Date.parse(`${dateISO}T07:00:00+08:00`);
+}
+
 function islandEccClockAt(sessionDateISO, daysBefore, hhmm) {
   return Date.parse(`${shiftIsoDate(sessionDateISO, daysBefore)}T${hhmm}:00+08:00`);
 }
@@ -557,6 +565,8 @@ const NOTIFICATION_CATEGORIES = new Map([
   ["operational_session_venue_updated", "club"],
   ["community_announcement_published", "club"],
   ["community_announcement_audit", "club"],
+  ["operational_session_reminder_tomorrow", "personal"],
+  ["operational_session_reminder_morning", "personal"],
 ]);
 
 export function notificationCategory(kind) {
@@ -593,7 +603,31 @@ export function notificationHktTime(value) {
   return `${formatted.replace(/\b(am|pm)\b/i, (period) => period.toUpperCase())} HKT`;
 }
 
-/** Kinds eligible for web push when applications.web_push_ops is on (live delivery). */
+export const SESSION_REMINDER_KINDS = Object.freeze([
+  "operational_booking_reserved",
+  "operational_rsvp_confirmed",
+  "operational_session_cancelled",
+  "operational_session_cancelled_no_defer",
+  "operational_session_time_updated",
+  "operational_session_reminder_tomorrow",
+  "operational_session_reminder_morning",
+  "session-cancelled",
+]);
+
+/** Member-facing venue confirm/update titles. Admin venue audit is not a session reminder. */
+export function isSessionReminderNotification(kind, title = "") {
+  if (kind === "operational_session_venue_updated") {
+    return title === "Venue confirmed" || title === "Venue updated";
+  }
+  return SESSION_REMINDER_KINDS.includes(kind);
+}
+
+/** Web push delivers every inbox row for that profile when web_push_ops is on. */
+export function webPushOpsKindEligible(_kind, _title) {
+  return true;
+}
+
+/** Historical allowlist kept for older migration comments; delivery no longer uses it. */
 export const WEB_PUSH_OPS_KINDS = Object.freeze([
   "operational_booking_reserved",
   "operational_rsvp_confirmed",
@@ -606,6 +640,12 @@ export const WEB_PUSH_OPS_KINDS = Object.freeze([
   "operational_island_ecc_payment_reminder",
   "operational_island_ecc_collector_finalize_reminder",
   "operational_island_ecc_collector_finalize_nudge",
+  "operational_session_reminder_tomorrow",
+  "operational_session_reminder_morning",
+  "operational_payment_marked",
+  "community_announcement_audit",
+  "admin_application_submitted",
+  "welcome",
 ]);
 
 const NOTIFICATION_DESTINATIONS = new Map([
@@ -631,6 +671,8 @@ const NOTIFICATION_DESTINATIONS = new Map([
   ["operational_island_ecc_payment_reminder", "#/account/payments"],
   ["operational_island_ecc_collector_finalize_reminder", "#/admin/payments"],
   ["operational_island_ecc_collector_finalize_nudge", "#/admin/payments"],
+  ["operational_session_reminder_tomorrow", "#/schedule"],
+  ["operational_session_reminder_morning", "#/schedule"],
   ["welcome", "#/account"],
 ]);
 

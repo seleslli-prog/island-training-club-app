@@ -56,7 +56,7 @@ const applicationRows = new Map([
       privacy_accepted_at: "2026-08-05T01:05:00.000Z",
       guidelines_accepted_at: "2026-08-05T01:10:00.000Z",
       submitted_at: "2026-08-05T01:15:00.000Z",
-      whatsapp_reminders: false,
+      session_reminders: true,
       email_receipts: true,
       community_news: true,
       web_push_ops: false,
@@ -4308,10 +4308,11 @@ applicationRows.set(authUser.id, {
 });
 const privacySummary = await views.viewAccount("privacy");
 for (const label of [
-  "WhatsApp session reminders",
+  "Session reminders",
   "HYROX payment reminders",
   "Email receipts",
   "Community news",
+  "Web push",
 ]) {
   if (!privacySummary.includes(label)) throw new Error(`Live notifications summary missing ${label}`);
 }
@@ -4353,13 +4354,13 @@ if (!privacyEdit.includes('href="#/account/notifications"')) {
 if (privacyEdit.includes("Privacy policy accepted") || privacyEdit.includes('name="photo_consent"')) {
   throw new Error("Live notifications edit should not include agreements or photo consent");
 }
-for (const name of ["whatsapp_reminders", "hyrox_payment_reminders", "email_receipts", "community_news", "web_push_ops"]) {
+for (const name of ["session_reminders", "hyrox_payment_reminders", "email_receipts", "community_news", "web_push_ops"]) {
   if (!privacyEdit.includes(`name="${name}"`)) {
     throw new Error(`Live notifications edit route missing ${name}`);
   }
 }
-if (/name="whatsapp_reminders"[^>]*checked/.test(privacyEdit)) {
-  throw new Error("Live privacy edit route should leave unchecked WhatsApp reminders off");
+if (!/name="session_reminders"[^>]*checked/.test(privacyEdit)) {
+  throw new Error("Live privacy edit route should prefill checked Session reminders");
 }
 if (!/name="email_receipts"[^>]*checked/.test(privacyEdit)) {
   throw new Error("Live privacy edit route should prefill checked email receipts");
@@ -4372,7 +4373,7 @@ if (!privacyEdit.includes("Save changes")) {
 }
 applicationRows.set(authUser.id, {
   ...applicationRows.get(authUser.id),
-  whatsapp_reminders: undefined,
+  session_reminders: undefined,
   email_receipts: undefined,
   community_news: undefined,
 });
@@ -4382,7 +4383,7 @@ if ((missingPreferenceSummary.match(/>Off</g) || []).length < 3) {
 }
 applicationRows.set(authUser.id, {
   ...applicationRows.get(authUser.id),
-  whatsapp_reminders: false,
+  session_reminders: true,
   email_receipts: true,
   community_news: true,
 });
@@ -4419,7 +4420,7 @@ if (
 }
 for (const banned of [
   "photo_consent",
-  "whatsapp_reminders",
+  "session_reminders",
   "email_receipts",
   "community_news",
   "waiver_accepted_at",
@@ -4430,7 +4431,7 @@ for (const banned of [
   if (banned in membershipPatch) throw new Error(`membership patch should exclude ${banned}`);
 }
 await store.updateMyPrivacyPreferences({
-  whatsapp_reminders: true,
+  session_reminders: true,
   hyrox_payment_reminders: false,
   email_receipts: false,
   community_news: false,
@@ -4441,7 +4442,7 @@ if (!privacyPatch) throw new Error("privacy update missing");
 const privacyKeys = Object.keys(privacyPatch).sort().join(",");
 if (
   privacyKeys !==
-  ["community_news", "email_receipts", "hyrox_payment_reminders", "web_push_ops", "whatsapp_reminders"].join(",")
+  ["community_news", "email_receipts", "hyrox_payment_reminders", "session_reminders", "web_push_ops"].join(",")
 ) {
   throw new Error(`privacy patch leaked fields: ${privacyKeys}`);
 }
