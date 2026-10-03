@@ -1,9 +1,9 @@
--- Session reminders (in-app + web push) and open web-push eligibility.
--- WhatsApp is not a delivery channel. session_reminders defaults on so existing
+-- Session alerts (in-app + web push) and open web-push eligibility.
+-- WhatsApp is not a delivery channel. session_alerts defaults on so existing
 -- booking / RSVP / venue / cancel inbox rows stay visible.
 
 alter table public.applications
-  add column if not exists session_reminders boolean not null default true;
+  add column if not exists session_alerts boolean not null default true;
 
 alter table public.operational_bookings
   add column if not exists session_reminder_tomorrow_sent_at timestamptz,
@@ -45,7 +45,7 @@ begin
        select 1
          from public.applications a
         where a.profile_id = NEW.profile_id
-          and a.session_reminders = false
+          and a.session_alerts = false
      ) then
     return null;
   end if;

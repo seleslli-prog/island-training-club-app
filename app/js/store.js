@@ -57,7 +57,7 @@ const APPLY_DRAFT_VERSION = 2;
 const UNCLAIMED_DRAFT_OWNER = "__unclaimed__";
 const LAST_ROUTE_KEY = "itc.last-route.v1";
 const LAST_ROUTE_VERSION = 1;
-const STATE_VERSION = 29;
+const STATE_VERSION = 30;
 
 const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
@@ -511,14 +511,16 @@ function migrate() {
   const v = state.version || 0;
   if (v >= STATE_VERSION) return;
   if (v < 29) {
-    for (const user of state.users) {
-      if (!Object.prototype.hasOwnProperty.call(user, "sessionReminders")) {
-        user.sessionReminders = true;
-      }
-    }
     for (const booking of state.bookings) {
       booking.sessionReminderTomorrowSentAt ??= null;
       booking.sessionReminderMorningSentAt ??= null;
+    }
+  }
+  if (v < 30) {
+    for (const user of state.users) {
+      if (!Object.prototype.hasOwnProperty.call(user, "sessionAlerts")) {
+        user.sessionAlerts = user.sessionReminders !== false;
+      }
     }
   }
   if (v < 27) {
@@ -2024,13 +2026,16 @@ export function receiptForBooking(bookingId) {
   return receipt && (!retirementBoundaryActive() || !receiptIsRetired(receipt)) ? receipt : null;
 }
 
-function wantsSessionReminders(userId) {
+function wantsSessionAlerts(userId) {
   const user = paymentUserById(userId) || state.users.find((candidate) => candidate.id === userId);
+  if (user && Object.prototype.hasOwnProperty.call(user, "sessionAlerts")) {
+    return user.sessionAlerts !== false;
+  }
   return user?.sessionReminders !== false;
 }
 
 function notify(userId, kind, body, link, title = "") {
-  if (isSessionReminderNotification(kind, title) && !wantsSessionReminders(userId)) return;
+  if (isSessionReminderNotification(kind, title) && !wantsSessionAlerts(userId)) return;
   state.notifications.push({
     id: uid("n"), userId, kind, body, link, title: title || undefined, read: false, createdAt: Date.now(),
   });
@@ -4564,7 +4569,7 @@ function localApplication(user) {
     privacy_accepted_at: user.privacyAcceptedAt || null,
     guidelines_accepted_at: user.guidelinesAcceptedAt || user.appliedAt || null,
     submitted_at: user.appliedAt || null,
-    session_reminders: user.sessionReminders !== false,
+    session_alerts: user.sessionAlerts !== false,
     email_receipts: !!user.emailReceipts,
     community_news: !!user.communityNews,
     hyrox_payment_reminders: user.hyroxPaymentReminders !== false,
@@ -4605,7 +4610,7 @@ function membershipPatch(form) {
 
 function privacyPatch(form) {
   return {
-    session_reminders: !!form.session_reminders,
+    session_alerts: !!form.session_alerts,
     email_receipts: !!form.email_receipts,
     community_news: !!form.community_news,
     hyrox_payment_reminders: !!form.hyrox_payment_reminders,
@@ -4734,7 +4739,7 @@ export async function updateMyPrivacyPreferences(form) {
   if (!isLive() || !supabase) {
     const user = currentUser();
     if (!user) throw new Error("Not signed in");
-    user.sessionReminders = patch.session_reminders;
+    user.sessionAlerts = patch.session_alerts;
     user.emailReceipts = patch.email_receipts;
     user.communityNews = patch.community_news;
     user.hyroxPaymentReminders = patch.hyrox_payment_reminders;

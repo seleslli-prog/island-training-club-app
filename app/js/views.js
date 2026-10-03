@@ -1454,8 +1454,11 @@ async function hydrateLiveUser(user) {
       guardianPhone: app.guardian_phone ?? user.guardianPhone ?? "",
       mediaConsent: app.photo_consent !== undefined ? !!app.photo_consent : user.mediaConsent,
       whatsappReminders: app.whatsapp_reminders !== undefined ? !!app.whatsapp_reminders : user.whatsappReminders,
-      sessionReminders: app.session_reminders !== undefined
-        ? !!app.session_reminders : user.sessionReminders !== false,
+      sessionAlerts: app.session_alerts !== undefined
+        ? !!app.session_alerts
+        : app.session_reminders !== undefined
+          ? !!app.session_reminders
+          : user.sessionAlerts !== false && user.sessionReminders !== false,
       hyroxPaymentReminders: app.hyrox_payment_reminders !== undefined
         ? !!app.hyrox_payment_reminders : user.hyroxPaymentReminders !== false,
       emailReceipts: app.email_receipts !== undefined ? !!app.email_receipts : user.emailReceipts,
@@ -1871,7 +1874,7 @@ async function accountNotificationsEdit(user) {
       title: "Edit Notifications",
     })}
     <form id="form-privacy" data-form="privacy-preferences" class="card mt16"><div class="card-body">
-      <label class="check"><input type="checkbox" name="session_reminders" ${hydrated.sessionReminders !== false ? "checked" : ""}> Session alerts</label>
+      <label class="check"><input type="checkbox" name="session_alerts" ${hydrated.sessionAlerts !== false ? "checked" : ""}> Session alerts</label>
       <p class="muted small">Bookings, RSVPs, venue updates, cancellations, plus a reminder the day before and on the morning of your session. In-app, and web push when that is on.</p>
       <label class="check"><input type="checkbox" name="hyrox_payment_reminders" ${hydrated.hyroxPaymentReminders !== false ? "checked" : ""}> HYROX payment reminders</label>
       <p class="muted small">Thursday payment reminders for unpaid HYROX reservations. You can still check payment status in the app.</p>
@@ -1893,7 +1896,7 @@ async function accountNotifications(user) {
     ${profileSubpageHeader({ title: "Notifications" })}
     <div class="card mt16"><div class="card-body">
       <div class="receipt-lines" style="margin-top:0;border-top:0">
-        <div class="line"><span>Session alerts</span><strong>${onOff(hydrated.sessionReminders !== false)}</strong></div>
+        <div class="line"><span>Session alerts</span><strong>${onOff(hydrated.sessionAlerts !== false)}</strong></div>
         <div class="line"><span>HYROX payment reminders</span><strong>${onOff(hydrated.hyroxPaymentReminders !== false)}</strong></div>
         <div class="line"><span>Email receipts</span><strong>${onOff(hydrated.emailReceipts)}</strong></div>
         <div class="line"><span>Community news</span><strong>${onOff(hydrated.communityNews)}</strong></div>
