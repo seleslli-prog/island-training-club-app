@@ -1650,7 +1650,7 @@ async function accountMember(user) {
         { cls: indemnity.kind === "current" && hydrated.mediaConsent ? "ok" : "todo" }
       )}
       ${profileRow("#/account/payments", ICONS.dollar, "Payments & Receipts", "Bookings, donations and orders")}
-      ${profileRow("#/account/notifications", ICONS.bell, "Notifications", "WhatsApp, email and session alerts")}
+      ${profileRow("#/account/notifications", ICONS.bell, "Notifications", "Session reminders, email and web push")}
     </div>
 
     <div class="btn-row">

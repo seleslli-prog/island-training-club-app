@@ -3917,7 +3917,7 @@ for (const redundantLink of ["#/account/donor", "#/account/history", "#/account/
 for (const sub of [
   "Contact, emergency and donor information",
   "Bookings, donations and orders",
-  "WhatsApp, email and session alerts",
+  "Session reminders, email and web push",
 ]) {
   if (!newMemberAcct.includes(sub)) {
     failures++;
