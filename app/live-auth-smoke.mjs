@@ -4308,7 +4308,7 @@ applicationRows.set(authUser.id, {
 });
 const privacySummary = await views.viewAccount("privacy");
 for (const label of [
-  "Session reminders",
+  "Session alerts",
   "HYROX payment reminders",
   "Email receipts",
   "Community news",
@@ -4360,7 +4360,7 @@ for (const name of ["session_reminders", "hyrox_payment_reminders", "email_recei
   }
 }
 if (!/name="session_reminders"[^>]*checked/.test(privacyEdit)) {
-  throw new Error("Live privacy edit route should prefill checked Session reminders");
+  throw new Error("Live privacy edit route should prefill checked Session alerts");
 }
 if (!/name="email_receipts"[^>]*checked/.test(privacyEdit)) {
   throw new Error("Live privacy edit route should prefill checked email receipts");

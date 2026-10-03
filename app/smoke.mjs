@@ -3917,7 +3917,7 @@ for (const redundantLink of ["#/account/donor", "#/account/history", "#/account/
 for (const sub of [
   "Contact, emergency and donor information",
   "Bookings, donations and orders",
-  "Session reminders, email and web push",
+  "Session alerts, email and web push",
 ]) {
   if (!newMemberAcct.includes(sub)) {
     failures++;
@@ -3942,11 +3942,12 @@ if (!privacyEditHtml.includes('name="hyrox_payment_reminders"')
   console.error("FAIL Notifications edit missing HYROX reminder preference");
 } else console.log("ok  Notifications exposes HYROX reminder preference");
 if (!privacyEditHtml.includes('name="session_reminders"')
-    || !privacyEditHtml.includes("Session reminders")
-    || privacyEditHtml.includes("WhatsApp session reminders")) {
+    || !privacyEditHtml.includes("Session alerts")
+    || privacyEditHtml.includes("WhatsApp session reminders")
+    || privacyEditHtml.includes("> Session reminders<")) {
   failures++;
-  console.error("FAIL Notifications edit missing Session reminders preference");
-} else console.log("ok  Notifications exposes Session reminders preference");
+  console.error("FAIL Notifications edit missing Session alerts preference");
+} else console.log("ok  Notifications exposes Session alerts preference");
 if (!privacyEditHtml.includes('name="web_push_ops"')
     || !privacyEditHtml.includes("> Web push<")
     || privacyEditHtml.includes("Web push for bookings, venue &amp; announcements")) {

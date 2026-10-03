@@ -1650,7 +1650,7 @@ async function accountMember(user) {
         { cls: indemnity.kind === "current" && hydrated.mediaConsent ? "ok" : "todo" }
       )}
       ${profileRow("#/account/payments", ICONS.dollar, "Payments & Receipts", "Bookings, donations and orders")}
-      ${profileRow("#/account/notifications", ICONS.bell, "Notifications", "Session reminders, email and web push")}
+      ${profileRow("#/account/notifications", ICONS.bell, "Notifications", "Session alerts, email and web push")}
     </div>
 
     <div class="btn-row">
@@ -1871,7 +1871,7 @@ async function accountNotificationsEdit(user) {
       title: "Edit Notifications",
     })}
     <form id="form-privacy" data-form="privacy-preferences" class="card mt16"><div class="card-body">
-      <label class="check"><input type="checkbox" name="session_reminders" ${hydrated.sessionReminders !== false ? "checked" : ""}> Session reminders</label>
+      <label class="check"><input type="checkbox" name="session_reminders" ${hydrated.sessionReminders !== false ? "checked" : ""}> Session alerts</label>
       <p class="muted small">Bookings, RSVPs, venue updates, cancellations, plus a reminder the day before and on the morning of your session. In-app, and web push when that is on.</p>
       <label class="check"><input type="checkbox" name="hyrox_payment_reminders" ${hydrated.hyroxPaymentReminders !== false ? "checked" : ""}> HYROX payment reminders</label>
       <p class="muted small">Thursday payment reminders for unpaid HYROX reservations. You can still check payment status in the app.</p>
@@ -1893,7 +1893,7 @@ async function accountNotifications(user) {
     ${profileSubpageHeader({ title: "Notifications" })}
     <div class="card mt16"><div class="card-body">
       <div class="receipt-lines" style="margin-top:0;border-top:0">
-        <div class="line"><span>Session reminders</span><strong>${onOff(hydrated.sessionReminders !== false)}</strong></div>
+        <div class="line"><span>Session alerts</span><strong>${onOff(hydrated.sessionReminders !== false)}</strong></div>
         <div class="line"><span>HYROX payment reminders</span><strong>${onOff(hydrated.hyroxPaymentReminders !== false)}</strong></div>
         <div class="line"><span>Email receipts</span><strong>${onOff(hydrated.emailReceipts)}</strong></div>
         <div class="line"><span>Community news</span><strong>${onOff(hydrated.communityNews)}</strong></div>
