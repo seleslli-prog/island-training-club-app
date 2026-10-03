@@ -2151,6 +2151,13 @@ if (!localVisitorHome.includes("This week — open to all")
     && !localVisitorHome.includes("No open sessions this week")) {
   throw new Error("visitor Home must fall back to the no-sessions copy");
 }
+if (localVisitorHome.includes("No open sessions this week")) {
+  if (localVisitorHome.includes('href="#/schedule">See more →</a>')) {
+    throw new Error("visitor Home empty week must not show See more");
+  }
+} else if (!localVisitorHome.includes('href="#/schedule">See more →</a>')) {
+  throw new Error("visitor Home with sessions must keep See more");
+}
 assertPrimaryNav(null, ["Home", "Schedule", "Community", "Account"], "visitor");
 if (!localVisitorHome.includes('href="#/account">Sign in or join</a>')) {
   throw new Error("local signed-out Home must retain the Account sign-in link");
@@ -3254,6 +3261,42 @@ if (!views.viewHome().includes("Nothing booked this week")) {
   failures++;
   console.error('FAIL "My week" should prompt when the member has no bookings');
 } else console.log('ok  "My week" empty state prompts to book');
+{
+  const emptyWeekHome = views.viewHome();
+  if (!emptyWeekHome.includes('href="#/schedule" style="color:var(--accent)">Find a session →</a>')) {
+    failures++;
+    console.error("FAIL empty My Week should keep Find a session");
+  }
+  if (emptyWeekHome.includes('href="#/schedule">See more →</a>')) {
+    failures++;
+    console.error("FAIL empty My Week should not also show See more");
+  } else console.log("ok  empty My Week hides See more and keeps Find a session");
+  const todayISO = data.isoDate(data.todayLocal());
+  const bookedWeekHome = views.viewHome({
+    sessions: [{
+      id: "week-session",
+      dateISO: todayISO,
+      date: data.todayLocal(),
+      time: "07:00",
+      kind: "paid",
+      name: "In-week session",
+      location: "Test venue",
+      price: 80,
+      capacity: 12,
+    }],
+    viewerBookings: [{
+      id: "week-booking",
+      sessionId: "week-session",
+      cycleId: null,
+      status: "confirmed",
+      snapshot: { dateISO: todayISO },
+    }],
+  });
+  if (!bookedWeekHome.includes('href="#/schedule">See more →</a>')) {
+    failures++;
+    console.error("FAIL My Week with bookings must keep See more");
+  } else console.log("ok  My Week with bookings keeps See more");
+}
 await check("checkout (member)", () => views.viewCheckout(paid.id));
 
 // --- document registry (indemnity + privacy + guidelines) ---
@@ -3563,6 +3606,9 @@ const approvedHome = views.viewHome();
 if (!approvedHome.includes("My Week") || !approvedHome.includes(booking.snapshot.name)
     || !approvedHome.includes(bookedActivityLink)) {
   throw new Error("approved Home must show the confirmed future booking in My Week");
+}
+if (!approvedHome.includes('href="#/schedule">See more →</a>')) {
+  throw new Error("approved Home with bookings must keep See more");
 }
 for (const session of allUpcoming.filter((item) => item.id !== booking.sessionId)) {
   if (approvedHome.includes(`href="#/activity/${session.id}"`)) {

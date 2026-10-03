@@ -374,7 +374,7 @@ export function viewHome(scheduleModel = null) {
     ${guest}
     <div class="section-head">
       <h2>${weekHeading}</h2>
-      <a href="#/schedule">See more →</a>
+      ${rows.length ? `<a href="#/schedule">See more →</a>` : ""}
     </div>
     <div class="session-list">
       ${rows.length
