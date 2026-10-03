@@ -3978,6 +3978,12 @@ if (!privacyEditHtml.includes('name="web_push_ops"')
   failures++;
   console.error("FAIL Notifications edit missing short Web push preference");
 } else console.log("ok  Notifications exposes short Web push preference");
+if (!privacyEditHtml.includes('name="email_receipts"')
+    || !privacyEditHtml.includes("itc.admin.ops@gmail.com")
+    || !privacyEditHtml.includes("Membership Details")) {
+  failures++;
+  console.error("FAIL Notifications edit missing email receipt sender/recipient copy");
+} else console.log("ok  Notifications exposes email receipt From/To copy");
 if (privacyEditHtml.includes('name="photo_consent"')) {
   failures++;
   console.error("FAIL Notifications edit should not include photo consent");
@@ -4055,6 +4061,43 @@ if (!data.webPushOpsKindEligible("operational_payment_marked")
   assert.ok(sessionAlertsPrefMigration.includes("a.session_alerts = false"));
 }
 console.log("ok  session reminder / web-push expansion migration markers");
+{
+  const emailReceiptMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261003000002_email_receipts.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "private.email_receipt_settings",
+    "request_email_receipt",
+    "send-email-receipt",
+    "email_receipts",
+    "profiles.email",
+    "itc.admin.ops@gmail.com",
+  ]) {
+    assert.ok(
+      emailReceiptMigration.toLowerCase().includes(marker.toLowerCase()),
+      `email receipt migration missing ${marker}`,
+    );
+  }
+  const emailReceiptFn = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/functions/send-email-receipt/index.ts"),
+    "utf8",
+  );
+  assert.ok(emailReceiptFn.includes("itc.admin.ops@gmail.com"));
+  assert.ok(emailReceiptFn.includes("smtp.gmail.com"));
+  assert.ok(emailReceiptFn.includes("GMAIL_SMTP_APP_PASSWORD"));
+  assert.equal(
+    /GMAIL_SMTP_APP_PASSWORD\s*=\s*['\"][^'\"]+['\"]/.test(emailReceiptFn),
+    false,
+    "email receipt function must not hardcode the Gmail App Password",
+  );
+  const configToml = readFileSync(resolve(__dirnameSmoke, "../supabase/config.toml"), "utf8");
+  assert.ok(configToml.includes("send-email-receipt"));
+  const runbook = readFileSync(resolve(__dirnameSmoke, "../docs/runbooks/email-receipts.md"), "utf8");
+  assert.ok(runbook.includes("itc.admin.ops@gmail.com"));
+  assert.doesNotMatch(runbook, /[A-Za-z0-9]{16} [A-Za-z0-9]{16}/);
+}
+console.log("ok  email receipt migration, function, and runbook markers");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
@@ -8555,42 +8598,90 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
     failures++;
     console.error("FAIL session reminder sweep needs the fixture member");
   } else {
-  const reminderMember = store.currentUser();
-  const rsvpSession = store.upcomingSessions(21).find((session) => store.sessionRequiresRsvp(session) && !data.sessionStarted(session)
-    && !store.userBookingFor(reminderMember.id, session.id));
-  if (!reminderMember || !rsvpSession) {
-    failures++;
-    console.error("FAIL session reminder sweep needs a signed-in member and upcoming RSVP session");
-  } else {
-    const beforeCount = store.notificationsFor(reminderMember.id)
-      .filter((note) => note.kind === "operational_session_reminder_tomorrow").length;
-    const booking = await store.rsvpSession(reminderMember.id, rsvpSession);
-    const dayBefore = data.sessionReminderTomorrowAt(rsvpSession.dateISO) + 60 * 1000;
-    store.sweepSessionReminders(dayBefore);
-    store.sweepSessionReminders(dayBefore);
-    const tomorrowNotes = store.notificationsFor(reminderMember.id)
-      .filter((note) => note.kind === "operational_session_reminder_tomorrow");
-    if (!booking || tomorrowNotes.length !== beforeCount + 1) {
+    const reminderMember = store.currentUser();
+    const rsvpSession = store.upcomingSessions(21).find((session) => store.sessionRequiresRsvp(session) && !data.sessionStarted(session)
+      && !store.userBookingFor(reminderMember.id, session.id));
+    if (!reminderMember || !rsvpSession) {
       failures++;
-      console.error("FAIL session reminders must send one tomorrow ping for an RSVP");
-    } else console.log("ok  session reminders send one tomorrow ping");
-    await store.updateMyPrivacyPreferences({
-      session_alerts: false,
-      email_receipts: !!reminderMember.emailReceipts,
-      community_news: !!reminderMember.communityNews,
-      hyrox_payment_reminders: reminderMember.hyroxPaymentReminders !== false,
-      web_push_ops: !!reminderMember.webPushOps,
-    });
-    const morningAt = data.sessionReminderMorningAt(rsvpSession.dateISO) + 60 * 1000;
-    store.sweepSessionReminders(morningAt);
-    const morningNotes = store.notificationsFor(reminderMember.id)
-      .filter((note) => note.kind === "operational_session_reminder_morning");
-    if (morningNotes.length) {
-      failures++;
-      console.error("FAIL opted-out session reminders must not send the morning ping");
-    } else console.log("ok  session reminder opt-out skips the morning ping");
-    if (booking?.id) await store.withdrawRsvp(booking.id);
+      console.error("FAIL session reminder sweep needs a signed-in member and upcoming RSVP session");
+    } else {
+      const beforeCount = store.notificationsFor(reminderMember.id)
+        .filter((note) => note.kind === "operational_session_reminder_tomorrow").length;
+      const booking = await store.rsvpSession(reminderMember.id, rsvpSession);
+      const dayBefore = data.sessionReminderTomorrowAt(rsvpSession.dateISO) + 60 * 1000;
+      store.sweepSessionReminders(dayBefore);
+      store.sweepSessionReminders(dayBefore);
+      const tomorrowNotes = store.notificationsFor(reminderMember.id)
+        .filter((note) => note.kind === "operational_session_reminder_tomorrow");
+      if (!booking || tomorrowNotes.length !== beforeCount + 1) {
+        failures++;
+        console.error("FAIL session reminders must send one tomorrow ping for an RSVP");
+      } else console.log("ok  session reminders send one tomorrow ping");
+      await store.updateMyPrivacyPreferences({
+        session_alerts: false,
+        email_receipts: !!reminderMember.emailReceipts,
+        community_news: !!reminderMember.communityNews,
+        hyrox_payment_reminders: reminderMember.hyroxPaymentReminders !== false,
+        web_push_ops: !!reminderMember.webPushOps,
+      });
+      const morningAt = data.sessionReminderMorningAt(rsvpSession.dateISO) + 60 * 1000;
+      store.sweepSessionReminders(morningAt);
+      const morningNotes = store.notificationsFor(reminderMember.id)
+        .filter((note) => note.kind === "operational_session_reminder_morning");
+      if (morningNotes.length) {
+        failures++;
+        console.error("FAIL opted-out session reminders must not send the morning ping");
+      } else console.log("ok  session reminder opt-out skips the morning ping");
+      if (booking?.id) await store.withdrawRsvp(booking.id);
+    }
   }
+}
+
+{
+  installLocalFixtures();
+  store.signIn("member@example.test");
+  const optedIn = store.currentUser();
+  await store.updateMyPrivacyPreferences({
+    session_alerts: optedIn.sessionAlerts !== false,
+    email_receipts: true,
+    community_news: !!optedIn.communityNews,
+    hyrox_payment_reminders: optedIn.hyroxPaymentReminders !== false,
+    web_push_ops: !!optedIn.webPushOps,
+  });
+  const paidSession = store.upcomingSessions(21).find((session) =>
+    session.kind === "paid" && !data.sessionStarted(session)
+    && !store.userBookingFor(optedIn.id, session.id));
+  if (!paidSession) {
+    failures++;
+    console.error("FAIL email receipt send needs a future paid session");
+  } else {
+    const hold = store.reserveSession(optedIn.id, paidSession.id, islandEccOpenNow(paidSession));
+    store.markBookingPaid(hold.id, "PayMe", "EMAIL-RECEIPT");
+    store.signIn("admin@example.test");
+    const issued = store.confirmBookingPayment(hold.id);
+    if (issued?.receipt?.emailSentTo !== "member@example.test" || !issued?.receipt?.emailSentAt) {
+      failures++;
+      console.error("FAIL opted-in email receipts must record send to the membership email");
+    } else console.log("ok  opted-in email receipts record send to the membership email");
+  }
+  installLocalFixtures();
+  store.signIn("member@example.test");
+  const optedOut = store.currentUser();
+  const otherSession = store.upcomingSessions(21).find((session) =>
+    session.kind === "paid" && !data.sessionStarted(session)
+    && !store.userBookingFor(optedOut.id, session.id));
+  if (!otherSession) {
+    failures++;
+    console.error("FAIL email receipt opt-out needs a future paid session");
+  } else {
+    const hold = store.reserveSession(optedOut.id, otherSession.id, islandEccOpenNow(otherSession));
+    store.markBookingPaid(hold.id, "PayMe", "EMAIL-RECEIPT-OFF");
+    store.signIn("admin@example.test");
+    const issued = store.confirmBookingPayment(hold.id);
+    if (issued?.receipt?.emailSentTo || issued?.receipt?.emailSentAt) {
+      failures++;
+      console.error("FAIL opted-out email receipts must not record a send");
+    } else console.log("ok  opted-out email receipts skip send");
   }
 }
 
