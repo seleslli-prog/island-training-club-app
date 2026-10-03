@@ -69,7 +69,7 @@ const RESTORABLE_ROUTE_PATTERNS = [
   new RegExp(`^#/(?:activity|checkout|pay|booking|receipt)/${ROUTE_ID}$`),
   new RegExp(`^#/hyrox/${ROUTE_ID}(?:/register)?$`),
   new RegExp(`^#/replacement/${ROUTE_ID}$`),
-  /^#\/admin(?:\/(?:members|activities|prayers|giving|payments))?$/,
+  /^#\/admin(?:\/(?:members|activities|prayers|giving|payments|announcements\/new))?$/,
   new RegExp(`^#/admin/(?:activity|campaign)/${ROUTE_ID}$`),
 ];
 
@@ -231,6 +231,7 @@ function freshState() {
     campaigns: [],
     donations: [],
     prayers: [],
+    announcements: [],
     oneOffEvents: [],
     sessionOverrides: {},
     queues: {},
@@ -306,7 +307,7 @@ function normalizeReceiptCounter() {
 function migrate() {
   // Persisted prototypes may predate individual collections or contain null
   // values. Normalize every collection before a legacy step or early return.
-  for (const key of ["users", "activities", "bookings", "receipts", "campaigns", "donations", "prayers", "notifications", "oneOffEvents"]) {
+  for (const key of ["users", "activities", "bookings", "receipts", "campaigns", "donations", "prayers", "notifications", "oneOffEvents", "announcements"]) {
     if (!Array.isArray(state[key])) state[key] = [];
   }
   if (!state.queues || typeof state.queues !== "object" || Array.isArray(state.queues)) {
@@ -3113,6 +3114,35 @@ export async function setAdminPrayerRequestStatus(requestId, status) {
   Object.assign(prayer, transition.value);
   save();
   return localAdminPrayerRow(prayer);
+}
+
+const ANNOUNCEMENT_ADMIN_ROLES = new Set(["admin", "superadmin", "super_admin"]);
+
+export async function publishAnnouncement({ title, body } = {}) {
+  const actor = currentUser();
+  if (!actor || actor.status !== "approved" || !ANNOUNCEMENT_ADMIN_ROLES.has(actor.role)) {
+    throw new Error("Admin only.");
+  }
+  const cleanTitle = String(title || "").trim();
+  const cleanBody = String(body || "").trim();
+  if (!cleanTitle) throw new Error("Enter a title");
+  if (!cleanBody) throw new Error("Enter announcement body");
+  if (!Array.isArray(state.announcements)) state.announcements = [];
+  state.announcements.push({
+    id: uid("ann"),
+    title: cleanTitle,
+    body: cleanBody,
+    postedAt: Date.now(),
+    createdBy: actor.id,
+    status: "published",
+  });
+  save();
+}
+
+export function listPublishedAnnouncements() {
+  return [...(state.announcements || [])]
+    .filter((item) => item.status === "published")
+    .sort((a, b) => (b.postedAt || 0) - (a.postedAt || 0));
 }
 
 // --- Duty roster --------------------------------------------------------------

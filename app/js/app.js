@@ -621,9 +621,11 @@ async function render(generation = renderGeneration) {
         ? await views.viewAdminActivity(arg2)
         : arg === "campaign"
           ? await views.viewAdminCampaign(arg2)
-          : arg === "users"
-            ? { redirect: "#/admin/members" }
-            : await views.viewAdmin(arg || "members");
+          : arg === "announcements" && arg2 === "new"
+            ? await views.viewAdminAnnouncementCompose()
+            : arg === "users"
+              ? { redirect: "#/admin/members" }
+              : await views.viewAdmin(arg || "members");
       break;
     default:
       out = views.viewNotFound();
@@ -1280,11 +1282,6 @@ document.addEventListener("click", async (e) => {
       }
       break;
     }
-
-    case "connect-interest":
-      // Stub for fellowship/meal sign-ups — the real flow will notify leaders.
-      toast(`Noted — a leader will reach out about ${el.dataset.topic}`);
-      break;
 
     case "giving-amount": {
       const input = document.getElementById("give-amount");
@@ -2047,6 +2044,27 @@ document.addEventListener("submit", async (e) => {
           location.hash = `#/admin/campaign/${campaign.id}`;
           await renderWithFeedback();
         } catch (err) { showCampaignError(control, err.message); toast(err.message || "Unable to save campaign", true); }
+      });
+      break;
+    }
+
+    case "form-announcement-publish": {
+      e.preventDefault();
+      if (!form.reportValidity()) return;
+      const fd = new FormData(form);
+      const control = form.querySelector('[type="submit"]');
+      await withBusyControl(control, "Publishing…", async () => {
+        try {
+          await store.publishAnnouncement({
+            title: fd.get("title"),
+            body: fd.get("body"),
+          });
+          toast("Announcement published");
+          location.hash = "#/community/announcements";
+          await renderWithFeedback();
+        } catch (err) {
+          toast(err.message || "Unable to publish announcement", true);
+        }
       });
       break;
     }

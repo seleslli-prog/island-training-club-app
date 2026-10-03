@@ -2400,18 +2400,65 @@ if (commAbout.includes("Community copy is draft placeholder text for review with
   failures++;
   console.error("FAIL Community About should drop the draft-placeholder disclaimer");
 } else console.log("ok  Community About drops the draft disclaimer");
-for (const [section, title] of [
+for (const [section, heading] of [
   ["prayers", "Prayers."],
   ["fellowship", "Fellowship."],
-  ["announcements", "Island Training Club turns 2."],
-  ["about", "More than a workout."],
+  ["announcements", "Announcements."],
 ]) {
-  if (!(await views.viewCommunity(section)).includes(title)) {
+  const html = await views.viewCommunity(section);
+  if (!html.includes(`<h1 class="display sm mt16">${heading}</h1>`) || html.includes("Community · ")) {
     failures++;
-    console.error(`FAIL community > ${section} heading should read "${title}"`);
+    console.error(`FAIL community > ${section} should use a white title without a Community kicker`);
   }
 }
-console.log("ok  community sub-page headings title-cased");
+if (!commAbout.includes(">About Island Training Club<") || commAbout.includes("Community · ")) {
+  failures++;
+  console.error("FAIL Community About kicker should read About Island Training Club");
+} else console.log("ok  Community About kicker reads About Island Training Club");
+if (!commAbout.includes(`<h2 class="display sm">More than a workout.</h2>`)) {
+  failures++;
+  console.error("FAIL Community About should keep the More than a workout title");
+} else console.log("ok  Community About keeps More than a workout");
+console.log("ok  community sub-pages use white titles without Community kickers");
+const fellowshipHtml = await views.viewCommunity("fellowship");
+if (fellowshipHtml.includes("I’m interested") || fellowshipHtml.includes("tell me more")
+    || fellowshipHtml.includes("connect-interest")) {
+  failures++;
+  console.error("FAIL Fellowship should not show the unused interest button");
+} else console.log("ok  Fellowship drops the unused interest button");
+if (!announcementHtml.includes("Island Training Club turns 2.")) {
+  failures++;
+  console.error("FAIL announcements should keep the anniversary story title");
+}
+if (announcementHtml.includes("Publish announcement")) {
+  failures++;
+  console.error("FAIL visitors should not see Publish announcement");
+} else console.log("ok  visitors do not see Publish announcement");
+{
+  const snapshot = mem.get("itc.prototype.v1");
+  installLocalFixtures();
+  store.signIn("admin@example.test");
+  const adminAnnouncements = await views.viewCommunity("announcements");
+  const publishAt = adminAnnouncements.indexOf("Publish announcement");
+  const storyAt = adminAnnouncements.indexOf("Island Training Club turns 2.");
+  if (publishAt < 0 || storyAt < 0 || publishAt < storyAt) {
+    failures++;
+    console.error("FAIL Admin Publish announcement should sit below the announcement story");
+  } else console.log("ok  Admin Publish announcement sits at the bottom of Announcements");
+  const compose = await views.viewAdminAnnouncementCompose();
+  if (!compose.includes("form-announcement-publish") || !compose.includes("Publish")) {
+    failures++;
+    console.error("FAIL Admin announcement compose should render the publish form");
+  } else console.log("ok  Admin announcement compose renders");
+  store.signIn("member@example.test");
+  const memberAnnouncements = await views.viewCommunity("announcements");
+  if (memberAnnouncements.includes("Publish announcement")) {
+    failures++;
+    console.error("FAIL members should not see Publish announcement");
+  } else console.log("ok  members do not see Publish announcement");
+  mem.set("itc.prototype.v1", snapshot);
+  store.load();
+}
 if (!(await views.viewCommunity("nope")).includes("Page not found")) {
   failures++;
   console.error("FAIL unknown Community section should 404");
