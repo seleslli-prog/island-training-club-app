@@ -2875,6 +2875,13 @@ if (!localVisitorHome.includes("This week — open to all")
     && !localVisitorHome.includes("No open sessions this week")) {
   throw new Error("visitor Home must fall back to the no-sessions copy");
 }
+if (localVisitorHome.includes("No open sessions this week")) {
+  if (localVisitorHome.includes('href="#/schedule">See more →</a>')) {
+    throw new Error("visitor Home empty week must not show See more");
+  }
+} else if (!localVisitorHome.includes('href="#/schedule">See more →</a>')) {
+  throw new Error("visitor Home with sessions must keep See more");
+}
 assertPrimaryNav(null, ["Home", "Schedule", "Community", "Account"], "visitor");
 if (!localVisitorHome.includes('href="#/account">Sign in or join</a>')) {
   throw new Error("local signed-out Home must retain the Account sign-in link");
@@ -3039,6 +3046,19 @@ for (const link of [
   }
 }
 if (commOk) console.log("ok  Community shows the five destination links");
+{
+  const connectAt = commHtml.indexOf("<h2>Ways to connect</h2>");
+  const socialAt = commHtml.indexOf("Connect beyond training");
+  if (connectAt < 0 || socialAt < 0 || connectAt > socialAt) {
+    failures++;
+    console.error("FAIL Community Pulse should put Ways to connect before the next-social feature");
+  } else console.log("ok  Community Pulse puts Ways to connect first");
+}
+if (!/community-action-grid\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*1fr;/.test(integratedStyleSource)
+    || !/community-action-card\s*\{\s*display:\s*flex;/.test(integratedStyleSource)) {
+  failures++;
+  console.error("FAIL Ways to connect should render as full-width tap rows");
+} else console.log("ok  Ways to connect uses full-width tap rows");
 if (!commHtml.includes('#/community/about')) {
   failures++;
   console.error("FAIL Community Explore should still link to About ITC");
@@ -3117,6 +3137,10 @@ if (!commAbout.includes("Arnold Wong") || !commAbout.includes("Our foundation"))
   failures++;
   console.error("FAIL Community About page missing leaders or culture content");
 } else console.log("ok  Community About page carries leaders & culture");
+if (commAbout.includes("Community copy is draft placeholder text for review with ITC leadership.")) {
+  failures++;
+  console.error("FAIL Community About should drop the draft-placeholder disclaimer");
+} else console.log("ok  Community About drops the draft disclaimer");
 for (const [section, title] of [
   ["prayers", "Prayers."],
   ["fellowship", "Fellowship."],
@@ -4164,6 +4188,17 @@ if (!views.viewHome().includes("Nothing booked this week")) {
   failures++;
   console.error('FAIL "My week" should prompt when the member has no bookings');
 } else console.log('ok  "My week" empty state prompts to book');
+{
+  const emptyWeekHome = views.viewHome();
+  if (!emptyWeekHome.includes('href="#/schedule" style="color:var(--accent)">Find a session →</a>')) {
+    failures++;
+    console.error("FAIL empty My Week should keep Find a session");
+  }
+  if (emptyWeekHome.includes('href="#/schedule">See more →</a>')) {
+    failures++;
+    console.error("FAIL empty My Week should not also show See more");
+  } else console.log("ok  empty My Week hides See more and keeps Find a session");
+}
 await check("checkout (member)", () => views.viewCheckout(paid.id));
 
 // --- document registry (indemnity + privacy + guidelines) ---
