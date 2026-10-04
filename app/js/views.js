@@ -6,7 +6,7 @@
 // ==========================================================================
 
 import * as store from "./store.js";
-import { isLive } from "./config.js";
+import { isLive, isLiveConfigured } from "./config.js";
 import * as liveOps from "./operations.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
@@ -291,11 +291,41 @@ export function notificationBellHTML(unreadCount = 0, active = false) {
 // Views
 // ============================================================================
 
+const guestEmailLinkState = {
+  open: false,
+  email: "",
+  feedback: "",
+  feedbackError: false,
+};
+
+export function captureGuestEmailLink(root) {
+  const details = root?.querySelector?.("#guest-email-link");
+  if (!details) return;
+  guestEmailLinkState.open = Boolean(details.open);
+  guestEmailLinkState.email = details.querySelector("[name=email]")?.value || "";
+  const feedback = details.querySelector("[data-magic-link-feedback]");
+  guestEmailLinkState.feedback = feedback?.textContent || "";
+  guestEmailLinkState.feedbackError = feedback?.getAttribute("role") === "alert";
+}
+
+function liveMagicLinkForm({ emailId, className = "mt16", email = "", feedback = "", feedbackError = false } = {}) {
+  const feedbackRole = feedbackError ? "alert" : "status";
+  return `
+    <form id="form-magic-link" class="${className}" novalidate>
+      <div class="field">
+        <label for="${emailId}">Email</label>
+        <input id="${emailId}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(email)}" required>
+      </div>
+      <button class="btn ghost mt16" type="submit">Email me a sign-in link</button>
+      <div class="muted small mt16" data-magic-link-feedback aria-live="polite"${feedback ? ` role="${feedbackRole}"` : ""}>${feedback ? esc(feedback) : ""}</div>
+    </form>`;
+}
+
 function visitorDraftActions() {
   // Live drafts belong to a signed-in pending profile and only resume on
   // #/apply after auth. Advertising a device draft while signed out makes
   // Sign in look like it will reopen someone else's unfinished form.
-  if (isLive() || !store.getApplyDraft()) return "";
+  if (isLiveConfigured() || !store.getApplyDraft()) return "";
   return `
     <div class="banner mt16" data-draft-resume>
       <p><strong>Continue your application</strong><br><span class="muted small">You started the membership form earlier. Continue to finish it.</span></p>
@@ -325,7 +355,7 @@ export function viewHome() {
   let weekHeading;
   if (!user) {
     rows = upcoming.filter((session) => session.kind === "free" && inThisWeek(session));
-    emptyMsg = isLive() && !liveOps.operationalStateStatus().loaded
+    emptyMsg = isLiveConfigured() && !liveOps.operationalStateStatus().loaded
       ? "Loading this week's sessions…"
       : "No open sessions this week — check back soon.";
     weekHeading = "This week — open to all";
@@ -351,9 +381,20 @@ export function viewHome() {
       <h3 class="mt8 guest-join-title">Join the club.</h3>
       <p class="subcopy mt8">Sign up to book sessions and stay in the community.</p>
       ${visitorDraftActions()}
-      ${isLive()
+      ${isLiveConfigured()
         ? `<button class="btn mt16" type="button" data-action="sign-in-google">Continue with Google</button>
-          <a class="guest-alt-auth" href="#/account">Use an email link instead</a>`
+          <details id="guest-email-link" class="guest-email-link"${guestEmailLinkState.open ? " open" : ""}>
+            <summary class="guest-alt-auth">Use an email link instead</summary>
+            <div class="guest-email-link-panel">
+              ${liveMagicLinkForm({
+                emailId: "guest-magic-link-email",
+                className: "guest-email-link-form",
+                email: guestEmailLinkState.email,
+                feedback: guestEmailLinkState.feedback,
+                feedbackError: guestEmailLinkState.feedbackError,
+              })}
+            </div>
+          </details>`
         : `<a class="btn mt16" href="#/account">Sign in or join</a>`}
       <p class="muted small mt8">Takes a couple of minutes. A leader confirms your application before paid booking opens.</p>
     </div></div>`
@@ -1483,7 +1524,7 @@ async function hydrateLiveUser(user) {
 }
 
 function accountVisitor() {
-  if (isLive()) {
+  if (isLiveConfigured()) {
     return `
       <div class="kicker">Account</div>
       <h1 class="display">Sign in</h1>
@@ -1493,14 +1534,7 @@ function accountVisitor() {
       <div class="card mt24"><div class="card-body">
         <button class="btn mt16" type="button" data-action="sign-in-google">Continue with Google</button>
         <p class="muted small center mt16">or continue with email</p>
-        <form id="form-magic-link" class="mt16" novalidate>
-          <div class="field">
-            <label for="magic-link-email">Email</label>
-            <input id="magic-link-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
-          </div>
-          <button class="btn ghost mt16" type="submit">Email me a sign-in link</button>
-          <div class="muted small mt16" data-magic-link-feedback aria-live="polite"></div>
-        </form>
+        ${liveMagicLinkForm({ emailId: "magic-link-email" })}
         <p class="muted small mt16">By continuing, you agree to be added to the ITC community roster. An ITC leader will review your application before you can book sessions.</p>
       </div></div>`;
   }

@@ -2328,7 +2328,7 @@ for (const assetReference of [
   'href="/app/styles.css"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js"',
-  'src="/app/vendor/supabase-js.2.117.2.umd.js"',
+  'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
   'src="/assets/itc/logo-header.png"',
@@ -2342,6 +2342,12 @@ assert.deepEqual(vercelConfig.rewrites, [
 ], "canonical root must serve the app and expose push-sw.js at / for root-scope registration");
 assert.doesNotMatch(appIndexSource, /esm\.sh/,
   "Home must not load supabase-js from esm.sh");
+assert.doesNotMatch(appIndexSource, /<script[^>]+src="\/app\/vendor\/supabase-js/,
+  "supabase-js must not parse as a blocking classic script before app modules");
+assert.match(appIndexSource, /rel="preload"[^>]+href="\/app\/vendor\/supabase-js\.2\.117\.2\.umd\.js"/,
+  "supabase-js should preload in the background for the Google return path");
+assert.match(appIndexSource, /rel="preconnect"[^>]+href="https:\/\/accounts\.google\.com"/,
+  "Google accounts origin should preconnect so Continue with Google navigates quickly");
 assert.ok(
   Array.isArray(vercelConfig.headers)
     && vercelConfig.headers.some((entry) => entry.source === "/push-sw.js"
@@ -2486,6 +2492,40 @@ assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPr
 assert.match(integratedAppSource,
   /pendingVisitorHydrate = store\.hydrateLiveOperations\(\{ ensureWindow: true \}\)/,
   "signed-out live boot must not await schedule hydrate before the first Home paint");
+assert.match(integratedAppSource, /peekStoredLiveSession\(\)|returningFromAuthRedirect\(\)/,
+  "first-visit guests must not wait on supabase-js before Continue with Google can navigate");
+assert.match(integratedAppSource, /await ensureLiveClient\(\)/,
+  "live boot must load supabase-js on demand instead of from a blocking classic script");
+{
+  const configSource = readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8");
+  assert.match(configSource, /export function isLiveConfigured/,
+    "guest Google CTA must be able to render before the vendor client exists");
+  assert.match(configSource, /export async function ensureLiveClient/,
+    "supabase-js UMD must load on demand");
+  assert.match(configSource, /document\.createElement\("script"\)/,
+    "vendor load must inject the UMD after first paint");
+}
+{
+  const storeSource = readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8");
+  const googleSignIn = storeSource.match(
+    /export async function signInWithGoogle\(\) \{[\s\S]*?\nexport async function signInWithMagicLink/
+  )?.[0] || "";
+  assert.match(googleSignIn, /if \(!isLiveConfigured\(\)\)/,
+    "Continue with Google must not wait for the supabase client to exist");
+  const redirectAt = googleSignIn.indexOf("requestGoogleIdCredential");
+  const clientAt = googleSignIn.indexOf("ensureLiveClient");
+  assert.ok(redirectAt >= 0, "Google sign-in must start the OIDC redirect");
+  assert.ok(clientAt === -1 || redirectAt < clientAt,
+    "Google OIDC navigation must start before supabase-js is required");
+}
+assert.match(integratedViewSource, /id="guest-email-link"/,
+  "live Home must reveal the email link on the join card instead of routing to Account");
+assert.match(integratedViewSource, /<summary class="guest-alt-auth">Use an email link instead</,
+  "Use an email link instead must expand in place on Home");
+assert.doesNotMatch(integratedViewSource, /href="#\/account"[^>]*>Use an email link instead</,
+  "Home must not send email-link visitors to the Account sign-in page");
+assert.match(integratedAppSource, /captureGuestEmailLink/,
+  "Home re-renders must keep an in-progress email-link form");
 assert.match(integratedAppSource, /dataset\.form === "photo-consent"[\s\S]*?updateMyPhotoConsent\(/,
   "Agreements must persist required photo consent through the form delegate");
 assert.match(integratedAppSource, /applyOwnAvatarToRoster/,

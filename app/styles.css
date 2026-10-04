@@ -510,15 +510,40 @@ h1.kicker {
   justify-content: center;
   min-height: 44px;
   margin-top: 8px;
+  padding: 0;
+  width: 100%;
+  border: 0;
+  background: none;
   color: var(--muted);
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
+  cursor: pointer;
 }
 .guest-alt-auth:hover,
 .guest-alt-auth:focus-visible {
   color: var(--ink);
+}
+.guest-email-link {
+  width: 100%;
+}
+.guest-email-link > summary {
+  list-style: none;
+}
+.guest-email-link > summary::-webkit-details-marker {
+  display: none;
+}
+.guest-email-link-panel {
+  margin-top: 4px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+}
+.guest-email-link-panel .field {
+  margin-top: 0;
 }
 
 /* ---- Cards ------------------------------------------------------------ */

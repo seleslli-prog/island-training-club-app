@@ -2608,7 +2608,16 @@ console.log("ok  live partial venue remains TBC until both values confirm it");
 
 const signedOutHome = views.viewHome();
 assert.match(signedOutHome, /data-action="sign-in-google"[^>]*>Continue with Google</);
-assert.match(signedOutHome, /href="#\/account"[^>]*>Use an email link instead</);
+assert.match(signedOutHome, /id="guest-email-link"/);
+assert.match(signedOutHome, /<summary class="guest-alt-auth">Use an email link instead</);
+assert.match(signedOutHome, /id="form-magic-link"/);
+assert.match(signedOutHome, /id="guest-magic-link-email"/);
+assert.doesNotMatch(signedOutHome, /href="#\/account"[^>]*>Use an email link instead</);
+assert.ok(
+  signedOutHome.indexOf('data-action="sign-in-google"')
+    < signedOutHome.indexOf('id="guest-email-link"'),
+  "Home Google must remain before the in-place email link"
+);
 assert.match(signedOutHome, /<h3 class="mt8 guest-join-title">Join the club\.<\/h3>/);
 assert.doesNotMatch(signedOutHome, /Membership is free/);
 assert.doesNotMatch(signedOutHome, /href="#\/account"[^>]*>Sign in or join</);

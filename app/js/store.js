@@ -33,7 +33,7 @@ import {
   normalizeDonorId,
   donorIdProblem,
 } from "./data.js";
-import { config, supabase, isLive } from "./config.js";
+import { config, supabase, isLive, isLiveConfigured, ensureLiveClient } from "./config.js";
 import {
   requestGoogleIdCredential,
   consumeGoogleRedirectCredential,
@@ -4431,7 +4431,10 @@ async function createGoogleSupabaseSession(credential) {
 }
 
 export async function completeGoogleSignInFromRedirect() {
-  if (!isLive() || !supabase) return false;
+  if (!isLiveConfigured()) return false;
+  if (!String(globalThis.location?.hash || "").includes("id_token=")) return false;
+  if (!supabase) await ensureLiveClient();
+  if (!supabase) throw new Error("Unable to load sign-in");
   const credential = consumeGoogleRedirectCredential();
   if (!credential) return false;
   await createGoogleSupabaseSession(credential);
@@ -4439,18 +4442,24 @@ export async function completeGoogleSignInFromRedirect() {
 }
 
 export async function signInWithGoogle() {
-  if (!isLive() || !supabase) {
+  if (!isLiveConfigured()) {
     throw new Error("signInWithGoogle requires SUPABASE_URL and SUPABASE_ANON_KEY");
   }
+  // Navigate to Google before supabase-js parses. The ID token is exchanged
+  // after Google returns, once the client is ready.
   const credential = await requestGoogleIdCredential();
   if (!credential?.token || credential.redirected) return;
+  if (!supabase) await ensureLiveClient();
+  if (!supabase) throw new Error("Unable to load sign-in");
   await createGoogleSupabaseSession(credential);
 }
 
 export async function signInWithMagicLink(email) {
-  if (!isLive() || !supabase) {
+  if (!isLiveConfigured()) {
     throw new Error("signInWithMagicLink requires SUPABASE_URL and SUPABASE_ANON_KEY");
   }
+  if (!supabase) await ensureLiveClient();
+  if (!supabase) throw new Error("Unable to load sign-in");
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!normalizedEmail) throw new Error("Enter your email address");
   const { error } = await supabase.auth.signInWithOtp({

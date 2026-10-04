@@ -8,6 +8,10 @@
   <link rel="manifest" href="/app/manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="48x48" href="/assets/itc/favicon-48.png">
   <link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preconnect" href="https://accounts.google.com">
+  <link rel="dns-prefetch" href="https://accounts.google.com">
+  <!-- Preload supabase-js; do not defer-parse it before app modules or Google redirect. -->
+  <link rel="preload" href="/app/vendor/supabase-js.2.117.2.umd.js" as="script" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous">
   <link rel="stylesheet" href="/app/styles.css">
   <script>
     // Live deployment values (hardcoded — Vercel does NOT inject env vars
@@ -20,8 +24,6 @@
     // Public VAPID key for Web Push (private key lives only in Edge Function secrets).
     window.VAPID_PUBLIC_KEY = "BAuwrBA_naFlYjZIXScAZovuyMgJzzLH6nJghwmpqXHq3e7cXVQ4dgfbyFJh-NSAg8S2tWYyn73iBXv0h9ZUlfM";
   </script>
-  <!-- Pinned supabase-js UMD on this origin so Home is not a third-party module waterfall. -->
-  <script defer src="/app/vendor/supabase-js.2.117.2.umd.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
 </head>
 <body>
   <div class="app-shell">

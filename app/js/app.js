@@ -6,7 +6,14 @@ import * as store from "./store.js";
 import { buildICS, findSession, todayLocal, mondayOf, addDays, isoDate, donorIdProblem } from "./data.js";
 import { buildIndemnityCsv } from "./exports.js";
 import * as views from "./views.js";
-import { isLive, supabase } from "./config.js";
+import {
+  isLive,
+  isLiveConfigured,
+  ensureLiveClient,
+  peekStoredLiveSession,
+  returningFromAuthRedirect,
+  supabase,
+} from "./config.js";
 import * as components from "./components.js";
 import { openAvatarManager } from "./avatar-cropper.js";
 import {
@@ -503,6 +510,7 @@ async function renderWithFeedback() {
 }
 
 async function render(generation = renderGeneration) {
+  views.captureGuestEmailLink(viewEl);
   const parts = parseHash();
   const [page, arg, arg2] = parts.length ? parts : ["home"];
 
@@ -907,6 +915,13 @@ export async function runAvatarModeration(control) {
     if (!mutationSucceeded || refreshed) controls.forEach((item) => { item.disabled = false; });
   }
 }
+
+document.addEventListener("toggle", (e) => {
+  const details = e.target;
+  if (details?.id !== "guest-email-link" || !details.open) return;
+  if (details.querySelector("summary") !== document.activeElement) return;
+  details.querySelector("[name=email]")?.focus();
+}, true);
 
 document.addEventListener("click", async (e) => {
   // Drill-down anchor links (e.g. Admin HYROX status counts) point at in-page
@@ -2198,6 +2213,29 @@ function consumeAuthCallbackError() {
   return detail ? `Sign-in failed: ${detail}` : "Sign-in failed. Please try again.";
 }
 
+let liveAuthBound = false;
+
+function bindLiveAuthState() {
+  if (liveAuthBound || !isLive() || !supabase) return;
+  liveAuthBound = true;
+  // Supabase may emit SIGNED_IN again when an existing session regains focus.
+  // Refresh identity without replacing the current route; only a pending
+  // applicant still needs the follow-up redirect to /apply.
+  supabase.auth.onAuthStateChange((event) => {
+    if (event !== "SIGNED_IN") return;
+    setTimeout(async () => {
+      try {
+        await store.getCurrentUser();
+        await syncApprovedGoogleAvatar({ ifMissing: true });
+        await renderWithFeedback();
+        await maybeRedirectToApply();
+      } catch (err) {
+        toast(err.message || "Sign-in failed", true);
+      }
+    }, 0);
+  });
+}
+
 async function boot() {
   store.load();
   const authCallbackError = consumeAuthCallbackError();
@@ -2205,27 +2243,40 @@ async function boot() {
   // Live mode: hydrate the synchronous view model before the first render
   // so Home renders with the correct signed-in state. The callback lock
   // is held by Supabase's own handler, so getCurrentUser() must not run
-  // while it is held.
-  if (isLive()) {
-    let bootError = null;
-    try {
-      await store.completeGoogleSignInFromRedirect();
-      await store.getCurrentUser();
-      const user = store.currentUser();
-      if (user) {
-        await store.fetchApplicationForUser(user);
-        await syncApprovedGoogleAvatar({ ifMissing: true });
-        await store.hydrateLiveOperations({ ensureWindow: true });
-      } else {
-        // Signed-out Home should paint the join card before schedule RPCs return.
-        pendingVisitorHydrate = store.hydrateLiveOperations({ ensureWindow: true });
+  // while it is held. First-visit guests skip supabase-js until after paint
+  // so Continue with Google can navigate immediately.
+  if (isLiveConfigured()) {
+    const needClientNow = isLive() || peekStoredLiveSession() || returningFromAuthRedirect();
+    if (needClientNow) {
+      let bootError = null;
+      try {
+        await ensureLiveClient();
+        await store.completeGoogleSignInFromRedirect();
+        await store.getCurrentUser();
+        const user = store.currentUser();
+        if (user) {
+          await store.fetchApplicationForUser(user);
+          await syncApprovedGoogleAvatar({ ifMissing: true });
+          await store.hydrateLiveOperations({ ensureWindow: true });
+        } else {
+          // Signed-out Home should paint the join card before schedule RPCs return.
+          pendingVisitorHydrate = store.hydrateLiveOperations({ ensureWindow: true });
+        }
+      } catch (err) {
+        bootError = err;
       }
-    } catch (err) {
-      bootError = err;
-    }
-    if (authCallbackError) toast(authCallbackError, true);
-    if (bootError) {
-      toast(bootError.message || "Application read failed", true);
+      bindLiveAuthState();
+      if (authCallbackError) toast(authCallbackError, true);
+      if (bootError) {
+        toast(bootError.message || "Application read failed", true);
+      }
+    } else {
+      if (authCallbackError) toast(authCallbackError, true);
+      pendingVisitorHydrate = (async () => {
+        await ensureLiveClient();
+        bindLiveAuthState();
+        await store.hydrateLiveOperations({ ensureWindow: true });
+      })();
     }
   } else if (authCallbackError) {
     toast(authCallbackError, true);
@@ -2292,25 +2343,6 @@ async function boot() {
       toast(err.message || "Unable to refresh the current page", true);
     }
   });
-
-  // Supabase may emit SIGNED_IN again when an existing session regains focus.
-  // Refresh identity without replacing the current route; only a pending
-  // applicant still needs the follow-up redirect to /apply.
-  if (isLive() && supabase) {
-    supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN") return;
-      setTimeout(async () => {
-        try {
-          await store.getCurrentUser();
-          await syncApprovedGoogleAvatar({ ifMissing: true });
-          await renderWithFeedback();
-          await maybeRedirectToApply();
-        } catch (err) {
-          toast(err.message || "Sign-in failed", true);
-        }
-      }, 0);
-    });
-  }
 
   await renderWithFeedback();
   if (pendingVisitorHydrate) {
