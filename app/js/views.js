@@ -345,15 +345,15 @@ export function viewHome() {
   const guest = !user
     ? `
     <div class="card mt24"><div class="card-body">
-      <span class="kicker">New to ITC?</span>
-      <h3 class="mt8">Everyone is welcome</h3>
-      <p class="hero-meta">Free activities are open to all — just show up. Membership is free too; sign in and an ITC leader approves every application before paid booking unlocks.</p>
+      <span class="kicker">Join ITC</span>
+      <h3 class="mt8">Join the club.</h3>
+      <p class="subcopy mt8">Sign up to book sessions and stay in the community.</p>
       ${visitorDraftActions()}
       ${isLive()
         ? `<button class="btn mt16" type="button" data-action="sign-in-google">Continue with Google</button>
-          <a class="btn ghost mt8" href="#/account">Use an email link instead</a>`
+          <a class="guest-alt-auth" href="#/account">Use an email link instead</a>`
         : `<a class="btn mt16" href="#/account">Sign in or join</a>`}
-      <p class="muted small mt8">New here? You'll be guided through a short application after sign-in.</p>
+      <p class="muted small mt8">Takes a couple of minutes. A leader confirms your application before paid booking opens.</p>
     </div></div>`
     : "";
 
@@ -1505,7 +1505,7 @@ function accountVisitor() {
   return `
     <div class="kicker">Account</div>
     <h1 class="display">Join the club.</h1>
-    <p class="subcopy mt8">Membership is free. An ITC leader approves every application — approval unlocks paid booking and member content.</p>
+    <p class="subcopy mt8">An ITC leader approves every application — approval unlocks paid booking and member content.</p>
     ${visitorDraftActions()}
     <div class="card mt24"><div class="card-body">
       <h3>Sign in</h3>

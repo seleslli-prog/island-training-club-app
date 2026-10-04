@@ -2609,6 +2609,8 @@ console.log("ok  live partial venue remains TBC until both values confirm it");
 const signedOutHome = views.viewHome();
 assert.match(signedOutHome, /data-action="sign-in-google"[^>]*>Continue with Google</);
 assert.match(signedOutHome, /href="#\/account"[^>]*>Use an email link instead</);
+assert.match(signedOutHome, /<h3 class="mt8">Join the club\.<\/h3>/);
+assert.doesNotMatch(signedOutHome, /Membership is free/);
 assert.doesNotMatch(signedOutHome, /href="#\/account"[^>]*>Sign in or join</);
 store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
 const signedOutHomeWithDraft = views.viewHome();

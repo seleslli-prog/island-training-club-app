@@ -498,6 +498,23 @@ h1.kicker {
 .btn-row { display: grid; gap: 10px; margin-top: 16px; }
 .btn-row.two { grid-template-columns: 1fr 1fr; }
 
+.guest-alt-auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.guest-alt-auth:hover,
+.guest-alt-auth:focus-visible {
+  color: var(--ink);
+}
+
 /* ---- Cards ------------------------------------------------------------ */
 
 .card {

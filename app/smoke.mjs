@@ -2890,6 +2890,18 @@ assertPrimaryNav(null, ["Home", "Schedule", "Community", "Account"], "visitor");
 if (!localVisitorHome.includes('href="#/account">Sign in or join</a>')) {
   throw new Error("local signed-out Home must retain the Account sign-in link");
 }
+if (!localVisitorHome.includes("<h3 class=\"mt8\">Join the club.</h3>")) {
+  throw new Error("signed-out Home must prompt visitors to join, not browse");
+}
+if (!localVisitorHome.includes("Sign up to book sessions and stay in the community.")) {
+  throw new Error("signed-out Home must explain why to sign up");
+}
+if (localVisitorHome.includes("Membership is free")) {
+  throw new Error("signed-out Home must not say membership is free");
+}
+if (localVisitorHome.includes("<h3 class=\"mt8\">Everyone is welcome</h3>")) {
+  throw new Error("signed-out Home must not use a welcome heading on the join card");
+}
 if (localVisitorHome.includes('data-action="sign-in-google"')) {
   throw new Error("local signed-out Home must not render the live Google action");
 }
@@ -3209,6 +3221,12 @@ if (!(await views.viewCommunity("nope")).includes("Page not found")) {
   console.error("FAIL unknown Community section should 404");
 } else console.log("ok  unknown Community section 404s");
 await check("account (visitor)", () => views.viewAccount());
+{
+  const localVisitorAccount = await views.viewAccount();
+  if (localVisitorAccount.includes("Membership is free")) {
+    throw new Error("signed-out Account must not say membership is free");
+  }
+}
 await check("apply", () => views.viewApply());
 if (!views.viewApply().includes('name="donorId"')) {
   failures++;
