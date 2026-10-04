@@ -242,7 +242,7 @@ const NAV_ITEMS = [
   { key: "schedule", label: "Schedule", icon: "calendar", href: "#/schedule" },
   { key: "community", label: "Community", icon: "people", href: "#/community" },
   { key: "giving", label: "Giving", icon: "heart", href: "#/giving", roles: ["signed-in"] },
-  { key: "account", label: "Account", icon: "user", href: "#/account" },
+  { key: "account", label: "Account", icon: "user", href: "#/account", roles: ["signed-in"] },
 ];
 
 export function navHTML(routeKey, user) {
@@ -346,7 +346,7 @@ export function viewHome() {
     ? `
     <div class="card mt24"><div class="card-body">
       <span class="kicker">Join ITC</span>
-      <h3 class="mt8">Join the club.</h3>
+      <h3 class="mt8 guest-join-title">Join the club.</h3>
       <p class="subcopy mt8">Sign up to book sessions and stay in the community.</p>
       ${visitorDraftActions()}
       ${isLive()

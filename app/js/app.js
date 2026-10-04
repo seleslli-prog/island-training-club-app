@@ -682,6 +682,7 @@ async function render(generation = renderGeneration) {
   }
   navEl.innerHTML = views.navHTML(NAV_FOR[page] ?? "home", user);
   avatarEl.classList.toggle("is-empty", !user);
+  avatarEl.setAttribute("aria-label", user ? "Profile" : "Sign in");
   avatarEl.dataset.avatarSource = ownAvatar?.source || "initials";
   avatarEl.innerHTML = views.avatarHTML(user, ownAvatar);
   if (!notificationsActive) renderNotificationChrome(user, false, generation);

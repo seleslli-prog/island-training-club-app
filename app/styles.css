@@ -271,6 +271,12 @@ h1.kicker {
 
 .display.sm { font-size: 30px; }
 
+.guest-join-title {
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -.03em;
+}
+
 .subcopy {
   color: var(--muted);
   font-size: 14px;

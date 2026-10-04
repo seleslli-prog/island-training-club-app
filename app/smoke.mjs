@@ -208,6 +208,9 @@ function assertPrimaryNav(user, expected, label) {
   if (labels.includes("Giving") !== !!user) {
     throw new Error(`Giving must appear only in signed-in primary navigation (${label})`);
   }
+  if (labels.includes("Account") || (labels.includes("Profile") !== !!user)) {
+    throw new Error(`Profile must appear only in signed-in primary navigation (${label})`);
+  }
 }
 
 const freshV27State = store.load();
@@ -2886,11 +2889,11 @@ if (localVisitorHome.includes("No open sessions this week")) {
 } else if (!localVisitorHome.includes('href="#/schedule">See more →</a>')) {
   throw new Error("visitor Home with sessions must keep See more");
 }
-assertPrimaryNav(null, ["Home", "Schedule", "Community", "Account"], "visitor");
+assertPrimaryNav(null, ["Home", "Schedule", "Community"], "visitor");
 if (!localVisitorHome.includes('href="#/account">Sign in or join</a>')) {
   throw new Error("local signed-out Home must retain the Account sign-in link");
 }
-if (!localVisitorHome.includes("<h3 class=\"mt8\">Join the club.</h3>")) {
+if (!localVisitorHome.includes("<h3 class=\"mt8 guest-join-title\">Join the club.</h3>")) {
   throw new Error("signed-out Home must prompt visitors to join, not browse");
 }
 if (!localVisitorHome.includes("Sign up to book sessions and stay in the community.")) {
