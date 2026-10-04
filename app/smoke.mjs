@@ -2328,6 +2328,7 @@ for (const assetReference of [
   'href="/app/styles.css"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js"',
+  'src="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
   'src="/assets/itc/logo-header.png"',
@@ -2339,6 +2340,8 @@ assert.deepEqual(vercelConfig.rewrites, [
   { source: "/", destination: "/app/index.html" },
   { source: "/push-sw.js", destination: "/app/push-sw.js" },
 ], "canonical root must serve the app and expose push-sw.js at / for root-scope registration");
+assert.doesNotMatch(appIndexSource, /esm\.sh/,
+  "Home must not load supabase-js from esm.sh");
 assert.ok(
   Array.isArray(vercelConfig.headers)
     && vercelConfig.headers.some((entry) => entry.source === "/push-sw.js"
@@ -2346,6 +2349,26 @@ assert.ok(
         && header.value === "/")),
   "push-sw.js must allow root scope via Service-Worker-Allowed",
 );
+const cacheHeader = (source) => (vercelConfig.headers || [])
+  .find((entry) => entry.source === source)
+  ?.headers?.find((header) => header.key === "Cache-Control")
+  ?.value || "";
+assert.match(cacheHeader("/app/js/:path*"), /max-age=300/,
+  "app JS must be browser-cacheable; cookies do not gate the Vercel CDN");
+assert.match(cacheHeader("/app/vendor/:path*"), /immutable/,
+  "versioned vendor JS must be long-cached");
+assert.match(cacheHeader("/assets/:path*"), /max-age=300/,
+  "static assets must be browser-cacheable");
+assert.equal(cacheHeader("/push-sw.js"), "no-cache",
+  "the service worker must not be long-cached");
+{
+  const vendorSource = readFileSync(
+    resolve(__dirnameSmoke, "vendor/supabase-js.2.117.2.umd.js"),
+    "utf8",
+  );
+  assert.match(vendorSource, /createClient/,
+    "vendored supabase-js UMD must expose createClient");
+}
 const legacyProductionHosts = [
   "island-training-club-app-island-training-club.vercel.app",
   "island-training-club-app.vercel.app",
