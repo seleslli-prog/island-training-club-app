@@ -2201,6 +2201,7 @@ function consumeAuthCallbackError() {
 async function boot() {
   store.load();
   const authCallbackError = consumeAuthCallbackError();
+  let pendingVisitorHydrate = null;
   // Live mode: hydrate the synchronous view model before the first render
   // so Home renders with the correct signed-in state. The callback lock
   // is held by Supabase's own handler, so getCurrentUser() must not run
@@ -2210,9 +2211,15 @@ async function boot() {
     try {
       await store.completeGoogleSignInFromRedirect();
       await store.getCurrentUser();
-      await store.fetchApplicationForUser(store.currentUser());
-      await syncApprovedGoogleAvatar({ ifMissing: true });
-      await store.hydrateLiveOperations({ ensureWindow: true });
+      const user = store.currentUser();
+      if (user) {
+        await store.fetchApplicationForUser(user);
+        await syncApprovedGoogleAvatar({ ifMissing: true });
+        await store.hydrateLiveOperations({ ensureWindow: true });
+      } else {
+        // Signed-out Home should paint the join card before schedule RPCs return.
+        pendingVisitorHydrate = store.hydrateLiveOperations({ ensureWindow: true });
+      }
     } catch (err) {
       bootError = err;
     }
@@ -2306,6 +2313,14 @@ async function boot() {
   }
 
   await renderWithFeedback();
+  if (pendingVisitorHydrate) {
+    try {
+      await pendingVisitorHydrate;
+      await renderWithFeedback();
+    } catch (err) {
+      toast(err.message || "Unable to load this week's sessions", true);
+    }
+  }
   if (isLive()) await maybeRedirectToApply();
 }
 

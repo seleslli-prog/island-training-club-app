@@ -2614,6 +2614,7 @@ assert.doesNotMatch(signedOutHome, /Membership is free/);
 assert.doesNotMatch(signedOutHome, /href="#\/account"[^>]*>Sign in or join</);
 assert.doesNotMatch(views.navHTML("home", null), />Account</);
 assert.doesNotMatch(views.navHTML("home", null), />Profile</);
+assert.doesNotMatch(signedOutHome, /Loading this week's sessions/);
 store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
 const signedOutHomeWithDraft = views.viewHome();
 const signedOutAccount = await views.viewAccount();

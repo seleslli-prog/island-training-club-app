@@ -2460,6 +2460,9 @@ assert.doesNotMatch(
   "Unguarded querySelector on arbitrary hash hrefs would throw SyntaxError for route links");
 assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPrivacyPreferences\(/,
   "Notifications must persist reminder preferences through the form delegate");
+assert.match(integratedAppSource,
+  /pendingVisitorHydrate = store\.hydrateLiveOperations\(\{ ensureWindow: true \}\)/,
+  "signed-out live boot must not await schedule hydrate before the first Home paint");
 assert.match(integratedAppSource, /dataset\.form === "photo-consent"[\s\S]*?updateMyPhotoConsent\(/,
   "Agreements must persist required photo consent through the form delegate");
 assert.match(integratedAppSource, /applyOwnAvatarToRoster/,
@@ -2899,8 +2902,8 @@ if (!localVisitorHome.includes("<h3 class=\"mt8 guest-join-title\">Join the club
 if (!localVisitorHome.includes("Sign up to book sessions and stay in the community.")) {
   throw new Error("signed-out Home must explain why to sign up");
 }
-if (localVisitorHome.includes("Membership is free")) {
-  throw new Error("signed-out Home must not say membership is free");
+if (localVisitorHome.includes("Loading this week's sessions…")) {
+  throw new Error("local signed-out Home must not show the live schedule loading copy");
 }
 if (localVisitorHome.includes("<h3 class=\"mt8\">Everyone is welcome</h3>")) {
   throw new Error("signed-out Home must not use a welcome heading on the join card");

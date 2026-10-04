@@ -325,7 +325,9 @@ export function viewHome() {
   let weekHeading;
   if (!user) {
     rows = upcoming.filter((session) => session.kind === "free" && inThisWeek(session));
-    emptyMsg = "No open sessions this week — check back soon.";
+    emptyMsg = isLive() && !liveOps.operationalStateStatus().loaded
+      ? "Loading this week's sessions…"
+      : "No open sessions this week — check back soon.";
     weekHeading = "This week — open to all";
   } else if (user.status !== "approved") {
     rows = upcoming.filter((session) => session.kind === "free" && inThisWeek(session));
