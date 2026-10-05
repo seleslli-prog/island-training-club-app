@@ -81,6 +81,9 @@ const RESTORABLE_ROUTE_PATTERNS = [
 let liveProfile = null;
 let liveUser = null;
 let liveProfileFetchedAt = 0;
+let liveApplication = null;
+let liveApplicationUserId = null;
+let liveApplicationFetchedAt = 0;
 let liveGivingCampaign = null;
 let livePublishedAnnouncements = [];
 // Supabase remains the identity directory. Payment Ops caches live profiles
@@ -89,6 +92,25 @@ let livePaymentDirectory = new Map();
 const liveReplacementTokens = new Map();
 const livePendingReplacementStates = new Map();
 const LIVE_PROFILE_TTL_MS = 30_000;
+const LIVE_APPLICATION_TTL_MS = 30_000;
+
+function rememberLiveApplication(userId, row) {
+  liveApplicationUserId = userId || null;
+  liveApplication = row ?? null;
+  liveApplicationFetchedAt = Date.now();
+}
+
+export function invalidateLiveApplicationCache() {
+  liveApplication = null;
+  liveApplicationUserId = null;
+  liveApplicationFetchedAt = 0;
+}
+
+function liveApplicationCacheValid(userId) {
+  return Boolean(userId)
+    && liveApplicationUserId === userId
+    && Date.now() - liveApplicationFetchedAt <= LIVE_APPLICATION_TTL_MS;
+}
 const AVATAR_CACHE_EXPIRY_SKEW_MS = 30_000;
 const AVATAR_APPROVED_ROLES = new Set(["member", "admin", "superadmin", "super_admin"]);
 let ownAvatarCache = null;
@@ -1394,6 +1416,11 @@ export async function updateMyDonorId(raw) {
     .select("donor_id")
     .single();
   if (error) throw error;
+  if (liveApplicationCacheValid(cu.id) && liveApplication) {
+    rememberLiveApplication(cu.id, { ...liveApplication, donor_id: data.donor_id });
+  } else {
+    invalidateLiveApplicationCache();
+  }
   return data.donor_id;
 }
 
@@ -4368,6 +4395,7 @@ export async function getCurrentUser() {
   if (sessErr || !sessData.session) {
     clearAvatarCache();
     liveUser = null;
+    invalidateLiveApplicationCache();
     return null;
   }
   const authUser = sessData.session.user;
@@ -4375,6 +4403,7 @@ export async function getCurrentUser() {
     clearAvatarCache();
     liveProfile = null;
     liveProfileFetchedAt = 0;
+    invalidateLiveApplicationCache();
   }
   if (!liveProfile || Date.now() - liveProfileFetchedAt > LIVE_PROFILE_TTL_MS) {
     const { data: prof, error: profErr } = await supabase
@@ -4481,6 +4510,7 @@ export async function signOutLive() {
   liveProfileFetchedAt = 0;
   livePaymentDirectory = new Map();
   livePublishedAnnouncements = [];
+  invalidateLiveApplicationCache();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
@@ -4659,12 +4689,14 @@ function privacyPatch(form) {
 
 export async function fetchApplicationForUser(user) {
   if (!isLive() || !supabase || !user || !user.id) return null;
+  if (liveApplicationCacheValid(user.id)) return liveApplication;
   const { data, error } = await supabase
     .from("applications")
     .select("*")
     .eq("profile_id", user.id)
     .maybeSingle();
   if (error) throw error;
+  rememberLiveApplication(user.id, data);
   return data;
 }
 
@@ -4675,13 +4707,7 @@ export async function getMyApplication() {
   }
   const cu = await getCurrentUser();
   if (!cu) return null;
-  const { data, error } = await supabase
-    .from("applications")
-    .select("*")
-    .eq("profile_id", cu.id)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  return fetchApplicationForUser(cu);
 }
 
 export async function saveMyApplication(form) {
@@ -4739,6 +4765,7 @@ export async function saveMyApplication(form) {
 
   const { error } = await supabase.from("applications").upsert(row);
   if (error) throw error;
+  invalidateLiveApplicationCache();
   clearApplyDraft({ profileId: cu.id });
 }
 
@@ -4770,6 +4797,7 @@ export async function updateMyMembershipDetails(form) {
     .select()
     .single();
   if (error) throw error;
+  rememberLiveApplication(cu.id, data);
   return data;
 }
 
@@ -4795,6 +4823,7 @@ export async function updateMyPrivacyPreferences(form) {
     .select()
     .single();
   if (error) throw error;
+  rememberLiveApplication(cu.id, data);
   return data;
 }
 
@@ -4817,6 +4846,7 @@ export async function updateMyPhotoConsent(form) {
     .select()
     .single();
   if (error) throw error;
+  rememberLiveApplication(cu.id, data);
   return data;
 }
 
@@ -4860,6 +4890,7 @@ export async function acceptMyIndemnity(payload) {
     .select()
     .single();
   if (error) throw error;
+  rememberLiveApplication(cu.id, data);
   return data.waiver_accepted_at;
 }
 

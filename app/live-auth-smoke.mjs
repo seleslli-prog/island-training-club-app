@@ -165,6 +165,7 @@ const profileUpdates = [];
 let applicationReadError = null;
 let applicationReadGate = null;
 const applicationReadGates = [];
+let applicationSelectCount = 0;
 let notificationReadError = null;
 let notificationReadGate = null;
 let notificationQueryCount = 0;
@@ -718,6 +719,7 @@ const fakeSupabase = {
                 maybeSingle: async () => {
                   const readGate = applicationReadGates.shift() || applicationReadGate;
                   if (readGate) await readGate;
+                  applicationSelectCount += 1;
                   return {
                     data: structuredClone(applicationRows.get(value) || null),
                     error: applicationReadError,
@@ -1673,6 +1675,18 @@ operationalRpcHandler = (name, args) => {
 };
 
 const store = await import("./js/store.js");
+const applicationRowsSet = applicationRows.set.bind(applicationRows);
+const applicationRowsDelete = applicationRows.delete.bind(applicationRows);
+applicationRows.set = (key, value) => {
+  const result = applicationRowsSet(key, value);
+  if (key === authUser.id) store.invalidateLiveApplicationCache();
+  return result;
+};
+applicationRows.delete = (key) => {
+  const result = applicationRowsDelete(key);
+  if (key === authUser.id) store.invalidateLiveApplicationCache();
+  return result;
+};
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
 const operations = await import("./js/operations.js");
@@ -2654,6 +2668,29 @@ assert.ok(
 store.clearApplyDraft();
 
 await store.getCurrentUser();
+{
+  const user = store.currentUser();
+  store.invalidateLiveApplicationCache();
+  const before = applicationSelectCount;
+  const first = await store.fetchApplicationForUser(user);
+  const second = await store.fetchApplicationForUser(user);
+  assert.equal(applicationSelectCount, before + 1,
+    "signed-in application reads must reuse the 30s in-memory cache");
+  assert.equal(first?.profile_id, user.id);
+  assert.equal(second?.waiver_accepted_at, first?.waiver_accepted_at);
+  store.invalidateLiveApplicationCache();
+  await store.fetchApplicationForUser(user);
+  assert.equal(applicationSelectCount, before + 2,
+    "invalidateLiveApplicationCache must force the next application select");
+  const tabBefore = applicationSelectCount;
+  for (let i = 0; i < 4; i++) {
+    await store.getCurrentUser();
+    await store.fetchApplicationForUser(store.currentUser());
+  }
+  assert.equal(applicationSelectCount, tabBefore,
+    "signed-in tab-switch identity hydrate must not refetch applications within the cache window");
+  console.log("ok  signed-in application cache reuses one select across tab switches");
+}
 prayerRpcErrors.set("list_my_prayer_requests", { message: "sensitive stale row failure" });
 const failedPrayerListHtml = await views.viewCommunity("prayers");
 prayerRpcErrors.delete("list_my_prayer_requests");
@@ -5034,6 +5071,19 @@ applicationReadGate = null;
 assert.equal(viewEl.hasAttribute("aria-busy"), false, "route busy state must clear");
 assert.equal(routeLoader.hidden, true, "route loading feedback must clear");
 
+store.invalidateLiveApplicationCache();
+const applicationSelectsBeforeTabSwitch = applicationSelectCount;
+location.hash = "#/home";
+await windowListeners.get("hashchange")();
+location.hash = "#/schedule";
+await windowListeners.get("hashchange")();
+location.hash = "#/community";
+await windowListeners.get("hashchange")();
+location.hash = "#/account";
+await windowListeners.get("hashchange")();
+assert.equal(applicationSelectCount, applicationSelectsBeforeTabSwitch + 1,
+  "signed-in tab switches must not refetch applications within the 30s cache window");
+
 // Three overlapping routes prove that stale completion cannot clear current
 // feedback and out-of-order completion cannot replace the newest route.
 const deferred = () => {
@@ -5045,6 +5095,7 @@ const deferred = () => {
 const oldestGate = deferred();
 const middleGate = deferred();
 const currentGate = deferred();
+store.invalidateLiveApplicationCache();
 applicationReadGates.push(oldestGate.promise, middleGate.promise, currentGate.promise);
 location.hash = "#/account/notifications";
 const oldestRender = windowListeners.get("hashchange")();
@@ -7637,6 +7688,7 @@ if (location.hash !== "#/apply"
 }
 
 applicationReadError = new Error("Application read failed");
+store.invalidateLiveApplicationCache();
 location.hash = "#/home";
 await dispatchAuthStateChange("SIGNED_IN");
 await new Promise(setImmediate);
