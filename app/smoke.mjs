@@ -3227,9 +3227,9 @@ if (commAbout.includes("Community copy is draft placeholder text for review with
   console.error("FAIL Community About should drop the draft-placeholder disclaimer");
 } else console.log("ok  Community About drops the draft disclaimer");
 for (const [section, heading] of [
-  ["prayers", "Prayers."],
-  ["fellowship", "Fellowship."],
-  ["announcements", "Announcements."],
+  ["prayers", "Prayers"],
+  ["fellowship", "Fellowship"],
+  ["announcements", "Announcements"],
 ]) {
   const html = await views.viewCommunity(section);
   if (!html.includes(`<h1 class="display sm mt16">${heading}</h1>`) || html.includes("Community · ")) {

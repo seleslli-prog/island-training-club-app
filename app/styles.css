@@ -270,6 +270,7 @@ h1.kicker {
 }
 
 .display.sm { font-size: 30px; }
+.view > h1.display.sm { color: #fff; }
 
 .guest-join-title {
   font-size: 24px;

@@ -1275,7 +1275,7 @@ async function communityPrayers() {
     && ["member", "admin", "superadmin", "super_admin"].includes(user.role);
   const intro = `
     <a class="back-link" href="#/community">← Community</a>
-    <h1 class="display sm mt16">Prayers.</h1>
+    <h1 class="display sm mt16">Prayers</h1>
     <p class="subcopy mt8">We pray for each other — injuries, exams, work, family, anything. Send a request and the leaders will pray with you this week; you’re also welcome to pray along.</p>`;
   if (!approved) {
     const gateCopy = user
@@ -1322,7 +1322,7 @@ async function communityPrayers() {
 function communityFellowship() {
   return `
     <a class="back-link" href="#/community">← Community</a>
-    <h1 class="display sm mt16">Fellowship.</h1>
+    <h1 class="display sm mt16">Fellowship</h1>
     <p class="subcopy mt8">Sessions are where we train; fellowship is where we become friends. Whatever you believe, you’re welcome at every one of these.</p>
     <div class="card mt16"><div class="card-body prose">
       <h3>Small groups</h3>
@@ -1347,7 +1347,7 @@ function communityAnnouncements() {
   if (!anniversary && !published) {
     return `
       <a class="back-link" href="#/community">← Community</a>
-      <h1 class="display sm mt16">Announcements.</h1>
+      <h1 class="display sm mt16">Announcements</h1>
       <div class="empty mt16">No announcements yet.</div>
       ${adminCompose}`;
   }
@@ -1357,7 +1357,7 @@ function communityAnnouncements() {
     : "";
   return `
     <a class="back-link" href="#/community">← Community</a>
-    <h1 class="display sm mt16">Announcements.</h1>
+    <h1 class="display sm mt16">Announcements</h1>
     ${anniversary}
     ${publishedSection}
     ${adminCompose}`;
