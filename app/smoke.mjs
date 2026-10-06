@@ -2796,15 +2796,23 @@ console.log("ok  admin announcement compose markers");
 // Weekly encouragement rotates on Hong Kong Sundays, regardless of the host
 // calendar. Each expected reference is hand-derived from the fixed HKT epoch.
 {
+  const refs = data.WEEKLY_VERSES.map((verse) => verse.ref);
+  if (data.WEEKLY_VERSES.length !== 32) {
+    throw new Error(`Weekly verse pool should have 32 entries, got ${data.WEEKLY_VERSES.length}`);
+  }
+  if (new Set(refs).size !== refs.length) {
+    throw new Error("Weekly verse pool refs must be unique");
+  }
+
   const verseCases = [
-    ["one second before the epoch boundary", "2026-07-25T15:59:59.000Z", "2 Timothy 4:7"],
-    ["one millisecond before the epoch boundary", "2026-07-25T15:59:59.999Z", "2 Timothy 4:7"],
-    ["at the epoch boundary", "2026-07-25T16:00:00.000Z", "Hebrews 12:1"],
-    ["one millisecond before the next boundary", "2026-08-01T15:59:59.999Z", "Hebrews 12:1"],
-    ["at the next boundary", "2026-08-01T16:00:00.000Z", "Isaiah 40:31"],
-    ["one week before the epoch", "2026-07-18T16:00:00.000Z", "2 Timothy 4:7"],
-    ["eight weeks before the epoch", "2026-05-30T16:00:00.000Z", "Hebrews 12:1"],
-    ["nine weeks before the epoch", "2026-05-23T16:00:00.000Z", "2 Timothy 4:7"],
+    ["one second before the epoch boundary", "2026-10-10T15:59:59.000Z", "Psalm 23:1"],
+    ["one millisecond before the epoch boundary", "2026-10-10T15:59:59.999Z", "Psalm 23:1"],
+    ["at the epoch boundary", "2026-10-10T16:00:00.000Z", "Hebrews 12:1"],
+    ["one millisecond before the next boundary", "2026-10-17T15:59:59.999Z", "Hebrews 12:1"],
+    ["at the next boundary", "2026-10-17T16:00:00.000Z", "Isaiah 40:31"],
+    ["one week before the epoch", "2026-10-03T16:00:00.000Z", "Psalm 23:1"],
+    ["eight weeks before the epoch", "2026-08-15T16:00:00.000Z", "Proverbs 3:5"],
+    ["nine weeks before the epoch", "2026-08-08T16:00:00.000Z", "James 1:3"],
   ];
   for (const [label, instant, expectedRef] of verseCases) {
     const actualRef = data.weeklyVerse(new Date(instant)).ref;
@@ -2814,7 +2822,7 @@ console.log("ok  admin announcement compose markers");
   }
 
   const dataModuleURL = new URL("./js/data.js", import.meta.url).href;
-  const fixedInstant = "2026-07-25T16:00:00.000Z";
+  const fixedInstant = "2026-10-10T16:00:00.000Z";
   const childSource = `
     const RealDate = Date;
     const fixedInstant = ${JSON.stringify(fixedInstant)};

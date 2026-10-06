@@ -719,10 +719,107 @@ export const WEEKLY_VERSES = [
     ref: "2 Timothy 4:7",
     text: "I have fought the good fight, I have finished the race, I have kept the faith.",
   },
+  {
+    ref: "Proverbs 27:17",
+    text: "As iron sharpens iron, so one person sharpens another.",
+  },
+  {
+    ref: "1 Timothy 4:8",
+    text: "Physical training is of some value, but godliness has value for all things.",
+  },
+  {
+    ref: "Psalm 18:29",
+    text: "With your help I can advance against a troop; with my God I can scale a wall.",
+  },
+  {
+    ref: "Isaiah 41:10",
+    text: "Do not fear, for I am with you; do not be dismayed, for I am your God.",
+  },
+  {
+    ref: "Ecclesiastes 4:9",
+    text: "Two are better than one, because they have a good return for their labour.",
+  },
+  {
+    ref: "Philippians 3:14",
+    text: "I press on toward the goal to win the prize for which God has called me.",
+  },
+  {
+    ref: "Romans 12:12",
+    text: "Be joyful in hope, patient in affliction, faithful in prayer.",
+  },
+  {
+    ref: "Ephesians 6:10",
+    text: "Be strong in the Lord and in his mighty power.",
+  },
+  {
+    ref: "Psalm 46:1",
+    text: "God is our refuge and strength, an ever-present help in trouble.",
+  },
+  {
+    ref: "1 Corinthians 16:13",
+    text: "Be on your guard; stand firm in the faith; be courageous; be strong.",
+  },
+  {
+    ref: "Hebrews 12:11",
+    text: "No discipline seems pleasant at the time, but later it produces a harvest of righteousness.",
+  },
+  {
+    ref: "Matthew 11:28",
+    text: "Come to me, all you who are weary and burdened, and I will give you rest.",
+  },
+  {
+    ref: "Romans 8:28",
+    text: "In all things God works for the good of those who love him.",
+  },
+  {
+    ref: "Nehemiah 8:10",
+    text: "The joy of the Lord is your strength.",
+  },
+  {
+    ref: "1 Thessalonians 5:11",
+    text: "Therefore encourage one another and build each other up.",
+  },
+  {
+    ref: "James 1:3",
+    text: "The testing of your faith produces perseverance.",
+  },
+  {
+    ref: "Proverbs 3:5",
+    text: "Trust in the Lord with all your heart and lean not on your own understanding.",
+  },
+  {
+    ref: "Matthew 5:16",
+    text: "Let your light shine before others, that they may see your good deeds and glorify your Father.",
+  },
+  {
+    ref: "2 Corinthians 12:9",
+    text: "My grace is sufficient for you, for my power is made perfect in weakness.",
+  },
+  {
+    ref: "Deuteronomy 31:6",
+    text: "Be strong and courageous. Do not be afraid; the Lord your God goes with you.",
+  },
+  {
+    ref: "Psalm 37:5",
+    text: "Commit your way to the Lord; trust in him and he will do this.",
+  },
+  {
+    ref: "Hebrews 10:24",
+    text: "Let us consider how we may spur one another on toward love and good deeds.",
+  },
+  {
+    ref: "Philippians 2:4",
+    text: "Not looking to your own interests but each of you to the interests of the others.",
+  },
+  {
+    ref: "Psalm 23:1",
+    text: "The Lord is my shepherd, I lack nothing.",
+  },
 ];
 
 const CALENDAR_DAY_MS = 24 * 60 * 60 * 1000;
-const VERSE_EPOCH_DAY = Date.UTC(2026, 6, 26) / CALENDAR_DAY_MS;
+// Sunday 11 Oct 2026, 00:00 Asia/Hong_Kong — week 0 of this pool.
+const VERSE_EPOCH_DAY = Date.UTC(2026, 9, 11) / CALENDAR_DAY_MS;
 const HKT_DATE_PARTS = new Intl.DateTimeFormat("en-US", {
   timeZone: "Asia/Hong_Kong",
   calendar: "gregory",
