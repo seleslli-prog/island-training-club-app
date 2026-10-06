@@ -741,7 +741,7 @@ export const WEEKLY_VERSES = [
   },
   {
     ref: "Philippians 3:14",
-    text: "I press on toward the goal to win the prize for which God has called me.",
+    text: "I press on toward the goal to win the prize for which God has called me heavenward in Christ Jesus.",
   },
   {
     ref: "Romans 12:12",
@@ -800,8 +800,8 @@ export const WEEKLY_VERSES = [
     text: "Be strong and courageous. Do not be afraid; the Lord your God goes with you.",
   },
   {
-    ref: "Psalm 37:5",
-    text: "Commit your way to the Lord; trust in him and he will do this.",
+    ref: "2 Corinthians 5:20",
+    text: "We are therefore Christ’s ambassadors, as though God were making his appeal through us.",
   },
   {
     ref: "Hebrews 10:24",
