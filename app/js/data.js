@@ -818,7 +818,7 @@ export const WEEKLY_VERSES = [
 ];
 
 const CALENDAR_DAY_MS = 24 * 60 * 60 * 1000;
-// Sunday 11 Oct 2026, 00:00 Asia/Hong_Kong — week 0 of this pool.
+// Sunday 11 Oct 2026, 00:00 Asia/Hong_Kong — week 1 of this pool (Hebrews 12:1).
 const VERSE_EPOCH_DAY = Date.UTC(2026, 9, 11) / CALENDAR_DAY_MS;
 const HKT_DATE_PARTS = new Intl.DateTimeFormat("en-US", {
   timeZone: "Asia/Hong_Kong",
@@ -839,7 +839,8 @@ function hktCalendarDay(date) {
 }
 
 export function weeklyVerse(date = new Date()) {
-  const weeks = Math.floor((hktCalendarDay(date) - VERSE_EPOCH_DAY) / 7);
   const n = WEEKLY_VERSES.length;
-  return WEEKLY_VERSES[((weeks % n) + n) % n];
+  const weeksFromEpoch = Math.floor((hktCalendarDay(date) - VERSE_EPOCH_DAY) / 7);
+  const weekNumber = ((weeksFromEpoch % n) + n) % n + 1;
+  return WEEKLY_VERSES[weekNumber - 1];
 }
