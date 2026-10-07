@@ -5319,10 +5319,9 @@ installLocalFixtures({ withMemberBooking: true });
 store.signIn("member@example.test");
 await check("home (member)", () => views.viewHome());
 const memberHome = views.viewHome();
-const fixtureMember = store.currentUser();
-const fixtureBookings = store.bookingsForUser(fixtureMember.id);
-const fixtureSnap = fixtureBookings[0]?.snapshot;
-const bookedMarker = fixtureSnap?.location ?? "BFT Causeway Bay";
+const fixtureBooking = store.getBooking("fixture-booking");
+const fixtureSnap = fixtureBooking?.snapshot;
+const fixtureLink = fixtureBooking ? `href="#/activity/${fixtureBooking.sessionId}"` : "";
 const otherMarker = "Midtown28 Fitness";
 const fixtureInMyWeek = Boolean(
   fixtureSnap?.dateISO
@@ -5330,14 +5329,17 @@ const fixtureInMyWeek = Boolean(
   && fixtureSnap.dateISO <= myWeekEndISO
   && !data.sessionStarted(fixtureSnap)
 );
-if (fixtureInMyWeek) {
-  if (!memberHome.includes(bookedMarker) || memberHome.includes(otherMarker)) {
-    failures++;
-    console.error(`FAIL "My week" should show only the member's booked HYROX (${bookedMarker})`);
-  } else console.log(`ok  "My week" shows only the member's booked session (${bookedMarker})`);
-} else if (memberHome.includes(bookedMarker)) {
+if (!fixtureBooking) {
   failures++;
-  console.error(`FAIL "My week" must exclude a started or out-of-week fixture booking (${bookedMarker})`);
+  console.error('FAIL "My week" fixture booking is missing');
+} else if (fixtureInMyWeek) {
+  if (!memberHome.includes(fixtureLink) || memberHome.includes(otherMarker)) {
+    failures++;
+    console.error(`FAIL "My week" should show only the member's booked session (${fixtureBooking.sessionId})`);
+  } else console.log(`ok  "My week" shows only the member's booked session (${fixtureSnap?.location || fixtureBooking.sessionId})`);
+} else if (memberHome.includes(fixtureLink)) {
+  failures++;
+  console.error(`FAIL "My week" must exclude a started or out-of-week fixture booking (${fixtureSnap?.location || fixtureBooking.sessionId})`);
 } else console.log(`ok  "My week" excludes a started or out-of-week fixture booking`);
 // Community prayer requests: v23 prayer migration followed by v24 retirement.
 const v22PrayerSnapshot = JSON.parse(mem.get("itc.prototype.v1"));
@@ -8736,25 +8738,28 @@ assert.match(await views.viewReplacementInvite(replacementRequest.inviteToken), 
 console.log("ok  replacement route preserves sign-in gate, privacy, and confirmed-member copy");
 
 {
+  installLocalFixtures();
   if (!store.signIn("member@example.test").ok) {
     failures++;
     console.error("FAIL session reminder sweep needs the fixture member");
   } else {
     const reminderMember = store.currentUser();
+    reminderMember.sessionAlerts = true;
     const rsvpSession = store.upcomingSessions(21).find((session) => store.sessionRequiresRsvp(session) && !data.sessionStarted(session)
       && !store.userBookingFor(reminderMember.id, session.id));
     if (!reminderMember || !rsvpSession) {
       failures++;
       console.error("FAIL session reminder sweep needs a signed-in member and upcoming RSVP session");
     } else {
-      const beforeCount = store.notificationsFor(reminderMember.id)
-        .filter((note) => note.kind === "operational_session_reminder_tomorrow").length;
+      const reminderLink = `#/activity/${rsvpSession.id}`;
+      const reminderNotes = (kind) => store.notificationsFor(reminderMember.id)
+        .filter((note) => note.kind === kind && note.link === reminderLink);
+      const beforeCount = reminderNotes("operational_session_reminder_tomorrow").length;
       const booking = await store.rsvpSession(reminderMember.id, rsvpSession);
       const dayBefore = data.sessionReminderTomorrowAt(rsvpSession.dateISO) + 60 * 1000;
       store.sweepSessionReminders(dayBefore);
       store.sweepSessionReminders(dayBefore);
-      const tomorrowNotes = store.notificationsFor(reminderMember.id)
-        .filter((note) => note.kind === "operational_session_reminder_tomorrow");
+      const tomorrowNotes = reminderNotes("operational_session_reminder_tomorrow");
       if (!booking || tomorrowNotes.length !== beforeCount + 1) {
         failures++;
         console.error("FAIL session reminders must send one tomorrow ping for an RSVP");
@@ -8766,11 +8771,11 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
         hyrox_payment_reminders: reminderMember.hyroxPaymentReminders !== false,
         web_push_ops: !!reminderMember.webPushOps,
       });
+      const morningBefore = reminderNotes("operational_session_reminder_morning").length;
       const morningAt = data.sessionReminderMorningAt(rsvpSession.dateISO) + 60 * 1000;
       store.sweepSessionReminders(morningAt);
-      const morningNotes = store.notificationsFor(reminderMember.id)
-        .filter((note) => note.kind === "operational_session_reminder_morning");
-      if (morningNotes.length) {
+      const morningNotes = reminderNotes("operational_session_reminder_morning");
+      if (morningNotes.length !== morningBefore) {
         failures++;
         console.error("FAIL opted-out session reminders must not send the morning ping");
       } else console.log("ok  session reminder opt-out skips the morning ping");
