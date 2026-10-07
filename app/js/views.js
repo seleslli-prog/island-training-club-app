@@ -326,14 +326,14 @@ export function viewHome() {
   const guest = !user
     ? `
     <div class="card mt24"><div class="card-body">
-      <span class="kicker">New to ITC?</span>
-      <h3 class="mt8">Everyone is welcome</h3>
-      <p class="hero-meta">Free activities are open to all — just show up. Membership is free too; sign in and an ITC leader approves every application before paid booking unlocks.</p>
+      <span class="kicker">Join ITC</span>
+      <h3 class="mt8">Join the club.</h3>
+      <p class="subcopy mt8">Sign up to book sessions and stay in the community.</p>
       ${visitorDraftActions()}
       ${isLive()
         ? `<button class="btn mt16" type="button" data-action="sign-in-google">Continue with Google</button>`
         : `<a class="btn mt16" href="#/account">Sign in or join</a>`}
-      <p class="muted small mt8">New here? You'll be guided through a short application after sign-in.</p>
+      <p class="muted small mt8">Takes a couple of minutes. A leader confirms your application before paid booking opens.</p>
     </div></div>`
     : "";
 
@@ -353,7 +353,7 @@ export function viewHome() {
     ${guest}
     <div class="section-head">
       <h2>${weekHeading}</h2>
-      <a href="#/schedule">See more →</a>
+      ${rows.length ? `<a href="#/schedule">See more →</a>` : ""}
     </div>
     <div class="session-list">
       ${rows.length
@@ -729,7 +729,7 @@ export function viewActivity(sessionId, attendeeNames) {
       ? `<div class="banner mt16"><span class="kicker">Leader note</span><p>${esc(s.memberNote)}</p></div>`
       : memberOnlyNote("Leader notes (meet points, routes, kit) are shared with approved members.")
     : "";
-  const photoFallback = s.kind === "paid" ? "/assets/itc/hyrox.webp" : "/assets/itc/main.webp";
+  const photoFallback = s.kind === "paid" ? "/assets/itc/itc-hyrox-mood.webp" : "/assets/itc/main.webp";
   const photo = s.photo || photoFallback;
 
   return `
@@ -1011,6 +1011,24 @@ function communityHome() {
       <h1 class="display">${esc(communityHeading(user))}</h1>
       <p class="subcopy mt8">Island Training Club is a Hong Kong training community with a Christian foundation — open to everyone. Training is the doorway; find your next way to connect.</p>
 
+      <div class="community-section-head"><h2>Ways to connect</h2></div>
+      <div class="community-action-grid">
+        <a class="community-action-card" href="#/community/prayers">
+          <span class="community-action-icon">${ICONS.heart}</span>
+          <div>
+            <h3>Prayer</h3>
+            <p>Share privately with our leaders.</p>
+          </div>
+        </a>
+        <a class="community-action-card" href="#/community/fellowship">
+          <span class="community-action-icon">${ICONS.people}</span>
+          <div>
+            <h3>Fellowship</h3>
+            <p>Small groups and community life.</p>
+          </div>
+        </a>
+      </div>
+
       <section class="community-feature" aria-labelledby="next-connection-title">
         <span class="kicker">Socials</span>
         <h2 id="next-connection-title">Connect beyond training</h2>
@@ -1032,20 +1050,6 @@ function communityHome() {
           <p>${esc(announcement.lead)}</p>
         </a>` : `
         <div class="community-announcement-preview empty">No announcements yet.</div>`}
-
-      <div class="community-section-head"><h2>Ways to connect</h2></div>
-      <div class="community-action-grid">
-        <a class="community-action-card" href="#/community/prayers">
-          <span class="community-action-icon">${ICONS.heart}</span>
-          <h3>Prayer</h3>
-          <p>Share privately with our leaders.</p>
-        </a>
-        <a class="community-action-card" href="#/community/fellowship">
-          <span class="community-action-icon">${ICONS.people}</span>
-          <h3>Fellowship</h3>
-          <p>Small groups and community life.</p>
-        </a>
-      </div>
 
       <div class="community-section-head"><h2>Explore</h2></div>
       <nav class="community-explore" aria-label="Explore the ITC community">
@@ -1081,8 +1085,7 @@ function communityAbout() {
     <div class="section-head"><h2>Culture</h2></div>
     <div class="card"><div class="card-body prose">
       ${CULTURE.map((c) => `<h3>${esc(c.title)}</h3><p>${esc(c.body)}</p>`).join("")}
-    </div></div>
-    <p class="muted small mt16">Community copy is draft placeholder text for review with ITC leadership.</p>`;
+    </div></div>`;
 }
 
 function communityPrayers() {
@@ -1270,7 +1273,7 @@ function accountVisitor() {
   return `
     <div class="kicker">Account</div>
     <h1 class="display">Join the club.</h1>
-    <p class="subcopy mt8">Membership is free. An ITC leader approves every application — approval unlocks paid booking and member content.</p>
+    <p class="subcopy mt8">An ITC leader approves every application — approval unlocks paid booking and member content.</p>
     ${visitorDraftActions()}
     <div class="card mt24"><div class="card-body">
       <h3>Sign in</h3>
@@ -1760,17 +1763,24 @@ function compareHistoryBookings(a, b) {
 }
 
 function accountHistory(user) {
-  const seenSessionIds = new Set();
-  const history = store.bookingsForUser(user.id)
-    .slice()
-    .sort(compareHistoryBookings)
+  const groups = new Map();
+  for (const booking of store.bookingsForUser(user.id)) {
+    const key = booking.cycleId || booking.sessionId || booking.id;
+    const list = groups.get(key);
+    if (list) list.push(booking);
+    else groups.set(key, [booking]);
+  }
+  const history = [...groups.values()]
+    .map((group) => {
+      const ranked = group.slice().sort(compareHistoryBookings);
+      return ranked.find((booking) => booking.status !== "cancelled") || ranked[0];
+    })
     .filter((booking) => {
-      const key = booking.cycleId || booking.sessionId || booking.id;
-      if (seenSessionIds.has(key)) return false;
-      seenSessionIds.add(key);
+      if (!booking) return false;
       if (booking.cycleId) return true;
       return !(booking.status === "confirmed" && !sessionStarted(bookingDisplaySnapshot(booking)));
-    });
+    })
+    .sort(compareHistoryBookings);
   return `
     <a class="back-link" href="#/account">← Profile</a>
     <div class="kicker mt16">Profile · History</div>
@@ -2305,8 +2315,12 @@ export async function viewAdmin(tab = "members") {
   // Live mode reads real data (Supabase applications + profiles); local
   // mode keeps the local prototype lists.
   let memberUsers = null;
-  if (["members", "payments"].includes(canonicalTab)) {
-    memberUsers = (await store.listPaymentUsers())
+  if (canonicalTab === "payments") {
+    const cachedUsers = isLive() ? store.peekLivePaymentDirectory() : null;
+    memberUsers = (cachedUsers || await store.listPaymentUsers())
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  } else if (canonicalTab === "members") {
+    memberUsers = (await store.listPaymentUsers({ force: true }))
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }
   let body;
@@ -2323,11 +2337,16 @@ export async function viewAdmin(tab = "members") {
     }
   } else {
     let profilePhone = String(user.phone || "").trim();
-    try {
-      const application = await store.getMyApplication();
-      profilePhone = String(application?.mobile || application?.phone || profilePhone).trim();
-    } catch (error) {
-      console.warn("Unable to load Membership Details phone for payout form", error);
+    const cachedApplication = isLive() ? store.peekLiveApplication(user.id) : undefined;
+    if (cachedApplication !== undefined) {
+      profilePhone = String(cachedApplication?.mobile || cachedApplication?.phone || profilePhone).trim();
+    } else {
+      try {
+        const application = await store.getMyApplication();
+        profilePhone = String(application?.mobile || application?.phone || profilePhone).trim();
+      } catch (error) {
+        console.warn("Unable to load Membership Details phone for payout form", error);
+      }
     }
     body = adminOps(user, memberUsers, profilePhone);
   }
@@ -2387,13 +2406,17 @@ function adminVenueStatusMetrics(session) {
 function adminVenueHandoff(session, { message, override, meta = "", extra = "", ready = true, heading = venueDisplayName(session), subheading = "", cardClass = "" }) {
   const venueName = venueDisplayName(session);
   const blockedCopy = "Available after venue allocation is finalized.";
+  // Live gym confirmation lives on the session row. Local mode still copies
+  // it onto the weekly override, so read session first and fall back.
+  const gymConfirmedAt = session?.gymConfirmedAt || override?.gymConfirmedAt;
+  const gymNote = session?.gymNote || override?.gymNote;
   return `<div class="card hyrox-venue-card mt16 ${cardClass}"><div class="card-body">
     ${meta}
-    <div class="section-head"><div><h3>${esc(heading)}</h3>${subheading ? `<p class="muted small hyrox-card-subtitle">${esc(subheading)}</p>` : ""}</div>${override.gymConfirmedAt ? `<span class="badge free">Confirmed</span>` : `<span class="badge neutral">Venue handoff</span>`}</div>
+    <div class="section-head"><div><h3>${esc(heading)}</h3>${subheading ? `<p class="muted small hyrox-card-subtitle">${esc(subheading)}</p>` : ""}</div>${gymConfirmedAt ? `<span class="badge free">Confirmed</span>` : `<span class="badge neutral">Venue handoff</span>`}</div>
     ${adminVenueStatusMetrics(session)}
     ${extra}
-    ${override.gymConfirmedAt
-      ? `<p class="badge free mt8">Confirmed with ${esc(venueName)} · ${new Date(override.gymConfirmedAt).toLocaleDateString("en-HK", { day: "numeric", month: "short" })}${override.gymNote ? ` — ${esc(override.gymNote)}` : ""}</p>`
+    ${gymConfirmedAt
+      ? `<p class="badge free mt8">Confirmed with ${esc(venueName)} · ${new Date(gymConfirmedAt).toLocaleDateString("en-HK", { day: "numeric", month: "short" })}${gymNote ? ` — ${esc(gymNote)}` : ""}</p>`
       : ready
         ? `<div class="btn-row mt8">
             <a class="btn sm" href="https://wa.me/?text=${encodeURIComponent(message)}" target="_blank" rel="noopener">Send via WhatsApp</a>
@@ -2473,7 +2496,7 @@ function adminHyroxCycleCards() {
 }
 
 function adminHyroxWeeklyBookingSetup() {
-  return `<details class="admin-section mt24">
+  return `<details class="admin-section mt24" id="admin-hyrox-weekly-setup">
     <summary><h2>HYROX weekly booking setup</h2></summary>
     ${adminHyroxCycleCards()}
     ${adminFinalizeGym()}
@@ -2492,7 +2515,7 @@ function adminOps(viewer, memberUsers, profilePhone = "") {
   const pending = pendingPayments(memberUsers);
 
   const dutyCard = `
-    <details class="admin-section mt16">
+    <details class="admin-section mt16" id="admin-payment-duty">
       <summary><h2>Payment duty</h2></summary>
     <div class="card mt8"><div class="card-body">
       <p class="muted small">One collector per week covers both venues. Member payment screens show this collector’s PayMe/FPS details.</p>
@@ -2515,7 +2538,7 @@ function adminOps(viewer, memberUsers, profilePhone = "") {
     </details>`;
 
   const pendingCard = `
-    <details class="admin-section mt24">
+    <details class="admin-section mt24" id="admin-pending-payments"${pending.length ? " open" : ""}>
       <summary><h2>Pending payments</h2></summary>
     ${pending.length ? pending.map(({ booking: b, who }) => `
       <div class="card booking-card mt16"><div class="card-body">
@@ -2960,9 +2983,9 @@ function adminMembers(viewer, users = [], pendingApplicants = []) {
     const matchesRole = adminMemberFilters.role === "all" || normalizedRole(u.role) === adminMemberFilters.role;
     return matchesQuery && matchesStatus && matchesRole;
   });
-  const approvalsSection = pendingApplicants.length
-    ? adminApprovals(pendingApplicants)
-    : "";
+  const hasActiveFilters = adminMemberFilters.query.length > 0 ||
+    adminMemberFilters.status !== "all" || adminMemberFilters.role !== "all";
+  const approvalsSection = hasActiveFilters ? "" : adminApprovals(pendingApplicants);
   const option = (value, label, selected) =>
     `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
   const filterChip = (key, value, label) =>
@@ -2995,8 +3018,6 @@ function adminMembers(viewer, users = [], pendingApplicants = []) {
         ${editor}
       </div>`;
   }).join("");
-  const hasActiveFilters = adminMemberFilters.query.length > 0 ||
-    adminMemberFilters.status !== "all" || adminMemberFilters.role !== "all";
   return `
     <p class="muted small mt16">${canEdit ? "Role changes are Super Admin only." : "Only a Super Admin can change roles."}</p>
     <div class="member-filters" aria-label="Filter members">

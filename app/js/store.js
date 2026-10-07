@@ -51,11 +51,66 @@ const STATE_VERSION = 19;
 let liveProfile = null;
 let liveUser = null;
 let liveProfileFetchedAt = 0;
+let liveApplication = null;
+let liveApplicationUserId = null;
+let liveApplicationFetchedAt = 0;
 let liveGivingCampaign = null;
 // Supabase remains the identity directory. Payment Ops caches live profiles
 // in memory only; device-local persistence stores UUID-keyed operations.
 let livePaymentDirectory = new Map();
+let livePaymentDirectoryFetchedAt = 0;
+let liveNotifications = null;
+let liveNotificationsFetchedAt = 0;
+let liveNotificationsRefresh = null;
+let livePaymentDirectoryRefresh = null;
 const LIVE_PROFILE_TTL_MS = 30_000;
+const LIVE_APPLICATION_TTL_MS = 30_000;
+const LIVE_NOTIFICATIONS_TTL_MS = 30_000;
+
+function rememberLiveApplication(userId, row) {
+  liveApplicationUserId = userId || null;
+  liveApplication = row ?? null;
+  liveApplicationFetchedAt = Date.now();
+}
+
+export function invalidateLiveApplicationCache() {
+  liveApplication = null;
+  liveApplicationUserId = null;
+  liveApplicationFetchedAt = 0;
+}
+
+export function invalidateLiveNotificationsCache() {
+  liveNotifications = null;
+  liveNotificationsFetchedAt = 0;
+  liveNotificationsRefresh = null;
+}
+
+export function peekLiveApplication(userId) {
+  // Last known row for this user, even if the TTL has elapsed. Callers that
+  // must not wait on Kong (Schedule browse, payment-confirm re-render) use
+  // this instead of a blocking applications select.
+  if (!userId || liveApplicationUserId !== userId) return undefined;
+  return liveApplication;
+}
+
+export function peekLiveNotifications() {
+  // Last known inbox rows, even if the TTL has elapsed. Browse chrome uses
+  // this so Home → Schedule does not start a second Kong OPTIONS.
+  return liveNotifications;
+}
+
+export function peekLivePaymentDirectory() {
+  // Last completed profiles list. Payment-confirm re-render uses this so the
+  // duty collector's pending list can update without another Kong OPTIONS.
+  if (livePaymentDirectoryFetchedAt <= 0) return null;
+  return [...livePaymentDirectory.values()];
+}
+
+function liveApplicationCacheValid(userId) {
+  return Boolean(userId)
+    && liveApplicationUserId === userId
+    && Date.now() - liveApplicationFetchedAt <= LIVE_APPLICATION_TTL_MS;
+}
 
 let state = null;
 
@@ -104,12 +159,14 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
       console.warn("ensureLiveSessionWindow failed", err);
     }
   }
-  let authenticated = false;
-  try {
-    const { data } = await supabase.auth.getSession();
-    authenticated = Boolean(data?.session);
-  } catch {
-    authenticated = false;
+  let authenticated = Boolean(liveUser);
+  if (!authenticated) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      authenticated = Boolean(data?.session);
+    } catch {
+      authenticated = false;
+    }
   }
   if (authenticated) await liveOps.liveSweepHyroxDeadlines({ refresh: false });
   await liveOps.hydrateOperationalState({ force, authenticated });
@@ -811,6 +868,11 @@ export async function updateMyDonorId(raw) {
     .select("donor_id")
     .single();
   if (error) throw error;
+  if (liveApplicationCacheValid(cu.id) && liveApplication) {
+    rememberLiveApplication(cu.id, { ...liveApplication, donor_id: data.donor_id });
+  } else {
+    invalidateLiveApplicationCache();
+  }
   return data.donor_id;
 }
 
@@ -867,18 +929,49 @@ export function allUsers() {
   return state.users;
 }
 
-export async function listPaymentUsers() {
+async function refreshLivePaymentDirectory() {
+  if (livePaymentDirectoryRefresh) return livePaymentDirectoryRefresh;
+  const pending = (async () => {
+    const profiles = await listProfiles();
+    livePaymentDirectory = new Map(
+      profiles.map(normalizePaymentUser).filter(Boolean).map((user) => [user.id, user])
+    );
+    livePaymentDirectoryFetchedAt = Date.now();
+    const actor = currentUser();
+    if (actor && !livePaymentDirectory.has(actor.id)) {
+      livePaymentDirectory.set(actor.id, normalizePaymentUser(actor));
+    }
+    return [...livePaymentDirectory.values()];
+  })();
+  livePaymentDirectoryRefresh = pending;
+  try {
+    return await pending;
+  } finally {
+    if (livePaymentDirectoryRefresh === pending) livePaymentDirectoryRefresh = null;
+  }
+}
+
+export async function listPaymentUsers({ force = false } = {}) {
   requirePaymentAdminActor();
   if (!isLive() || !supabase) return state.users;
-  const profiles = await listProfiles();
-  livePaymentDirectory = new Map(
-    profiles.map(normalizePaymentUser).filter(Boolean).map((user) => [user.id, user])
-  );
-  const actor = currentUser();
-  if (actor && !livePaymentDirectory.has(actor.id)) {
-    livePaymentDirectory.set(actor.id, normalizePaymentUser(actor));
+  // rememberLiveUser seeds the current actor into this map. That single
+  // entry is not a directory cache — only a completed listProfiles() is.
+  // Admin Members passes force so role/status edits are not masked by the
+  // 30s peek used to keep payment-confirm rerenders off Kong.
+  if (force) return refreshLivePaymentDirectory();
+  const cached = livePaymentDirectoryFetchedAt > 0
+    ? [...livePaymentDirectory.values()]
+    : null;
+  const fresh = cached
+    && Date.now() - livePaymentDirectoryFetchedAt <= LIVE_PROFILE_TTL_MS;
+  if (fresh) return cached;
+  if (cached) {
+    void refreshLivePaymentDirectory().catch((err) => {
+      console.warn("payment directory refresh failed", err);
+    });
+    return cached;
   }
-  return [...livePaymentDirectory.values()];
+  return refreshLivePaymentDirectory();
 }
 
 export function pendingPaymentBookings() {
@@ -3157,35 +3250,15 @@ export { isoDate, todayLocal };
 // --- Live (Supabase) auth helpers (from canonical Auth baseline) ----
 // --- Live (Supabase) auth helpers --------------------------------------------
 
-export async function getCurrentUser() {
-  if (!isLive() || !supabase) return currentUser();
-  const { data: sessData, error: sessErr } = await supabase.auth.getSession();
-  if (sessErr || !sessData.session) {
-    liveUser = null;
-    return null;
-  }
-  const authUser = sessData.session.user;
-  if (!liveProfile || Date.now() - liveProfileFetchedAt > LIVE_PROFILE_TTL_MS) {
-    const { data: prof, error: profErr } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", authUser.id)
-      .maybeSingle();
-    if (profErr) {
-      // Never fail silently — a broken profile read renders a signed-in
-      // user as a visitor with no clue why (cf. the 42P17 RLS recursion).
-      console.error("profiles fetch failed", profErr);
-      return null;
-    }
-    liveProfile = prof || {
-      id: authUser.id,
-      email: authUser.email,
-      full_name: authUser.user_metadata?.full_name || null,
-      avatar_url: authUser.user_metadata?.avatar_url || null,
-      role: "pending",
-    };
-    liveProfileFetchedAt = Date.now();
-  }
+function rememberLiveUser(prof, authUser) {
+  liveProfile = prof || {
+    id: authUser.id,
+    email: authUser.email,
+    full_name: authUser.user_metadata?.full_name || null,
+    avatar_url: authUser.user_metadata?.avatar_url || null,
+    role: "pending",
+  };
+  liveProfileFetchedAt = Date.now();
   const fullName = liveProfile.full_name || liveProfile.email || "ITC Member";
   liveUser = {
     id: liveProfile.id,
@@ -3207,6 +3280,52 @@ export async function getCurrentUser() {
   return liveUser;
 }
 
+function cachedAuthUser() {
+  if (!liveProfile) return null;
+  return {
+    id: liveProfile.id,
+    email: liveProfile.email,
+    user_metadata: {},
+  };
+}
+
+async function refreshLiveIdentity({ force = false } = {}) {
+  const { data: sessData, error: sessErr } = await supabase.auth.getSession();
+  if (sessErr || !sessData.session) {
+    liveUser = null;
+    return null;
+  }
+  const authUser = sessData.session.user;
+  if (force || !liveProfile || Date.now() - liveProfileFetchedAt > LIVE_PROFILE_TTL_MS) {
+    const { data: prof, error: profErr } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", authUser.id)
+      .maybeSingle();
+    if (profErr) {
+      // Never fail silently — a broken profile read renders a signed-in
+      // user as a visitor with no clue why (cf. the 42P17 RLS recursion).
+      console.error("profiles fetch failed", profErr);
+      return null;
+    }
+    return rememberLiveUser(prof, authUser);
+  }
+  return rememberLiveUser(liveProfile, authUser);
+}
+
+export async function getCurrentUser({ force = false } = {}) {
+  if (!isLive() || !supabase) return currentUser();
+  const cacheFresh = liveUser && liveProfile && Date.now() - liveProfileFetchedAt <= LIVE_PROFILE_TTL_MS;
+  if (!force && cacheFresh) return rememberLiveUser(liveProfile, cachedAuthUser());
+  if (!force && liveUser) {
+    void refreshLiveIdentity().catch((err) => {
+      console.error("profiles fetch failed", err);
+    });
+    return liveProfile ? rememberLiveUser(liveProfile, cachedAuthUser()) : liveUser;
+  }
+  return refreshLiveIdentity({ force });
+}
+
 export async function signInWithGoogle() {
   if (!isLive || !supabase) {
     throw new Error("signInWithGoogle requires SUPABASE_URL and SUPABASE_ANON_KEY");
@@ -3224,6 +3343,10 @@ export async function signOutLive() {
   liveUser = null;
   liveProfileFetchedAt = 0;
   livePaymentDirectory = new Map();
+  livePaymentDirectoryFetchedAt = 0;
+  livePaymentDirectoryRefresh = null;
+  invalidateLiveApplicationCache();
+  invalidateLiveNotificationsCache();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
@@ -3322,6 +3445,8 @@ export async function updateProfileRole(profileId, newRole, reason, expectedRole
   if (!data || data.id !== profileId || data.role !== newRole) {
     throw new Error("Application decision conflict.");
   }
+  livePaymentDirectory = new Map();
+  livePaymentDirectoryFetchedAt = 0;
   // The DB trigger writes role_changes + welcome notification automatically.
   // Persisting `reason` to role_changes.reason requires a small Postgres
   // RPC that sets a session-local config; deferred. ⏳
@@ -3392,15 +3517,27 @@ function privacyPatch(form) {
   };
 }
 
-export async function fetchApplicationForUser(user) {
-  if (!isLive() || !supabase || !user || !user.id) return null;
+async function refreshApplicationForUser(userId) {
   const { data, error } = await supabase
     .from("applications")
     .select("*")
-    .eq("profile_id", user.id)
+    .eq("profile_id", userId)
     .maybeSingle();
   if (error) throw error;
+  rememberLiveApplication(userId, data);
   return data;
+}
+
+export async function fetchApplicationForUser(user) {
+  if (!isLive() || !supabase || !user || !user.id) return null;
+  if (liveApplicationCacheValid(user.id)) return liveApplication;
+  if (liveApplicationUserId === user.id) {
+    void refreshApplicationForUser(user.id).catch((err) => {
+      console.warn("application refresh failed", err);
+    });
+    return liveApplication;
+  }
+  return refreshApplicationForUser(user.id);
 }
 
 export async function getMyApplication() {
@@ -3408,15 +3545,9 @@ export async function getMyApplication() {
     const user = currentUser();
     return user ? localApplication(user) : null;
   }
-  const cu = await getCurrentUser();
+  const cu = currentUser() || await getCurrentUser();
   if (!cu) return null;
-  const { data, error } = await supabase
-    .from("applications")
-    .select("*")
-    .eq("profile_id", cu.id)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  return fetchApplicationForUser(cu);
 }
 
 export async function saveMyApplication(form) {
@@ -3459,6 +3590,7 @@ export async function saveMyApplication(form) {
   };
   const { error } = await supabase.from("applications").upsert(row);
   if (error) throw error;
+  invalidateLiveApplicationCache();
   clearApplyDraft();
 }
 
@@ -3489,6 +3621,7 @@ export async function updateMyMembershipDetails(form) {
     .select()
     .single();
   if (error) throw error;
+  rememberLiveApplication(cu.id, data);
   return data;
 }
 
@@ -3513,6 +3646,7 @@ export async function updateMyPrivacyPreferences(form) {
     .select()
     .single();
   if (error) throw error;
+  rememberLiveApplication(cu.id, data);
   return data;
 }
 
@@ -3556,6 +3690,7 @@ export async function acceptMyIndemnity(payload) {
     .select()
     .single();
   if (error) throw error;
+  rememberLiveApplication(cu.id, data);
   return data.waiver_accepted_at;
 }
 
@@ -3665,17 +3800,48 @@ function normalizeLocalNotification(notification) {
   };
 }
 
-export async function listMyNotifications() {
+function startLiveNotificationsRefresh() {
+  let pending;
+  pending = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      liveNotifications = data || [];
+      liveNotificationsFetchedAt = Date.now();
+      return liveNotifications;
+    } finally {
+      if (liveNotificationsRefresh === pending) liveNotificationsRefresh = null;
+    }
+  })();
+  liveNotificationsRefresh = pending;
+  return pending;
+}
+
+function refreshLiveNotifications() {
+  if (liveNotificationsRefresh) return liveNotificationsRefresh;
+  return startLiveNotificationsRefresh();
+}
+
+export async function listMyNotifications({ force = false } = {}) {
   if (!isLive() || !supabase) {
     const user = currentUser();
     return user ? notificationsFor(user.id).map(normalizeLocalNotification) : [];
   }
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data || [];
+  const cached = liveNotifications;
+  const fresh = cached
+    && Date.now() - liveNotificationsFetchedAt <= LIVE_NOTIFICATIONS_TTL_MS;
+  if (!force && fresh) return cached;
+  if (!force && cached) {
+    void refreshLiveNotifications().catch((err) => {
+      console.warn("notifications refresh failed", err);
+    });
+    return cached;
+  }
+  if (!force && liveNotificationsRefresh) return liveNotificationsRefresh;
+  return force ? startLiveNotificationsRefresh() : refreshLiveNotifications();
 }
 
 export async function markNotificationRead(id) {
@@ -3699,6 +3865,11 @@ export async function markNotificationRead(id) {
     .single();
   if (error) throw error;
   if (!data?.id) throw new Error("Notification update conflict.");
+  if (liveNotifications) {
+    liveNotifications = liveNotifications.map((row) => (
+      row.id === data.id ? { ...row, read_at: data.read_at } : row
+    ));
+  }
   return data;
 }
 

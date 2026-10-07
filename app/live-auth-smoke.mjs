@@ -152,6 +152,10 @@ const profileUpdates = [];
 let applicationReadError = null;
 let applicationReadGate = null;
 const applicationReadGates = [];
+let sessionReadGate = null;
+let sessionReadCount = 0;
+let profileListGate = null;
+let applicationSelectCount = 0;
 let notificationReadError = null;
 let notificationReadGate = null;
 let notificationQueryCount = 0;
@@ -172,6 +176,7 @@ let givingCampaignRows = [];
 let operationalRpcHandler = null;
 let operationalAuthSubOverride = null;
 let operationalVenueOverrideReadError = null;
+let operationalReadGate = null;
 let operationalRsvpCountError = null;
 let operationalRsvpCountRowsOverride = null;
 const operationalRpcCalls = [];
@@ -311,16 +316,18 @@ let liveSession = {
 };
 const fakeSupabase = {
   auth: {
-    getSession: () => {
+    getSession: async () => {
       if (authCallbackLocked) {
         throw new Error("getSession must not run while the auth callback lock is held");
       }
-      return Promise.resolve({
+      sessionReadCount += 1;
+      if (sessionReadGate) await sessionReadGate;
+      return {
         data: {
           session: liveSession,
         },
         error: null,
-      });
+      };
     },
     onAuthStateChange(callback) {
       authStateChangeHandler = callback;
@@ -353,15 +360,18 @@ const fakeSupabase = {
               if (column !== "created_at" || options?.ascending !== true) {
                 throw new Error("Profile list query should order by created_at ascending");
               }
-              return Promise.resolve({
-                data: [
-                  structuredClone(profile),
-                  ...structuredClone(approvedProfiles),
-                  ...structuredClone(pendingProfiles),
-                  ...structuredClone(declinedProfiles),
-                ],
-                error: profileListError,
-              });
+              return (async () => {
+                if (profileListGate) await profileListGate;
+                return {
+                  data: [
+                    structuredClone(profile),
+                    ...structuredClone(approvedProfiles),
+                    ...structuredClone(pendingProfiles),
+                    ...structuredClone(declinedProfiles),
+                  ],
+                  error: profileListError,
+                };
+              })();
             },
           };
         },
@@ -496,6 +506,7 @@ const fakeSupabase = {
                 maybeSingle: async () => {
                   const readGate = applicationReadGates.shift() || applicationReadGate;
                   if (readGate) await readGate;
+                  applicationSelectCount += 1;
                   return {
                     data: structuredClone(applicationRows.get(value) || null),
                     error: applicationReadError,
@@ -578,7 +589,11 @@ const fakeSupabase = {
         }
         return { data: error ? null : visibleRows.slice(), error };
       };
-      const thenable = () => Promise.resolve(result());
+      const settle = async () => {
+        if (operationalReadGate) await operationalReadGate;
+        return result();
+      };
+      const thenable = () => settle();
       const chain = {
         order: thenable,
         gte(column, value) {
@@ -601,7 +616,7 @@ const fakeSupabase = {
         is: () => chain,
         match: () => chain,
         then(resolve, reject) {
-          return Promise.resolve(result()).then(resolve, reject);
+          return settle().then(resolve, reject);
         },
       };
       return { select: () => chain };
@@ -1137,6 +1152,18 @@ operationalRpcHandler = (name, args) => {
 };
 
 const store = await import("./js/store.js");
+const applicationRowsSet = applicationRows.set.bind(applicationRows);
+const applicationRowsDelete = applicationRows.delete.bind(applicationRows);
+applicationRows.set = (key, value) => {
+  const result = applicationRowsSet(key, value);
+  if (key === authUser.id) store.invalidateLiveApplicationCache();
+  return result;
+};
+applicationRows.delete = (key) => {
+  const result = applicationRowsDelete(key);
+  if (key === authUser.id) store.invalidateLiveApplicationCache();
+  return result;
+};
 const views = await import("./js/views.js");
 const data = await import("./js/data.js");
 const operations = await import("./js/operations.js");
@@ -1671,8 +1698,8 @@ assert.deepEqual({
   capacity: 30,
   isOpen: true,
 });
-assert.equal(hydratedBft.photo, "../assets/itc/hyrox.webp");
-assert.equal(hydratedMidtown.photo, "../assets/itc/hyrox.webp");
+assert.equal(hydratedBft.photo, "../assets/itc/itc-hyrox-mood.webp");
+assert.equal(hydratedMidtown.photo, "../assets/itc/itc-hyrox-mood.webp");
 assert.equal(hydratedMidtown.location, "Midtown28 Fitness");
 assert.equal(hydratedMidtown.venue, "Midtown28 Fitness");
 assert.equal(hydratedMidtown.mapsQuery, "Midtown28 Fitness, Hong Kong");
@@ -1680,7 +1707,7 @@ for (const html of [
   views.viewActivity(hydratedBft.id),
   views.viewActivity(hydratedMidtown.id),
 ]) {
-  assert.match(html, /class="detail-photo" src="\.\.\/assets\/itc\/hyrox\.webp"/);
+  assert.match(html, /class="detail-photo" src="\.\.\/assets\/itc\/itc-hyrox-mood\.webp"/);
 }
 
 const customMidtownFixture = operationalTableRows.operational_sessions
@@ -1694,7 +1721,7 @@ try {
   assert.equal(customMidtown.location, "Custom Midtown Venue");
   assert.equal(customMidtown.venue, "Custom Midtown Venue");
   assert.equal(customMidtown.mapsQuery, "Custom Midtown Venue");
-  assert.equal(customMidtown.photo, "../assets/itc/hyrox.webp");
+  assert.equal(customMidtown.photo, "../assets/itc/itc-hyrox-mood.webp");
 } finally {
   customMidtownFixture.venue = "Midtown 28";
   await operations.refreshOperationalState();
@@ -1835,6 +1862,29 @@ assert.match(signedOutAccount, /data-action="sign-in-google"/);
 store.clearApplyDraft();
 
 await store.getCurrentUser();
+{
+  const user = store.currentUser();
+  store.invalidateLiveApplicationCache();
+  const before = applicationSelectCount;
+  const first = await store.fetchApplicationForUser(user);
+  const second = await store.fetchApplicationForUser(user);
+  assert.equal(applicationSelectCount, before + 1,
+    "signed-in application reads must reuse the 30s in-memory cache");
+  assert.equal(first?.profile_id, user.id);
+  assert.equal(second?.waiver_accepted_at, first?.waiver_accepted_at);
+  store.invalidateLiveApplicationCache();
+  await store.fetchApplicationForUser(user);
+  assert.equal(applicationSelectCount, before + 2,
+    "invalidateLiveApplicationCache must force the next application select");
+  const tabBefore = applicationSelectCount;
+  for (let i = 0; i < 4; i++) {
+    await store.getCurrentUser();
+    await store.fetchApplicationForUser(store.currentUser());
+  }
+  assert.equal(applicationSelectCount, tabBefore,
+    "signed-in tab-switch identity hydrate must not refetch applications within the cache window");
+  console.log("ok  signed-in application cache reuses one select across tab switches");
+}
 for (const failure of assignedPayoutFailures) {
   operationalRpcHandler = (name, args) => {
     if (name === "get_assigned_collector_payout_profiles") {
@@ -1943,8 +1993,12 @@ if (queue.some((item) => item.id === authUser.id)) {
 const approvalsHtml = await views.viewAdmin("approvals");
 assert.match(approvalsHtml, /Ready for review \(1\)/);
 assert.match(approvalsHtml, /Awaiting application \(1\)/);
-assert.ok(approvalsHtml.indexOf("Submitted Runner") < approvalsHtml.indexOf("Incomplete Runner"),
-  "Submitted applications must render first");
+const approvalsStart = approvalsHtml.indexOf("Ready for review");
+assert.ok(
+  approvalsStart >= 0
+    && approvalsHtml.indexOf("Submitted Runner", approvalsStart) < approvalsHtml.indexOf("Incomplete Runner", approvalsStart),
+  "Submitted applications must render first in the approval groups"
+);
 if (!approvalsHtml.includes("Application not submitted")) {
   throw new Error("Approvals must explain incomplete pending profiles");
 }
@@ -3401,6 +3455,7 @@ const makeElement = () => {
   },
   remove() {},
   querySelector() { return null; },
+  querySelectorAll() { return []; },
   };
 };
 const routeLoader = makeElement();
@@ -3417,6 +3472,8 @@ globalThis.document = {
   get activeElement() { return activeElement; },
   get visibilityState() { return documentVisibilityState; },
   getElementById: (id) => elements.get(id),
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
   createElement: () => makeElement(),
   addEventListener: (event, callback) => domListeners.set(event, callback),
 };
@@ -3527,6 +3584,53 @@ applicationReadGate = null;
 assert.equal(viewEl.hasAttribute("aria-busy"), false, "route busy state must clear");
 assert.equal(routeLoader.hidden, true, "route loading feedback must clear");
 
+store.invalidateLiveApplicationCache();
+const applicationSelectsBeforeTabSwitch = applicationSelectCount;
+location.hash = "#/home";
+await windowListeners.get("hashchange")();
+location.hash = "#/schedule";
+await windowListeners.get("hashchange")();
+location.hash = "#/community";
+await windowListeners.get("hashchange")();
+location.hash = "#/account";
+await windowListeners.get("hashchange")();
+assert.equal(applicationSelectCount, applicationSelectsBeforeTabSwitch + 1,
+  "signed-in tab switches must not refetch applications within the 30s cache window");
+
+// Home → Schedule is a browse path. It already has the operational cache
+// from boot, so a cold application/auth round-trip must not block the route.
+location.hash = "#/home";
+await windowListeners.get("hashchange")();
+store.invalidateLiveApplicationCache();
+const applicationSelectsBeforeScheduleNav = applicationSelectCount;
+const sessionReadsBeforeScheduleNav = sessionReadCount;
+const notificationQueriesBeforeScheduleNav = notificationQueryCount;
+let releaseBlockedApplicationRead;
+applicationReadGate = new Promise((resolve) => { releaseBlockedApplicationRead = resolve; });
+let releaseBlockedSessionRead;
+sessionReadGate = new Promise((resolve) => { releaseBlockedSessionRead = resolve; });
+location.hash = "#/schedule";
+let scheduleNavSettled = false;
+const scheduleNav = windowListeners.get("hashchange")().then(() => { scheduleNavSettled = true; });
+await new Promise(setImmediate);
+try {
+  assert.equal(scheduleNavSettled, true,
+    "home→schedule must render without waiting for application or auth REST");
+  assert.equal(applicationSelectCount, applicationSelectsBeforeScheduleNav,
+    "schedule navigation must not fetch applications");
+  assert.equal(sessionReadCount, sessionReadsBeforeScheduleNav,
+    "schedule navigation must not call getSession or trigger Kong OPTIONS");
+  assert.equal(notificationQueryCount, notificationQueriesBeforeScheduleNav,
+    "schedule navigation must not refetch notifications or trigger Kong OPTIONS");
+  assert.match(viewEl.innerHTML, /Find your next session/);
+} finally {
+  releaseBlockedApplicationRead();
+  releaseBlockedSessionRead();
+  applicationReadGate = null;
+  sessionReadGate = null;
+}
+await scheduleNav;
+
 // Three overlapping routes prove that stale completion cannot clear current
 // feedback and out-of-order completion cannot replace the newest route.
 const deferred = () => {
@@ -3538,6 +3642,7 @@ const deferred = () => {
 const oldestGate = deferred();
 const middleGate = deferred();
 const currentGate = deferred();
+store.invalidateLiveApplicationCache();
 applicationReadGates.push(oldestGate.promise, middleGate.promise, currentGate.promise);
 location.hash = "#/account/privacy";
 const oldestRender = windowListeners.get("hashchange")();
@@ -3567,6 +3672,7 @@ assert.equal(routeLoader.hidden, true);
 // Signed-in notification chrome appears before its best-effort count query,
 // fails silently, and ignores stale generations.
 const notificationBell = elements.get("top-notifications");
+store.invalidateLiveNotificationsCache();
 const countGate = deferred();
 notificationReadGate = countGate.promise;
 location.hash = "#/home";
@@ -3580,6 +3686,7 @@ await new Promise(setImmediate);
 assert.match(notificationBell.innerHTML, /notification-badge[^>]*[\s\S]*>2<\/span>/);
 assert.equal(notificationBell.getAttribute("aria-label"), "Notifications, 2 unread");
 
+store.invalidateLiveNotificationsCache();
 const cappedRows = Array.from({ length: 118 }, (_, index) => ({
   id: `notification-cap-${index}`,
   kind: "welcome",
@@ -3597,6 +3704,7 @@ assert.match(notificationBell.innerHTML, />99\+<\/span>/, "only the visual badge
 notificationRows.splice(-cappedRows.length);
 
 const toastsBeforeCountFailure = toastStack.children.length;
+store.invalidateLiveNotificationsCache();
 notificationReadError = new Error("Notification count unavailable");
 await windowListeners.get("hashchange")();
 await new Promise(setImmediate);
@@ -3605,10 +3713,12 @@ assert.equal(notificationBell.getAttribute("aria-label"), "Notifications");
 assert.doesNotMatch(notificationBell.innerHTML, /notification-badge/);
 assert.equal(toastStack.children.length, toastsBeforeCountFailure, "count failures must not toast");
 
+store.invalidateLiveNotificationsCache();
 const staleCountGate = deferred();
 notificationReadGate = staleCountGate.promise;
 const staleCountRender = windowListeners.get("hashchange")();
 await staleCountRender;
+store.invalidateLiveNotificationsCache();
 notificationRows.push({
   id: "notification-new-unread",
   kind: "welcome",
@@ -4419,6 +4529,114 @@ await delayedClickMutation({
   beforeResolve: () => Object.assign(routedDeferServerRow, confirmedServerRow),
   successToast: "Payment confirmed — member notified",
 });
+
+const pendingApproveRow = operationalBookingRow("booking-approve-status", routingSessions[0], {
+  status: "reserved",
+  payment_marked_at: fixedIso,
+  payment_method: "payme",
+  payment_reference: "APPROVE-STATUS",
+});
+operationalTableRows.operational_bookings.push(pendingApproveRow);
+await operations.refreshOperationalState();
+assert.ok(store.pendingPaymentBookings().some((booking) => booking.id === pendingApproveRow.id),
+  "duty collector must see the marked payment before confirming it");
+const confirmedApproveRow = {
+  ...pendingApproveRow,
+  status: "confirmed",
+  paid_at: fixedIso,
+  confirmed_by: authUser.id,
+};
+const refreshGate = deferred();
+operationalReadGate = refreshGate.promise;
+operationalRpcHandler = (name, args) => {
+  if (name === "approve_operational_payment") {
+    operationalRpcCalls.push({ name, args: structuredClone(args) });
+    return Promise.resolve({ data: structuredClone(confirmedApproveRow), error: null });
+  }
+  return delegatedBaseOperationalRpcHandler(name, args);
+};
+let approveSettled = false;
+const approvePromise = store.confirmBookingPayment(pendingApproveRow.id)
+  .then((row) => {
+    approveSettled = true;
+    return row;
+  });
+await new Promise(setImmediate);
+try {
+  assert.equal(approveSettled, true,
+    "payment approval must not wait for a full operational refresh");
+  assert.equal(store.getBooking(pendingApproveRow.id)?.status, "confirmed",
+    "approved booking status must update from the RPC result immediately");
+  assert.equal(
+    store.pendingPaymentBookings().some((booking) => booking.id === pendingApproveRow.id),
+    false,
+    "confirmed payments must leave the duty pending list immediately",
+  );
+} finally {
+  refreshGate.resolve();
+  operationalReadGate = null;
+}
+await approvePromise;
+operationalRpcHandler = delegatedBaseOperationalRpcHandler;
+
+location.hash = "#/admin/payments";
+await windowListeners.get("hashchange")();
+const pendingUiRow = operationalBookingRow("booking-approve-ui", routingSessions[0], {
+  status: "reserved",
+  payment_marked_at: fixedIso,
+  payment_method: "payme",
+  payment_reference: "APPROVE-UI-REF",
+});
+operationalTableRows.operational_bookings.push(pendingUiRow);
+await operations.refreshOperationalState();
+await windowListeners.get("hashchange")();
+assert.match(elements.get("view").innerHTML, /APPROVE-UI-REF/,
+  "duty collector must see the marked payment in the pending list");
+const confirmedUiRow = {
+  ...pendingUiRow,
+  status: "confirmed",
+  paid_at: fixedIso,
+  confirmed_by: authUser.id,
+};
+const blockedSessionRead = deferred();
+const blockedProfileList = deferred();
+const blockedApplicationRead = deferred();
+sessionReadGate = blockedSessionRead.promise;
+profileListGate = blockedProfileList.promise;
+applicationReadGate = blockedApplicationRead.promise;
+operationalRpcHandler = (name, args) => {
+  if (name === "approve_operational_payment") {
+    operationalRpcCalls.push({ name, args: structuredClone(args) });
+    return Promise.resolve({ data: structuredClone(confirmedUiRow), error: null });
+  }
+  return delegatedBaseOperationalRpcHandler(name, args);
+};
+const approveUiControl = operationControl("BUTTON", "", "Confirm received");
+approveUiControl.dataset = { action: "confirm-payment", booking: pendingUiRow.id };
+approveUiControl.closest = () => approveUiControl;
+let approveUiSettled = false;
+const approveUiClick = click({ target: approveUiControl, preventDefault() {} })
+  .then(() => { approveUiSettled = true; });
+await new Promise(setImmediate);
+try {
+  assert.equal(approveUiSettled, true,
+    "payment confirmation UI must not wait for auth or profile REST");
+  assert.equal(store.getBooking(pendingUiRow.id)?.status, "confirmed",
+    "approved booking status must update from the RPC result immediately");
+  assert.doesNotMatch(elements.get("view").innerHTML, /APPROVE-UI-REF/,
+    "approved member must leave the pending list as soon as the RPC returns");
+  assert.match(elements.get("view").innerHTML, /id="admin-pending-payments"/,
+    "pending payments section must rerender immediately after approval");
+} finally {
+  blockedSessionRead.resolve();
+  blockedProfileList.resolve();
+  blockedApplicationRead.resolve();
+  sessionReadGate = null;
+  profileListGate = null;
+  applicationReadGate = null;
+}
+await approveUiClick;
+operationalRpcHandler = delegatedBaseOperationalRpcHandler;
 const midtownServerRow = operationalTableRows.operational_sessions.find((row) => row.id === queueMidtown.id);
 await delayedClickMutation({
   action: "midtown-toggle",
@@ -4786,9 +5004,46 @@ await new Promise(setImmediate);
 const confirmedGymSession = store.getSession(gymSession.id);
 assert.ok(confirmedGymSession.gymConfirmedAt, "delegated gym submit must persist confirmation");
 assert.equal(confirmedGymSession.gymNote, "Confirmed 18 with BFT");
-assert.match(viewEl.innerHTML, /Confirmed with gym/);
+assert.match(viewEl.innerHTML, /Confirmed with BFT/);
 assert.match(viewEl.innerHTML, /Confirmed 18 with BFT/);
+assert.doesNotMatch(viewEl.innerHTML, new RegExp(`form-gym-note[^>]*data-session="${gymSession.id}"|data-session="${gymSession.id}"[^>]*form-gym-note`));
 console.log("ok  delegated gym confirmation persists and rerenders confirmed state");
+
+const hashBeforeRouteClick = location.hash;
+const routeAnchor = makeElement();
+routeAnchor.dataset = {};
+routeAnchor.setAttribute("href", "#/schedule");
+const routeClickTarget = makeElement();
+routeClickTarget.closest = (selector) => String(selector).includes("href^='#'") ? routeAnchor : null;
+let routePrevented = false;
+await click({
+  target: routeClickTarget,
+  defaultPrevented: false,
+  preventDefault() { routePrevented = true; },
+});
+assert.equal(routePrevented, false, "route hashes must not be treated as in-page fragments");
+assert.equal(location.hash, hashBeforeRouteClick, "route hash clicks must not rewrite location");
+
+const fragmentId = "hyrox-status-cycle-1-claims";
+const fragmentTarget = makeElement();
+fragmentTarget.scrollIntoView = () => { fragmentTarget.scrolled = true; };
+elements.set(fragmentId, fragmentTarget);
+const fragmentAnchor = makeElement();
+fragmentAnchor.dataset = {};
+fragmentAnchor.setAttribute("href", `#${fragmentId}`);
+const fragmentClickTarget = makeElement();
+fragmentClickTarget.closest = (selector) => String(selector).includes("href^='#'") ? fragmentAnchor : null;
+let fragmentPrevented = false;
+await click({
+  target: fragmentClickTarget,
+  defaultPrevented: false,
+  preventDefault() { fragmentPrevented = true; },
+});
+assert.equal(fragmentPrevented, true, "in-page Admin fragments must not hit the hash router");
+assert.equal(fragmentTarget.scrolled, true, "in-page Admin fragments must scroll their target");
+assert.equal(location.hash, hashBeforeRouteClick, "in-page fragments must keep the current Admin route");
+elements.delete(fragmentId);
+console.log("ok  in-page Admin fragments scroll without hijacking hash routes");
 
 const swimmingSession = store.upcomingSessions(21)
   .find((session) => session.activityId === "water" && !data.sessionStarted(session));
@@ -5437,6 +5692,7 @@ if (location.hash !== "#/apply" || !elements.get("view").innerHTML.includes("Goo
 }
 
 applicationReadError = new Error("Application read failed");
+store.invalidateLiveApplicationCache();
 location.hash = "#/home";
 await dispatchAuthStateChange("SIGNED_IN");
 await new Promise(setImmediate);
@@ -5771,7 +6027,7 @@ let detailPhotoError;
 let detailPhotoSrc = "/assets/itc/missing-hyrox.webp";
 let detailPhotoRemoved = false;
 const detailPhoto = {
-  dataset: { photoFallback: "/assets/itc/hyrox.webp" },
+  dataset: { photoFallback: "/assets/itc/itc-hyrox-mood.webp" },
   isConnected: true,
   getAttribute(name) { return name === "src" ? detailPhotoSrc : null; },
   set src(value) { detailPhotoSrc = value; },
@@ -5780,7 +6036,7 @@ const detailPhoto = {
 };
 assert.equal(app.mountDetailPhotoFallback(detailPhoto), true);
 detailPhotoError();
-assert.equal(detailPhotoSrc, "/assets/itc/hyrox.webp", "failed HYROX image must retry the root asset");
+assert.equal(detailPhotoSrc, "/assets/itc/itc-hyrox-mood.webp", "failed HYROX image must retry the root asset");
 detailPhotoError();
 assert.equal(detailPhotoRemoved, true, "a failed HYROX fallback must not remain broken");
 console.log("ok  HYROX detail photo retries a root asset fallback");

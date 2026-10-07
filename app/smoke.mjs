@@ -833,8 +833,10 @@ assert.match(integratedViewSource, /function venueDisplayName\(session\)/);
 assert.match(integratedViewSource, /Mark confirmed with \$\{esc\(venueName\)\}/);
 assert.match(integratedViewSource, /function adminVenueStatusMetrics\(session\)/);
 assert.match(readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8"),
-  /closest\("a\[href\^='#'\][^"]*"\)/,
+  /closest\??\("a\[href\^='#'\][^"]*"\)/,
   "App click delegate must intercept hash-only anchor links before the router runs");
+assert.match(integratedAppSource, /function inPageFragmentId\(href\)[\s\S]*href\.startsWith\("#\/"\)/,
+  "in-page fragment clicks must not treat hash routes as scroll targets");
 assert.equal(typeof store.attendeeCountFor, "function",
   "store must export attendeeCountFor for identity-independent RSVP counts");
 assert.equal((integratedViewSource.match(/store\.attendeeCountFor\(s\)/g) || []).length, 4,
@@ -1116,9 +1118,28 @@ if (!localVisitorHome.includes("This week — open to all")
     && !localVisitorHome.includes("No open sessions this week")) {
   throw new Error("visitor Home must fall back to the no-sessions copy");
 }
+if (localVisitorHome.includes("No open sessions this week")) {
+  if (localVisitorHome.includes('href="#/schedule">See more →</a>')) {
+    throw new Error("visitor Home empty week must not show See more");
+  }
+} else if (!localVisitorHome.includes('href="#/schedule">See more →</a>')) {
+  throw new Error("visitor Home with sessions must keep See more");
+}
 assertPrimaryNav(null, ["Home", "Schedule", "Community", "Account"], "visitor");
 if (!localVisitorHome.includes('href="#/account">Sign in or join</a>')) {
   throw new Error("local signed-out Home must retain the Account sign-in link");
+}
+if (!localVisitorHome.includes("<h3 class=\"mt8\">Join the club.</h3>")) {
+  throw new Error("signed-out Home must prompt visitors to join, not browse");
+}
+if (!localVisitorHome.includes("Sign up to book sessions and stay in the community.")) {
+  throw new Error("signed-out Home must explain why to sign up");
+}
+if (localVisitorHome.includes("Membership is free")) {
+  throw new Error("signed-out Home must not say membership is free");
+}
+if (localVisitorHome.includes("<h3 class=\"mt8\">Everyone is welcome</h3>")) {
+  throw new Error("signed-out Home must not use a welcome heading on the join card");
 }
 if (localVisitorHome.includes('data-action="sign-in-google"')) {
   throw new Error("local signed-out Home must not render the live Google action");
@@ -1273,6 +1294,14 @@ for (const link of [
   }
 }
 if (commOk) console.log("ok  Community shows the five destination links");
+{
+  const connectAt = commHtml.indexOf("<h2>Ways to connect</h2>");
+  const socialAt = commHtml.indexOf("Connect beyond training");
+  if (connectAt < 0 || socialAt < 0 || connectAt > socialAt) {
+    failures++;
+    console.error("FAIL Community Pulse should put Ways to connect before the next-social feature");
+  } else console.log("ok  Community Pulse puts Ways to connect first");
+}
 if (!commHtml.includes('#/community/about')) {
   failures++;
   console.error("FAIL Community Explore should still link to About ITC");
@@ -1328,6 +1357,10 @@ if (!commAbout.includes("Arnold Wong") || !commAbout.includes("Our foundation"))
   failures++;
   console.error("FAIL Community About page missing leaders or culture content");
 } else console.log("ok  Community About page carries leaders & culture");
+if (commAbout.includes("Community copy is draft placeholder text for review with ITC leadership.")) {
+  failures++;
+  console.error("FAIL Community About should not show the internal draft disclaimer");
+} else console.log("ok  Community About has no draft disclaimer");
 if (!views.viewCommunity("prayers").includes('id="form-prayer"')) {
   failures++;
   console.error("FAIL prayers page missing the request form");
@@ -1349,6 +1382,12 @@ if (!views.viewCommunity("nope").includes("Page not found")) {
   console.error("FAIL unknown Community section should 404");
 } else console.log("ok  unknown Community section 404s");
 await check("account (visitor)", () => views.viewAccount());
+{
+  const localVisitorAccount = await views.viewAccount();
+  if (localVisitorAccount.includes("Membership is free")) {
+    throw new Error("signed-out Account must not say membership is free");
+  }
+}
 await check("apply", () => views.viewApply());
 if (!views.viewApply().includes('name="donorId"')) {
   failures++;
@@ -1548,7 +1587,7 @@ if (paidDirectionsSession) {
     console.error("FAIL paid activity should fall back to its location for Get directions");
   } else console.log("ok  paid activity falls back to its location for Get directions");
 }
-if (!paidHtml.includes('data-photo-fallback="/assets/itc/hyrox.webp"')) {
+if (!paidHtml.includes('data-photo-fallback="/assets/itc/itc-hyrox-mood.webp"')) {
   failures++;
   console.error("FAIL paid activity should provide a root asset fallback for its HYROX image");
 } else console.log("ok  paid activity provides a HYROX image fallback");
@@ -2107,6 +2146,17 @@ if (!views.viewHome().includes("Nothing booked this week")) {
   failures++;
   console.error('FAIL "My week" should prompt when the member has no bookings');
 } else console.log('ok  "My week" empty state prompts to book');
+{
+  const emptyWeekHome = views.viewHome();
+  if (!emptyWeekHome.includes('href="#/schedule" style="color:var(--accent)">Find a session →</a>')) {
+    failures++;
+    console.error("FAIL empty My Week should keep Find a session");
+  }
+  if (emptyWeekHome.includes('href="#/schedule">See more →</a>')) {
+    failures++;
+    console.error("FAIL empty My Week should not also show See more");
+  } else console.log("ok  empty My Week hides See more and keeps Find a session");
+}
 await check("checkout (member)", () => views.viewCheckout(paid.id));
 
 // --- document registry (indemnity + privacy + guidelines) ---
@@ -2127,7 +2177,7 @@ for (const key of ["indemnity", "privacy", "guidelines"]) {
   }
 }
 console.log("ok  documents registry exposes indemnity + privacy + guidelines");
-for (const [key, expected] of [["indemnity", false], ["privacy", true], ["guidelines", true]]) {
+for (const [key, expected] of [["indemnity", false], ["privacy", false], ["guidelines", false]]) {
   if (!!DOCS[key]?.provisional !== expected) {
     failures++;
     console.error(`FAIL ${key} provisional watermark flag expected ${expected}, got ${!!DOCS[key]?.provisional}`);
@@ -2415,6 +2465,9 @@ const approvedHome = views.viewHome();
 if (!approvedHome.includes("My Week") || !approvedHome.includes(booking.snapshot.name)
     || !approvedHome.includes(bookedActivityLink)) {
   throw new Error("approved Home must show the confirmed future booking in My Week");
+}
+if (!approvedHome.includes('href="#/schedule">See more →</a>')) {
+  throw new Error("approved Home with bookings must keep See more");
 }
 for (const session of allUpcoming.filter((item) => item.id !== booking.sessionId)) {
   if (approvedHome.includes(`href="#/activity/${session.id}"`)) {
@@ -3593,6 +3646,8 @@ store.signIn("member@example.test");
     throw new Error("payments tab sections must collapse behind their headers");
   if (!ops.includes("Pending payments") || !ops.includes("9921"))
     throw new Error("ops should list pending payments with references");
+  if (!/id="admin-pending-payments"[^>]*\bopen\b/.test(ops))
+    throw new Error("pending payments should stay open while claims are waiting");
   if (!ops.includes('data-action="confirm-payment"'))
     throw new Error("pending payments need a confirm action");
   console.log("ok  ops lists pending payments for the collector");

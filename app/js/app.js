@@ -170,6 +170,51 @@ const NAV_FOR = {
   admin: "admin",
 };
 
+// Browse routes already have the boot-time operational cache and signed-in
+// identity. Awaiting getSession/profiles/applications REST (each one a Kong
+// OPTIONS preflight) is what made Home → Schedule feel stuck on "Loading…".
+const BLOCKING_LIVE_IDENTITY_PAGES = new Set([
+  "account", "apply", "admin", "pay", "checkout", "booking", "receipt",
+]);
+
+function routeNeedsBlockingLiveIdentity(page) {
+  return BLOCKING_LIVE_IDENTITY_PAGES.has(page);
+}
+
+// Hash-router pages use "#/schedule". In-page Admin drill-downs use
+// "#hyrox-status-…". Only the latter should scroll; never call querySelector
+// with a route hash (invalid CSS) and never replace the current route.
+function inPageFragmentId(href) {
+  if (typeof href !== "string" || !href.startsWith("#") || href.length < 2) return "";
+  if (href.startsWith("#/")) return "";
+  try {
+    return decodeURIComponent(href.slice(1));
+  } catch {
+    return href.slice(1);
+  }
+}
+
+function snapshotOpenDetails(root) {
+  if (!root?.querySelectorAll) return [];
+  return [...root.querySelectorAll("details")].flatMap((el) => {
+    if (!el.open) return [];
+    if (el.id) return [el.id];
+    const summary = el.querySelector?.("summary")?.textContent?.trim();
+    return summary ? [`summary:${summary}`] : [];
+  });
+}
+
+function restoreOpenDetails(root, keys) {
+  if (!root?.querySelectorAll || !keys?.length) return;
+  const keySet = new Set(keys);
+  for (const el of root.querySelectorAll("details")) {
+    const summary = el.querySelector?.("summary")?.textContent?.trim();
+    if ((el.id && keySet.has(el.id)) || (summary && keySet.has(`summary:${summary}`))) {
+      el.open = true;
+    }
+  }
+}
+
 let prevPage = null;
 let renderGeneration = 0;
 let notificationRouteRows = null;
@@ -265,8 +310,11 @@ async function refreshAfterAdminMutation(successMessage) {
 
 function lockAdminMutationControls(control) {
   const group = control?.closest?.(".member-role-actions");
-  const controls = group?.querySelectorAll?.("button, select") || [control];
-  [...controls].forEach((item) => { item.disabled = true; });
+  const grouped = group?.querySelectorAll?.("button, select");
+  // An empty NodeList is truthy, so `|| [control]` would skip the control
+  // that just succeeded when the Members refresh then failed.
+  const controls = grouped?.length ? [...grouped] : [control];
+  controls.forEach((item) => { item.disabled = true; });
 }
 
 function clearFieldError(field) {
@@ -329,16 +377,36 @@ function commitNotificationCount(unreadCount, active) {
 
 function renderNotificationChrome(user, active, generation, rowsPromise = null) {
   notificationEl.hidden = !user;
-  notificationEl.innerHTML = user ? views.notificationBellHTML(0, active) : "";
+  // The Notifications page fetches a fresh count. Browse routes reuse the last
+  // known badge so Schedule does not flash zero or wait on Kong.
+  const cachedRows = user && !active ? store.peekLiveNotifications() : null;
+  const cachedUnread = Array.isArray(cachedRows)
+    ? cachedRows.filter((row) => !row.read_at).length
+    : 0;
+  notificationEl.innerHTML = user
+    ? views.notificationBellHTML(cachedRows ? cachedUnread : 0, active)
+    : "";
   if (!user) {
     notificationEl.removeAttribute("aria-label");
     notificationEl.removeAttribute("aria-current");
     return null;
   }
 
-  notificationEl.setAttribute("aria-label", "Notifications");
+  notificationEl.setAttribute("aria-label",
+    cachedRows
+      ? (cachedUnread ? `Notifications, ${cachedUnread} unread` : "Notifications")
+      : "Notifications");
   if (active) notificationEl.setAttribute("aria-current", "page");
   else notificationEl.removeAttribute("aria-current");
+
+  // Schedule-style browse already has the Home/boot bell. Skip a second Kong
+  // OPTIONS preflight even when the cache is still empty; Home itself still
+  // refreshes the unread count.
+  const page = parseHash()[0];
+  if (!active && !rowsPromise
+      && ["schedule", "activity", "hyrox", "community"].includes(page)) {
+    return null;
+  }
 
   // Best-effort and detached from ordinary route renders. The Notifications
   // page passes its own request so page content and the badge share one query.
@@ -399,7 +467,7 @@ async function render(generation = renderGeneration) {
   // delay route content. This same promise is also consumed by the page.
   if (notificationsActive) {
     notificationRowsPromise = pendingNotificationRouteRequest
-      || (routeUser ? store.listMyNotifications() : Promise.resolve([]));
+      || (routeUser ? store.listMyNotifications({ force: true }) : Promise.resolve([]));
     pendingNotificationRouteRequest = null;
     renderNotificationChrome(routeUser, true, generation, notificationRowsPromise);
   }
@@ -486,7 +554,11 @@ async function render(generation = renderGeneration) {
 
   // Keep the local filter cache paired with this generation's HTML commit.
   if (notificationsActive) notificationRouteRows = nextNotificationRouteRows;
+  // Admin mutations re-render the whole Payments view. Restore which
+  // sections were open so a just-confirmed payment stays on screen.
+  const openDetails = page === "admin" ? snapshotOpenDetails(viewEl) : [];
   viewEl.innerHTML = out;
+  if (page === "admin") restoreOpenDetails(viewEl, openDetails);
   const user = store.currentUser();
   navEl.innerHTML = views.navHTML(NAV_FOR[page] ?? "home", user);
   avatarEl.classList.toggle("is-empty", !user);
@@ -652,17 +724,19 @@ document.addEventListener("click", async (e) => {
   // the click keeps the user on Admin/Payments and just scrolls the target
   // into view.
   const anchor = e.target.closest && e.target.closest("a[href^='#']:not([href='#'])");
-  if (anchor && !anchor.dataset.action && !e.defaultPrevented) {
-    const href = anchor.getAttribute("href") || "";
-    const target = document.querySelector(href);
-    if (target && href.startsWith("#") && href.length > 1) {
-      e.preventDefault();
+  const href = typeof anchor?.getAttribute === "function"
+    ? (anchor.getAttribute("href") || "")
+    : "";
+  const fragmentId = inPageFragmentId(href);
+  if (fragmentId && !anchor.dataset?.action && !e.defaultPrevented) {
+    e.preventDefault();
+    const target = document.getElementById?.(fragmentId) || null;
+    if (target?.scrollIntoView) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
-      target.setAttribute("tabindex", "-1");
-      target.focus({ preventScroll: true });
-      history.replaceState(null, "", `${location.pathname}${location.search}${href}`);
-      return;
+      target.setAttribute?.("tabindex", "-1");
+      target.focus?.({ preventScroll: true });
     }
+    return;
   }
   const el = e.target.closest("[data-action]");
   // Repeated forms route through the submit delegate via data-action. If a
@@ -1644,7 +1718,7 @@ document.addEventListener("submit", async (e) => {
       try {
         await store.confirmGymBooking(form.dataset.session, new FormData(form).get("note"));
         toast("Marked confirmed with the gym");
-        render();
+        await renderWithFeedback();
       } catch (err) {
         toast(err.message || "Unable to record gym confirmation", true);
       }
@@ -1814,7 +1888,7 @@ async function boot() {
     if (parseHash()[0] === "notifications") {
       const user = store.currentUser();
       pendingNotificationRouteRequest = user
-        ? store.listMyNotifications()
+        ? store.listMyNotifications({ force: true })
         : Promise.resolve([]);
       renderNotificationChrome(user, true, generation, pendingNotificationRouteRequest);
     } else {
@@ -1826,9 +1900,9 @@ async function boot() {
       if (generation === renderGeneration && routeLoader) routeLoader.hidden = false;
     }, 300);
     let navError = null;
-    if (isLive()) {
+    if (isLive() && routeNeedsBlockingLiveIdentity(parseHash()[0])) {
       try {
-        await store.getCurrentUser();
+        await store.getCurrentUser({ force: true });
         await store.fetchApplicationForUser(store.currentUser());
       } catch (err) {
         navError = err;

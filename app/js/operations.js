@@ -58,6 +58,8 @@ const liveCache = {
 
 const listeners = new Set();
 let subscription = null;
+let hydrationEpoch = 0;
+let lastAuthenticated = false;
 
 function notifyListeners() {
   for (const fn of listeners) {
@@ -163,7 +165,7 @@ function buildSessionRow(row, templatesById = null) {
     location: venue,
     mapsQuery,
     venue,
-    photo: metadata?.photo || "../assets/itc/hyrox.webp",
+    photo: metadata?.photo || "../assets/itc/itc-hyrox-mood.webp",
     capacity: row.capacity,
     price: row.price_hkd,
     isOpen: row.is_open,
@@ -300,14 +302,42 @@ function buildVenueOverrideRow(row) {
   };
 }
 
+function preferLiveBooking(incoming) {
+  const existing = liveCache.bookings.find((item) => item.id === incoming.id);
+  // A post-approval refresh can still read a reserved replica. Keep the
+  // confirmed row the duty collector just applied from the RPC.
+  if (existing?.status === "confirmed" && incoming.status === "reserved") {
+    return existing;
+  }
+  return incoming;
+}
+
+function preferLiveSession(incoming) {
+  const existing = liveCache.sessions.get(incoming.id);
+  // Gym confirmation is written on the session. Keep a locally patched
+  // confirmation if a concurrent refresh still reads a null replica.
+  if (existing?.gymConfirmedAt && !incoming.gymConfirmedAt) {
+    return {
+      ...incoming,
+      gymConfirmedAt: existing.gymConfirmedAt,
+      gymConfirmedBy: existing.gymConfirmedBy,
+      gymNote: existing.gymNote,
+    };
+  }
+  return incoming;
+}
+
 function replaceState(payload) {
-  liveCache.sessions = new Map(payload.sessions.map((row) => [row.id, row]));
+  liveCache.sessions = new Map(payload.sessions.map((row) => {
+    const session = preferLiveSession(row);
+    return [session.id, session];
+  }));
   liveCache.hyroxCycles = new Map(
     (payload.hyroxCycles || []).map((row) => [row.id, row])
   );
   liveCache.hyroxQueues = payload.hyroxQueues || [];
   liveCache.templates = payload.templates || [];
-  liveCache.bookings = payload.bookings;
+  liveCache.bookings = (payload.bookings || []).map(preferLiveBooking);
   liveCache.queues = payload.queues;
   liveCache.receipts = payload.receipts;
   liveCache.assignments = new Map(
@@ -428,16 +458,120 @@ async function fetchRsvpCounts() {
   }
 }
 
+function rpcRecord(data) {
+  if (Array.isArray(data)) return data[0] || null;
+  return data || null;
+}
+
+function patchLiveBooking(result) {
+  const row = rpcRecord(result);
+  if (!row?.id) return null;
+  // Drop any in-flight full refresh so a stale bookings snapshot cannot
+  // overwrite the RPC result the duty collector just confirmed.
+  hydrationEpoch += 1;
+  const existing = liveCache.bookings.find((item) => item.id === row.id);
+  const booking = buildBookingRow(row);
+  if (existing) {
+    booking.snapshot = { ...existing.snapshot, ...booking.snapshot };
+    booking.dateISO = booking.dateISO || existing.dateISO;
+    booking.sessionId = booking.sessionId || existing.sessionId;
+    booking.cycleId = booking.cycleId || existing.cycleId;
+    booking.userId = booking.userId || existing.userId;
+  }
+  const index = liveCache.bookings.findIndex((item) => item.id === booking.id);
+  if (index >= 0) liveCache.bookings[index] = booking;
+  else liveCache.bookings.push(booking);
+  notifyListeners();
+  return booking;
+}
+
+function bookingRpcShape(booking, overrides = {}) {
+  if (!booking) return null;
+  return {
+    id: booking.id,
+    profile_id: booking.userId,
+    session_id: booking.sessionId,
+    hyrox_cycle_id: booking.cycleId,
+    status: booking.status,
+    created_at: booking.createdAt,
+    reserved_at: booking.reservedAt,
+    pay_deadline_at: booking.payDeadlineAt,
+    payment_marked_at: booking.paymentMarkedAt,
+    payment_method: booking.paidMethod,
+    payment_reference: booking.paymentRef,
+    paid_at: booking.paidAt,
+    confirmed_by: booking.confirmedBy,
+    snapshot: booking.snapshot,
+    ...overrides,
+  };
+}
+
+function confirmLiveBookingLocally(bookingId, rpcResult) {
+  const patched = patchLiveBooking(rpcResult);
+  if (patched?.status === "confirmed") return patched;
+  const existing = liveCache.bookings.find((item) => item.id === bookingId);
+  if (!existing) return patched;
+  return patchLiveBooking(bookingRpcShape(existing, {
+    status: "confirmed",
+    paid_at: existing.paidAt || Date.now(),
+  }));
+}
+
+function templatesByIdMap() {
+  return new Map((liveCache.templates || []).map((template) => [template.activity_id, template]));
+}
+
+function patchLiveSession(result) {
+  const row = rpcRecord(result);
+  if (!row?.id) return null;
+  hydrationEpoch += 1;
+  const existing = liveCache.sessions.get(row.id);
+  const session = {
+    ...(existing || {}),
+    ...buildSessionRow(row, templatesByIdMap()),
+  };
+  liveCache.sessions.set(session.id, session);
+  notifyListeners();
+  return session;
+}
+
+function confirmLiveGymLocally(sessionId, rpcResult, note) {
+  const patched = patchLiveSession(rpcResult);
+  if (patched?.gymConfirmedAt) {
+    if (note != null && String(note).trim() && !patched.gymNote) {
+      patched.gymNote = String(note).trim();
+      liveCache.sessions.set(patched.id, patched);
+    }
+    return patched;
+  }
+  const existing = liveCache.sessions.get(sessionId);
+  if (!existing) return patched;
+  const next = {
+    ...existing,
+    gymConfirmedAt: existing.gymConfirmedAt || Date.now(),
+    gymNote: String(note || existing.gymNote || "").trim() || null,
+  };
+  liveCache.sessions.set(sessionId, next);
+  hydrationEpoch += 1;
+  notifyListeners();
+  return next;
+}
+
 async function fetchOperationalState({ authenticated } = {}) {
   if (!isLive() || !supabase) return null;
   if (authenticated === undefined) {
-    try {
-      const { data } = await supabase.auth.getSession();
-      authenticated = Boolean(data?.session);
-    } catch {
-      authenticated = false;
+    if (liveCache.loaded) {
+      authenticated = lastAuthenticated;
+    } else {
+      try {
+        const { data } = await supabase.auth.getSession();
+        authenticated = Boolean(data?.session);
+      } catch {
+        authenticated = false;
+      }
     }
   }
+  lastAuthenticated = Boolean(authenticated);
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const [
     sessions,
@@ -564,22 +698,26 @@ export async function hydrateOperationalState({ force = false, authenticated } =
     if (hydrationPromise && hydrationPromise !== pending) return hydrationPromise;
     if (hydrationPromise === pending) hydrationPromise = null;
   }
-  liveCache.loading = Promise.resolve().then(async () => {
+  const epoch = ++hydrationEpoch;
+  let pending;
+  pending = Promise.resolve().then(async () => {
     try {
       const payload = await fetchOperationalState({ authenticated });
+      if (epoch !== hydrationEpoch) return liveCache;
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
       return liveCache;
     } catch (err) {
+      if (epoch !== hydrationEpoch) return liveCache;
       liveCache.error = operationalProblem(err);
       notifyListeners();
       throw liveCache.error;
     } finally {
-      liveCache.loading = null;
+      if (liveCache.loading === pending) liveCache.loading = null;
     }
   });
-  const pending = liveCache.loading;
+  liveCache.loading = pending;
   hydrationPromise = pending;
   try {
     return await pending;
@@ -960,7 +1098,18 @@ export async function liveMarkBookingPaid(bookingId, method, reference) {
 }
 
 export async function liveApproveBookingPayment(bookingId) {
-  return runOperationalRpc("approve_operational_payment", { p_booking_id: bookingId });
+  const row = await runOperationalRpc("approve_operational_payment", { p_booking_id: bookingId }, {
+    skipRefresh: true,
+    applyResult(result) {
+      confirmLiveBookingLocally(bookingId, result);
+    },
+  });
+  const confirmed = liveCache.bookings.find((item) => item.id === bookingId);
+  if (confirmed?.status !== "confirmed") confirmLiveBookingLocally(bookingId, row);
+  void refreshOperationalState().catch((err) => {
+    console.warn("operations refresh after payment approval failed", err);
+  });
+  return row;
 }
 
 export async function liveDeferBooking(bookingId, targetSessionId) {
@@ -982,10 +1131,21 @@ export async function liveLeaveQueue(entryId) {
 }
 
 export async function liveFinalizeGym(sessionId, note) {
-  return runOperationalRpc("finalize_operational_gym", {
+  const row = await runOperationalRpc("finalize_operational_gym", {
     p_session_id: sessionId,
     p_note: note || "",
+  }, {
+    skipRefresh: true,
+    applyResult(result) {
+      confirmLiveGymLocally(sessionId, result, note);
+    },
   });
+  const confirmed = liveCache.sessions.get(sessionId);
+  if (!confirmed?.gymConfirmedAt) confirmLiveGymLocally(sessionId, row, note);
+  void refreshOperationalState().catch((err) => {
+    console.warn("operations refresh after gym confirmation failed", err);
+  });
+  return row;
 }
 
 export async function liveSetSessionTime(sessionId, time) {
