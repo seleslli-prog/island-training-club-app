@@ -1,0 +1,14 @@
+{
+  "name": "island-training-club-app",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "node scripts/syntax-check.mjs",
+    "test": "node app/smoke.mjs",
+    "test:coverage": "node app/smoke.mjs",
+    "build": "node scripts/verify-static.mjs"
+  }
+}
