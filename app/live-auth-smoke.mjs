@@ -166,6 +166,9 @@ let applicationReadError = null;
 let applicationReadGate = null;
 const applicationReadGates = [];
 let applicationSelectCount = 0;
+let sessionReadGate = null;
+let sessionReadCount = 0;
+let operationalReadGate = null;
 let notificationReadError = null;
 let notificationReadGate = null;
 let notificationQueryCount = 0;
@@ -462,16 +465,18 @@ let liveSession = {
 };
 const fakeSupabase = {
   auth: {
-    getSession: () => {
+    getSession: async () => {
       if (authCallbackLocked) {
         throw new Error("getSession must not run while the auth callback lock is held");
       }
-      return Promise.resolve({
+      sessionReadCount += 1;
+      if (sessionReadGate) await sessionReadGate;
+      return {
         data: {
           session: liveSession,
         },
         error: null,
-      });
+      };
     },
     onAuthStateChange(callback) {
       authStateChangeHandler = callback;
@@ -767,7 +772,8 @@ const fakeSupabase = {
       operationalTableQueries.push(table);
       const rows = operationalTableRows[table];
       const sessionFilters = { since: null, ids: null };
-      const result = () => {
+      const result = async () => {
+        if (operationalReadGate) await operationalReadGate;
         let error = table === "operational_session_venue_overrides"
           ? operationalVenueOverrideReadError
           : table === "operational_hyrox_queue_entries" && !liveSession
@@ -5084,6 +5090,40 @@ await windowListeners.get("hashchange")();
 assert.equal(applicationSelectCount, applicationSelectsBeforeTabSwitch + 1,
   "signed-in tab switches must not refetch applications within the 30s cache window");
 
+// Home → Schedule is a browse path. It already has the operational cache
+// from boot, so a cold application/auth round-trip must not block the route.
+location.hash = "#/home";
+await windowListeners.get("hashchange")();
+store.invalidateLiveApplicationCache();
+const applicationSelectsBeforeScheduleNav = applicationSelectCount;
+const sessionReadsBeforeScheduleNav = sessionReadCount;
+const notificationQueriesBeforeScheduleNav = notificationQueryCount;
+let releaseBlockedApplicationRead;
+applicationReadGate = new Promise((resolve) => { releaseBlockedApplicationRead = resolve; });
+let releaseBlockedSessionRead;
+sessionReadGate = new Promise((resolve) => { releaseBlockedSessionRead = resolve; });
+location.hash = "#/schedule";
+let scheduleNavSettled = false;
+const scheduleNav = windowListeners.get("hashchange")().then(() => { scheduleNavSettled = true; });
+await new Promise(setImmediate);
+try {
+  assert.equal(scheduleNavSettled, true,
+    "home→schedule must render without waiting for application or auth REST");
+  assert.equal(applicationSelectCount, applicationSelectsBeforeScheduleNav,
+    "schedule navigation must not fetch applications");
+  assert.equal(sessionReadCount, sessionReadsBeforeScheduleNav,
+    "schedule navigation must not call getSession or trigger Kong OPTIONS");
+  assert.equal(notificationQueryCount, notificationQueriesBeforeScheduleNav,
+    "schedule navigation must not refetch notifications or trigger Kong OPTIONS");
+  assert.match(viewEl.innerHTML, /Find your next session/);
+} finally {
+  releaseBlockedApplicationRead();
+  releaseBlockedSessionRead();
+  applicationReadGate = null;
+  sessionReadGate = null;
+}
+await scheduleNav;
+
 // Three overlapping routes prove that stale completion cannot clear current
 // feedback and out-of-order completion cannot replace the newest route.
 const deferred = () => {
@@ -5125,6 +5165,7 @@ assert.equal(routeLoader.hidden, true);
 // Signed-in notification chrome appears before its best-effort count query,
 // fails silently, and ignores stale generations.
 const notificationBell = elements.get("top-notifications");
+store.invalidateLiveNotificationsCache();
 const countGate = deferred();
 notificationReadGate = countGate.promise;
 location.hash = "#/home";
@@ -5155,6 +5196,7 @@ assert.match(notificationBell.innerHTML, />99\+<\/span>/, "only the visual badge
 notificationRows.splice(-cappedRows.length);
 
 const toastsBeforeCountFailure = toastStack.children.length;
+store.invalidateLiveNotificationsCache();
 notificationReadError = new Error("Notification count unavailable");
 await windowListeners.get("hashchange")();
 await new Promise(setImmediate);
@@ -5163,10 +5205,12 @@ assert.equal(notificationBell.getAttribute("aria-label"), "Notifications");
 assert.doesNotMatch(notificationBell.innerHTML, /notification-badge/);
 assert.equal(toastStack.children.length, toastsBeforeCountFailure, "count failures must not toast");
 
+store.invalidateLiveNotificationsCache();
 const staleCountGate = deferred();
 notificationReadGate = staleCountGate.promise;
 const staleCountRender = windowListeners.get("hashchange")();
 await staleCountRender;
+store.invalidateLiveNotificationsCache();
 notificationRows.push({
   id: "notification-new-unread",
   kind: "welcome",
@@ -6421,6 +6465,54 @@ await delayedClickMutation({
   beforeResolve: () => Object.assign(routedDeferServerRow, confirmedServerRow),
   successToast: "Payment confirmed — member notified",
 });
+const pendingApproveRow = operationalBookingRow("booking-approve-status", routingSessions[0], {
+  status: "reserved",
+  payment_marked_at: fixedIso,
+  payment_method: "payme",
+  payment_reference: "APPROVE-STATUS",
+});
+operationalTableRows.operational_bookings.push(pendingApproveRow);
+await operations.refreshOperationalState();
+assert.ok(store.pendingPaymentBookings().some((booking) => booking.id === pendingApproveRow.id),
+  "duty collector must see the marked payment before confirming it");
+const confirmedApproveRow = {
+  ...pendingApproveRow,
+  status: "confirmed",
+  paid_at: fixedIso,
+  confirmed_by: authUser.id,
+};
+const refreshGate = deferred();
+operationalReadGate = refreshGate.promise;
+operationalRpcHandler = (name, args) => {
+  if (name === "approve_operational_payment") {
+    operationalRpcCalls.push({ name, args: structuredClone(args) });
+    return Promise.resolve({ data: structuredClone(confirmedApproveRow), error: null });
+  }
+  return delegatedBaseOperationalRpcHandler(name, args);
+};
+let approveSettled = false;
+const approvePromise = store.confirmBookingPayment(pendingApproveRow.id)
+  .then((row) => {
+    approveSettled = true;
+    return row;
+  });
+await new Promise(setImmediate);
+try {
+  assert.equal(approveSettled, true,
+    "payment approval must not wait for a full operational refresh");
+  assert.equal(store.getBooking(pendingApproveRow.id)?.status, "confirmed",
+    "approved booking status must update from the RPC result immediately");
+  assert.equal(
+    store.pendingPaymentBookings().some((booking) => booking.id === pendingApproveRow.id),
+    false,
+    "confirmed payments must leave the duty pending list immediately",
+  );
+} finally {
+  refreshGate.resolve();
+  operationalReadGate = null;
+}
+await approvePromise;
+operationalRpcHandler = delegatedBaseOperationalRpcHandler;
 // A successful create remains actionable and non-duplicable while its
 // post-RPC relationship enrichment is reconciling.
 const reconcilingReplacementRow = {

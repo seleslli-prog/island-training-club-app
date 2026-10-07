@@ -89,6 +89,9 @@ let livePublishedAnnouncements = [];
 // Supabase remains the identity directory. Payment Ops caches live profiles
 // in memory only; device-local persistence stores UUID-keyed operations.
 let livePaymentDirectory = new Map();
+let livePaymentDirectoryFetchedAt = 0;
+let livePaymentDirectoryRefresh = null;
+let liveNotifications = null;
 const liveReplacementTokens = new Map();
 const livePendingReplacementStates = new Map();
 const LIVE_PROFILE_TTL_MS = 30_000;
@@ -104,6 +107,24 @@ export function invalidateLiveApplicationCache() {
   liveApplication = null;
   liveApplicationUserId = null;
   liveApplicationFetchedAt = 0;
+}
+
+export function peekLiveApplication(userId) {
+  if (!userId || liveApplicationUserId !== userId) return undefined;
+  return liveApplication;
+}
+
+export function peekLiveNotifications() {
+  return liveNotifications;
+}
+
+export function invalidateLiveNotificationsCache() {
+  liveNotifications = null;
+}
+
+export function peekLivePaymentDirectory() {
+  if (livePaymentDirectoryFetchedAt <= 0) return null;
+  return [...livePaymentDirectory.values()];
 }
 
 function liveApplicationCacheValid(userId) {
@@ -1480,18 +1501,45 @@ export function allUsers() {
   return state.users;
 }
 
-export async function listPaymentUsers() {
+async function refreshLivePaymentDirectory() {
+  if (livePaymentDirectoryRefresh) return livePaymentDirectoryRefresh;
+  const pending = (async () => {
+    const profiles = await listProfiles();
+    livePaymentDirectory = new Map(
+      profiles.map(normalizePaymentUser).filter(Boolean).map((user) => [user.id, user])
+    );
+    livePaymentDirectoryFetchedAt = Date.now();
+    const actor = currentUser();
+    if (actor && !livePaymentDirectory.has(actor.id)) {
+      livePaymentDirectory.set(actor.id, normalizePaymentUser(actor));
+    }
+    return [...livePaymentDirectory.values()];
+  })();
+  livePaymentDirectoryRefresh = pending;
+  try {
+    return await pending;
+  } finally {
+    if (livePaymentDirectoryRefresh === pending) livePaymentDirectoryRefresh = null;
+  }
+}
+
+export async function listPaymentUsers({ force = false } = {}) {
   requirePaymentAdminActor();
   if (!isLive() || !supabase) return state.users;
-  const profiles = await listProfiles();
-  livePaymentDirectory = new Map(
-    profiles.map(normalizePaymentUser).filter(Boolean).map((user) => [user.id, user])
-  );
-  const actor = currentUser();
-  if (actor && !livePaymentDirectory.has(actor.id)) {
-    livePaymentDirectory.set(actor.id, normalizePaymentUser(actor));
+  if (force) return refreshLivePaymentDirectory();
+  const cached = livePaymentDirectoryFetchedAt > 0
+    ? [...livePaymentDirectory.values()]
+    : null;
+  const fresh = cached
+    && Date.now() - livePaymentDirectoryFetchedAt <= LIVE_PROFILE_TTL_MS;
+  if (fresh) return cached;
+  if (cached) {
+    void refreshLivePaymentDirectory().catch((err) => {
+      console.warn("payment directory refresh failed", err);
+    });
+    return cached;
   }
-  return [...livePaymentDirectory.values()];
+  return refreshLivePaymentDirectory();
 }
 
 export function pendingPaymentBookings() {
@@ -4509,6 +4557,9 @@ export async function signOutLive() {
   liveUser = null;
   liveProfileFetchedAt = 0;
   livePaymentDirectory = new Map();
+  livePaymentDirectoryFetchedAt = 0;
+  livePaymentDirectoryRefresh = null;
+  liveNotifications = null;
   livePublishedAnnouncements = [];
   invalidateLiveApplicationCache();
   const { error } = await supabase.auth.signOut();
@@ -4609,6 +4660,8 @@ export async function updateProfileRole(profileId, newRole, reason, expectedRole
   if (!data || data.id !== profileId || data.role !== newRole) {
     throw new Error("Application decision conflict.");
   }
+  livePaymentDirectory = new Map();
+  livePaymentDirectoryFetchedAt = 0;
   // The DB trigger writes role_changes + welcome notification automatically.
   // Persisting `reason` to role_changes.reason requires a small Postgres
   // RPC that sets a session-local config; deferred. ⏳
@@ -5010,8 +5063,9 @@ export async function listMyNotifications() {
     .select("*")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data || []).filter((notification) =>
+  liveNotifications = (data || []).filter((notification) =>
     !isRetiredHyroxNotification(notification, retirementBooking));
+  return liveNotifications;
 }
 
 export async function markNotificationRead(id) {

@@ -294,6 +294,18 @@ const NAV_FOR = {
   admin: "admin",
 };
 
+// Browse routes already have the boot-time operational cache and signed-in
+// identity. Awaiting getSession/profiles/applications REST (each one a Kong
+// OPTIONS preflight) is what made Home → Schedule feel stuck on "Loading…".
+const BLOCKING_LIVE_IDENTITY_PAGES = new Set([
+  "account", "apply", "admin", "pay", "checkout", "booking", "receipt",
+  "replacement",
+]);
+
+function routeNeedsBlockingLiveIdentity(page) {
+  return BLOCKING_LIVE_IDENTITY_PAGES.has(page);
+}
+
 let prevPage = null;
 let renderGeneration = 0;
 let notificationRouteRows = null;
@@ -465,16 +477,36 @@ function commitNotificationCount(unreadCount, active) {
 
 function renderNotificationChrome(user, active, generation, rowsPromise = null) {
   notificationEl.hidden = !user;
-  notificationEl.innerHTML = user ? views.notificationBellHTML(0, active) : "";
+  // The Notifications page fetches a fresh count. Browse routes reuse the last
+  // known badge so Schedule does not flash zero or wait on Kong.
+  const cachedRows = user && !active ? store.peekLiveNotifications() : null;
+  const cachedUnread = Array.isArray(cachedRows)
+    ? cachedRows.filter((row) => !row.read_at).length
+    : 0;
+  notificationEl.innerHTML = user
+    ? views.notificationBellHTML(cachedRows ? cachedUnread : 0, active)
+    : "";
   if (!user) {
     notificationEl.removeAttribute("aria-label");
     notificationEl.removeAttribute("aria-current");
     return null;
   }
 
-  notificationEl.setAttribute("aria-label", "Notifications");
+  notificationEl.setAttribute("aria-label",
+    cachedRows
+      ? (cachedUnread ? `Notifications, ${cachedUnread} unread` : "Notifications")
+      : "Notifications");
   if (active) notificationEl.setAttribute("aria-current", "page");
   else notificationEl.removeAttribute("aria-current");
+
+  // Schedule-style browse already has the Home/boot bell. Skip a second Kong
+  // OPTIONS preflight even when the cache is still empty; Home itself still
+  // refreshes the unread count.
+  const page = parseHash()[0];
+  if (!active && !rowsPromise
+      && ["schedule", "activity", "hyrox", "community"].includes(page)) {
+    return null;
+  }
 
   // Best-effort and detached from ordinary route renders. The Notifications
   // page passes its own request so page content and the badge share one query.
@@ -2024,7 +2056,7 @@ document.addEventListener("submit", async (e) => {
       try {
         await store.confirmGymBooking(form.dataset.session, new FormData(form).get("note"));
         toast("Marked confirmed with the gym");
-        render();
+        await renderWithFeedback();
       } catch (err) {
         toast(err.message || "Unable to record gym confirmation", true);
       }
@@ -2303,7 +2335,7 @@ async function boot() {
       if (generation === renderGeneration && routeLoader) routeLoader.hidden = false;
     }, 300);
     let navError = null;
-    if (isLive()) {
+    if (isLive() && routeNeedsBlockingLiveIdentity(parseHash()[0])) {
       try {
         await store.getCurrentUser();
         await store.fetchApplicationForUser(store.currentUser());

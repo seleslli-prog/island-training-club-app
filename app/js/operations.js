@@ -70,6 +70,7 @@ const liveCache = {
 
 const listeners = new Set();
 let subscription = null;
+let hydrationEpoch = 0;
 
 function notifyListeners() {
   for (const fn of listeners) {
@@ -407,6 +408,128 @@ function buildVenueOverrideRow(row) {
   };
 }
 
+function preferLiveBooking(incoming) {
+  const existing = liveCache.bookings.find((item) => item.id === incoming.id);
+  // A post-approval refresh can still read a reserved replica. Keep the
+  // confirmed row the duty collector just applied from the RPC.
+  if (existing?.status === "confirmed" && incoming.status === "reserved") {
+    return existing;
+  }
+  return incoming;
+}
+
+function preferLiveSession(incoming) {
+  const existing = liveCache.sessions.get(incoming.id);
+  // Gym confirmation is written on the session. Keep a locally patched
+  // confirmation if a concurrent refresh still reads a null replica.
+  if (existing?.gymConfirmedAt && !incoming.gymConfirmedAt) {
+    return {
+      ...incoming,
+      gymConfirmedAt: existing.gymConfirmedAt,
+      gymConfirmedBy: existing.gymConfirmedBy,
+      gymNote: existing.gymNote,
+    };
+  }
+  return incoming;
+}
+
+function rpcRecord(data) {
+  if (Array.isArray(data)) return data[0] || null;
+  return data || null;
+}
+
+function patchLiveBooking(result) {
+  const row = rpcRecord(result);
+  if (!row?.id) return null;
+  hydrationEpoch += 1;
+  const existing = liveCache.bookings.find((item) => item.id === row.id);
+  const booking = buildBookingRow(row);
+  if (existing) {
+    booking.snapshot = { ...existing.snapshot, ...booking.snapshot };
+    booking.dateISO = booking.dateISO || existing.dateISO;
+    booking.sessionId = booking.sessionId || existing.sessionId;
+    booking.cycleId = booking.cycleId || existing.cycleId;
+    booking.userId = booking.userId || existing.userId;
+  }
+  const index = liveCache.bookings.findIndex((item) => item.id === booking.id);
+  if (index >= 0) liveCache.bookings[index] = booking;
+  else liveCache.bookings.push(booking);
+  notifyListeners();
+  return booking;
+}
+
+function bookingRpcShape(booking, overrides = {}) {
+  if (!booking) return null;
+  return {
+    id: booking.id,
+    profile_id: booking.userId,
+    session_id: booking.sessionId,
+    hyrox_cycle_id: booking.cycleId,
+    status: booking.status,
+    created_at: booking.createdAt,
+    reserved_at: booking.reservedAt,
+    pay_deadline_at: booking.payDeadlineAt,
+    payment_marked_at: booking.paymentMarkedAt,
+    payment_method: booking.paidMethod,
+    payment_reference: booking.paymentRef,
+    paid_at: booking.paidAt,
+    confirmed_by: booking.confirmedBy,
+    snapshot: booking.snapshot,
+    ...overrides,
+  };
+}
+
+function confirmLiveBookingLocally(bookingId, rpcResult) {
+  const patched = patchLiveBooking(rpcResult);
+  if (patched?.status === "confirmed") return patched;
+  const existing = liveCache.bookings.find((item) => item.id === bookingId);
+  if (!existing) return patched;
+  return patchLiveBooking(bookingRpcShape(existing, {
+    status: "confirmed",
+    paid_at: existing.paidAt || Date.now(),
+  }));
+}
+
+function templatesByIdMap() {
+  return new Map((liveCache.templates || []).map((template) => [template.activity_id, template]));
+}
+
+function patchLiveSession(result) {
+  const row = rpcRecord(result);
+  if (!row?.id) return null;
+  hydrationEpoch += 1;
+  const existing = liveCache.sessions.get(row.id);
+  const session = {
+    ...(existing || {}),
+    ...buildSessionRow(row, templatesByIdMap()),
+  };
+  liveCache.sessions.set(session.id, session);
+  notifyListeners();
+  return session;
+}
+
+function confirmLiveGymLocally(sessionId, rpcResult, note) {
+  const patched = patchLiveSession(rpcResult);
+  if (patched?.gymConfirmedAt) {
+    if (note != null && String(note).trim() && !patched.gymNote) {
+      patched.gymNote = String(note).trim();
+      liveCache.sessions.set(patched.id, patched);
+    }
+    return patched;
+  }
+  const existing = liveCache.sessions.get(sessionId);
+  if (!existing) return patched;
+  const next = {
+    ...existing,
+    gymConfirmedAt: existing.gymConfirmedAt || Date.now(),
+    gymNote: String(note || existing.gymNote || "").trim() || null,
+  };
+  liveCache.sessions.set(sessionId, next);
+  hydrationEpoch += 1;
+  notifyListeners();
+  return next;
+}
+
 function replaceState(payload) {
   const allSessions = new Map(payload.sessions.map((row) => [row.id, row]));
   const getSession = (id) => allSessions.get(id) || null;
@@ -423,7 +546,10 @@ function replaceState(payload) {
   liveCache.retiredReceiptIds = new Set(payload.receipts
     .filter((row) => isRetiredHyroxReceipt(row, getBooking)).map((row) => row.id));
   liveCache.sessions = new Map(payload.sessions
-    .filter((row) => !isRetiredHyroxSession(row)).map((row) => [row.id, row]));
+    .filter((row) => !isRetiredHyroxSession(row)).map((row) => {
+      const session = preferLiveSession(row);
+      return [session.id, session];
+    }));
   if (payload.replacementRequests) {
     liveCache.replacementRequests = payload.replacementRequests
       .map(buildReplacementRequestRow)
@@ -445,7 +571,7 @@ function replaceState(payload) {
   };
   const bookingIsActive = (row) => !isRetiredHyroxBooking(row, getSession)
     && (Boolean(row.cycleId) || hasActiveSession(row.sessionId));
-  liveCache.bookings = payload.bookings.filter(bookingIsActive);
+  liveCache.bookings = payload.bookings.filter(bookingIsActive).map(preferLiveBooking);
   liveCache.queues = payload.queues
     .filter((row) => {
       const session = getSession(row.sessionId ?? row.session_id);
@@ -684,14 +810,17 @@ export async function hydrateOperationalState({ force = false, authenticated } =
     if (hydrationPromise && hydrationPromise !== pending) return hydrationPromise;
     if (hydrationPromise === pending) hydrationPromise = null;
   }
+  const epoch = ++hydrationEpoch;
   liveCache.loading = Promise.resolve().then(async () => {
     try {
       const payload = await fetchOperationalState({ authenticated });
+      if (epoch !== hydrationEpoch) return liveCache;
       replaceState(payload);
       try { localStorage.setItem(cutoverMarker, "supabase"); } catch {}
       notifyListeners();
       return liveCache;
     } catch (err) {
+      if (epoch !== hydrationEpoch) return liveCache;
       liveCache.error = operationalProblem(err);
       notifyListeners();
       throw liveCache.error;
@@ -1124,7 +1253,18 @@ export async function liveMarkBookingPaid(bookingId, method, reference) {
 }
 
 export async function liveApproveBookingPayment(bookingId) {
-  return runOperationalRpc("approve_operational_payment", { p_booking_id: bookingId });
+  const row = await runOperationalRpc("approve_operational_payment", { p_booking_id: bookingId }, {
+    skipRefresh: true,
+    applyResult(result) {
+      confirmLiveBookingLocally(bookingId, result);
+    },
+  });
+  const confirmed = liveCache.bookings.find((item) => item.id === bookingId);
+  if (confirmed?.status !== "confirmed") confirmLiveBookingLocally(bookingId, row);
+  void refreshOperationalState().catch((err) => {
+    console.warn("operations refresh after payment approval failed", err);
+  });
+  return row;
 }
 
 export async function liveDeferBooking(bookingId, targetSessionId) {
@@ -1146,10 +1286,21 @@ export async function liveLeaveQueue(entryId) {
 }
 
 export async function liveFinalizeGym(sessionId, note) {
-  return runOperationalRpc("finalize_operational_gym", {
+  const row = await runOperationalRpc("finalize_operational_gym", {
     p_session_id: sessionId,
     p_note: note || "",
+  }, {
+    skipRefresh: true,
+    applyResult(result) {
+      confirmLiveGymLocally(sessionId, result, note);
+    },
   });
+  const confirmed = liveCache.sessions.get(sessionId);
+  if (!confirmed?.gymConfirmedAt) confirmLiveGymLocally(sessionId, row, note);
+  void refreshOperationalState().catch((err) => {
+    console.warn("operations refresh after gym confirmation failed", err);
+  });
+  return row;
 }
 
 export async function liveSetSessionTime(sessionId, time) {

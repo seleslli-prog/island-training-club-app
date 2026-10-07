@@ -2739,8 +2739,12 @@ export async function viewAdmin(tab = "members") {
   let memberUsers = null;
   let adminAvatarRows = null;
   let avatarLoadFailed = false;
-  if (["members", "payments"].includes(canonicalTab)) {
-    memberUsers = (await store.listPaymentUsers())
+  if (canonicalTab === "payments") {
+    const cachedUsers = isLive() ? store.peekLivePaymentDirectory() : null;
+    memberUsers = (cachedUsers || await store.listPaymentUsers())
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  } else if (canonicalTab === "members") {
+    memberUsers = (await store.listPaymentUsers({ force: true }))
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }
   let pendingApplicants = [];
@@ -2782,11 +2786,16 @@ export async function viewAdmin(tab = "members") {
     }
   } else {
     let profilePhone = String(user.phone || "").trim();
-    try {
-      const application = await store.getMyApplication();
-      profilePhone = String(application?.mobile || application?.phone || profilePhone).trim();
-    } catch (error) {
-      console.warn("Unable to load Membership Details phone for payout form", error);
+    const cachedApplication = isLive() ? store.peekLiveApplication(user.id) : undefined;
+    if (cachedApplication !== undefined) {
+      profilePhone = String(cachedApplication?.mobile || cachedApplication?.phone || profilePhone).trim();
+    } else {
+      try {
+        const application = await store.getMyApplication();
+        profilePhone = String(application?.mobile || application?.phone || profilePhone).trim();
+      } catch (error) {
+        console.warn("Unable to load Membership Details phone for payout form", error);
+      }
     }
     body = await adminOps(user, memberUsers, profilePhone);
   }
@@ -2899,17 +2908,21 @@ function adminCapacityLine(count, capacity) {
 
 function adminVenueHandoff(session, { message, override, meta = "", extra = "", heading = venueDisplayName(session), subheading = "", cardClass = "" }) {
   const venueName = venueDisplayName(session);
+  // Live gym confirmation lives on the session row. Local mode still copies
+  // it onto the weekly override, so read session first and fall back.
+  const gymConfirmedAt = session?.gymConfirmedAt || override?.gymConfirmedAt;
+  const gymNote = session?.gymNote || override?.gymNote;
   return `<div class="card hyrox-venue-card mt16 ${cardClass}"><div class="card-body">
     ${meta}
-    <div class="section-head"><div><h3>${esc(heading)}</h3>${subheading ? `<p class="muted small hyrox-card-subtitle">${esc(subheading)}</p>` : ""}</div>${override.gymConfirmedAt ? `<span class="badge free">Confirmed</span>` : `<span class="badge neutral">Venue handoff</span>`}</div>
+    <div class="section-head"><div><h3>${esc(heading)}</h3>${subheading ? `<p class="muted small hyrox-card-subtitle">${esc(subheading)}</p>` : ""}</div>${gymConfirmedAt ? `<span class="badge free">Confirmed</span>` : `<span class="badge neutral">Venue handoff</span>`}</div>
     ${extra}
-    <section class="admin-venue-finalization${override.gymConfirmedAt ? " is-finalized" : ""}" aria-labelledby="venue-finalization-${esc(session.id)}">
+    <section class="admin-venue-finalization${gymConfirmedAt ? " is-finalized" : ""}" aria-labelledby="venue-finalization-${esc(session.id)}">
       <div class="section-head">
-        <div><span class="kicker dim">Venue operations</span><h4 id="venue-finalization-${esc(session.id)}">${override.gymConfirmedAt ? "Venue finalized" : "Finalize with venue"}</h4></div>
-        ${override.gymConfirmedAt ? '<span class="badge free">Complete</span>' : ""}
+        <div><span class="kicker dim">Venue operations</span><h4 id="venue-finalization-${esc(session.id)}">${gymConfirmedAt ? "Venue finalized" : "Finalize with venue"}</h4></div>
+        ${gymConfirmedAt ? '<span class="badge free">Complete</span>' : ""}
       </div>
-      ${override.gymConfirmedAt
-        ? `<p class="badge free mt8">Confirmed with ${esc(venueName)} · ${new Date(override.gymConfirmedAt).toLocaleDateString("en-HK", { day: "numeric", month: "short" })}${override.gymNote ? ` — ${esc(override.gymNote)}` : ""}</p>`
+      ${gymConfirmedAt
+        ? `<p class="badge free mt8">Confirmed with ${esc(venueName)} · ${new Date(gymConfirmedAt).toLocaleDateString("en-HK", { day: "numeric", month: "short" })}${gymNote ? ` — ${esc(gymNote)}` : ""}</p>`
         : `<p class="muted small mt8">Send the confirmed headcount to the venue, then record their confirmation.</p>
            <div class="btn-row mt16">
             <a class="btn sm" href="https://wa.me/?text=${encodeURIComponent(message)}" target="_blank" rel="noopener">Send via WhatsApp</a>
