@@ -5,6 +5,7 @@ on:
     branches: [testing, main]
   push:
     branches: [testing, main]
+  workflow_dispatch:
 
 jobs:
   quality:
@@ -12,13 +13,20 @@ jobs:
     env:
       TZ: Asia/Hong_Kong
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run test:live-auth
-      - run: npm run build
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Live-auth tests
+        run: npm run test:live-auth
+      - name: Verify static app
+        run: npm run build

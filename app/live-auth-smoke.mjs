@@ -26,6 +26,13 @@ globalThis.history = {
   state: null,
   replaceState() {},
 };
+if (!globalThis.navigator || typeof globalThis.navigator !== "object") {
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    writable: true,
+    value: {},
+  });
+}
 
 const authUser = {
   id: "live-user-1",
@@ -844,6 +851,17 @@ const fakeSupabase = {
         },
       };
       return { select: () => chain };
+    }
+    if (table === "community_announcements") {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        order: () => Promise.resolve({ data: [], error: null }),
+        then(resolve, reject) {
+          return Promise.resolve({ data: [], error: null }).then(resolve, reject);
+        },
+      };
+      return chain;
     }
     throw new Error(`Unexpected table: ${table}`);
   },
