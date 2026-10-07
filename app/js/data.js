@@ -446,17 +446,11 @@ export function findSession(activities, sessionId) {
 // finalizes with the gym); last-minute spots get a 2-hour window.
 
 export function mainDeadlineFor(dateISO) {
-  const d = parseISO(dateISO);
-  d.setDate(d.getDate() - 2); // Saturday -> Thursday
-  d.setHours(18, 0, 0, 0);
-  return d.getTime();
+  return Date.parse(`${shiftIsoDate(dateISO, -2)}T18:00:00+08:00`);
 }
 
 export function finalCheckpointFor(dateISO) {
-  const d = parseISO(dateISO);
-  d.setDate(d.getDate() - 1); // Saturday -> Friday
-  d.setHours(14, 0, 0, 0);
-  return d.getTime();
+  return Date.parse(`${shiftIsoDate(dateISO, -1)}T14:00:00+08:00`);
 }
 
 export const LAST_MINUTE_WINDOW_MS = 2 * 60 * 60 * 1000;

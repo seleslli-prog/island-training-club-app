@@ -260,8 +260,12 @@ assert.ok(quarryBayEarlySeed, "the early Island ECC HYROX slot must be seeded");
   assert.equal(data.LAST_MINUTE_WINDOW_MS, 2 * 60 * 60 * 1000);
   assert.equal(
     data.nextPayDeadline(saturday, Date.parse("2026-10-08T18:00:00+08:00")),
+    Date.parse("2026-10-09T14:00:00+08:00"),
+    "non–Island ECC nextPayDeadline still uses Friday 14:00 HKT after Thursday 18:00 HKT",
+  );
+  assert.equal(
+    data.nextPayDeadline(saturday, Date.parse("2026-10-08T18:00:00+08:00")),
     data.finalCheckpointFor(saturday),
-    "non–Island ECC nextPayDeadline still uses Friday 14:00 after Thursday 18:00",
   );
   assert.equal(data.ISLAND_ECC_SIGNUP_LOCKED_ERROR, "HYROX sign-up opens Monday at 6 PM HKT.");
   console.log("ok  Island ECC HKT signup and pay-by helpers");

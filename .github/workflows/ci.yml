@@ -9,6 +9,8 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Hong_Kong
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,5 +19,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npm run test -- --run
+      - run: npm test
+      - run: npm run test:live-auth
       - run: npm run build
