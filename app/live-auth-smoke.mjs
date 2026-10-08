@@ -2765,6 +2765,8 @@ console.log("ok  live Admin Payments renders directory-backed financial names");
 // in memory. Cache hits avoid resolver traffic; mutations replace that cache.
 const firstAvatar = await store.getOwnAvatar();
 assert.equal(firstAvatar.source, "google");
+assert.deepEqual(store.peekOwnAvatar(), firstAvatar,
+  "peekOwnAvatar must return the in-memory presentation without another resolver call");
 assert.equal(avatarResolveCalls.length, 1);
 assert.equal(new URL(avatarResolveCalls[0].url).searchParams.get("scope"), "self");
 assert.equal(avatarResolveCalls[0].options.method, "GET");
@@ -4914,6 +4916,9 @@ const renderHashRoute = async (route) => {
   await windowListeners.get("hashchange")();
   await new Promise(setImmediate);
   return elements.get("view").innerHTML;
+};
+const flushBackgroundRouteWork = async () => {
+  for (let i = 0; i < 20; i++) await new Promise(setImmediate);
 };
 const configureRouteViewer = async (viewer) => {
   if (viewer === "public") {
@@ -7878,6 +7883,7 @@ store.clearAvatarCache();
 const activityAvatarResolveBefore = avatarResolveCalls.length;
 location.hash = `#/activity/${gatedPaidSession.id}`;
 await windowListeners.get("hashchange")();
+await flushBackgroundRouteWork();
 const activityAvatarCalls = avatarResolveCalls.slice(activityAvatarResolveBefore)
   .filter((call) => new URL(call.url).searchParams.get("scope") === "session");
 assert.equal(activityAvatarCalls.length, 1,
@@ -7890,6 +7896,7 @@ store.clearAvatarCache();
 avatarResolveStatus = 500;
 location.hash = `#/activity/${gatedPaidSession.id}`;
 await windowListeners.get("hashchange")();
+await flushBackgroundRouteWork();
 avatarResolveStatus = 200;
 assert.match(viewEl.innerHTML, /Who’s coming/);
 assert.doesNotMatch(viewEl.innerHTML, /sensitive resolver detail|object_path|pending_object/,

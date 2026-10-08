@@ -563,6 +563,27 @@ function venuePresentationHTML(presentation) {
   return "";
 }
 
+export function attendeeRosterInnerHTML(attendeeRows, attendeeNames) {
+  const rows = Array.isArray(attendeeRows) ? attendeeRows : [];
+  if (rows.length) {
+    return rows.map((row) => `
+        <div class="attendee-row">
+          ${avatarMarkup({
+            name: row.displayName,
+            presentation: row,
+            size: 32,
+            className: "attendee-avatar",
+            decorative: true,
+          })}
+          <span class="attendee-name">${esc(row.displayName || "Member")}</span>
+        </div>`).join("");
+  }
+  if (attendeeNames === null) {
+    return '<p class="muted small">Attendee names are temporarily unavailable. Try again shortly.</p>';
+  }
+  return '<p class="muted small">No confirmed bookings yet.</p>';
+}
+
 export function viewActivity(sessionId, options) {
   if (isRetiredHyroxLegacyRouteId(sessionId)) return viewRetiredSession();
   const optionsObject = options && typeof options === "object" && !Array.isArray(options);
@@ -773,27 +794,12 @@ export function viewActivity(sessionId, options) {
       <div><small>Places</small><strong>${spots <= 0 ? "Full" : `${spots} of ${s.capacity} left`}</strong></div>`
       : "";
 
-  const attendeeList = attendeeRows.length
-    ? attendeeRows.map((row) => `
-        <div class="attendee-row">
-          ${avatarMarkup({
-            name: row.displayName,
-            presentation: row,
-            size: 32,
-            className: "attendee-avatar",
-            decorative: true,
-          })}
-          <span class="attendee-name">${esc(row.displayName || "Member")}</span>
-        </div>`).join("")
-    : attendeeNames === null
-      ? '<p class="muted small">Attendee names are temporarily unavailable. Try again shortly.</p>'
-      : '<p class="muted small">No confirmed bookings yet.</p>';
   const attendees =
     (s.kind === "paid" || store.sessionRequiresRsvp(s))
       ? isMember
         ? `
       <div class="section-head"><h2>Who’s coming</h2></div>
-      <div class="attendees">${attendeeList}</div>`
+      <div class="attendees" data-attendee-roster>${attendeeRosterInnerHTML(attendeeRows, attendeeNames)}</div>`
         : `<div class="section-head"><h2>Who’s coming</h2></div>${memberOnlyNote("Member-only: the attendee list is visible after approval.")}`
       : "";
 
@@ -1643,7 +1649,7 @@ async function accountMember(user) {
   if (user.role !== normalized) user.role = normalized;
   const isAdmin = isAdminRole(normalized);
   const canManageAvatar = ["member", "admin", "superadmin"].includes(normalized);
-  const avatarPresentation = canManageAvatar ? await store.getOwnAvatar().catch(() => null) : null;
+  const avatarPresentation = canManageAvatar ? store.peekOwnAvatar() : null;
 
   const roleLabel = {
     member: "Active member",
@@ -2749,12 +2755,14 @@ export async function viewAdmin(tab = "members") {
   }
   let pendingApplicants = [];
   if (canonicalTab === "members") {
+    const avatarPromise = store.peekAdminAvatarRows()
+      ? Promise.resolve(store.peekAdminAvatarRows())
+      : store.getAdminAvatarRows().catch(() => {
+          avatarLoadFailed = true;
+          return null;
+        });
     pendingApplicants = await store.listApprovalCandidates();
-    try {
-      adminAvatarRows = await store.getAdminAvatarRows();
-    } catch {
-      avatarLoadFailed = true;
-    }
+    adminAvatarRows = await avatarPromise;
   }
   let prayerRows = [];
   let prayerLoadFailed = false;

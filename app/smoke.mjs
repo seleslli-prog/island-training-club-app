@@ -2451,6 +2451,17 @@ assert.match(integratedAppSource,
 assert.match(integratedAppSource,
   /viewEl\.querySelector\("\[data-route-not-found\]"\)/,
   "not-found route output must not overwrite the last successful route");
+assert.match(integratedAppSource, /paintOwnAvatarChrome/,
+  "route chrome must paint cached initials immediately instead of awaiting avatar REST");
+assert.match(integratedAppSource, /fillActivityRoster/,
+  "Activity Details must paint first and fill Who's coming without blocking the route");
+assert.match(integratedAppSource, /subscribeOperationalState/,
+  "Admin Payments duty must subscribe to operational realtime");
+assert.match(integratedAppSource, /page === "admin" && \(!tab \|\| tab === "payments"/,
+  "collector duty realtime must refresh Admin Payments for other admins");
+assert.doesNotMatch(integratedAppSource,
+  /"account", "apply", "admin", "pay"/,
+  "Admin must not block navigation on identity REST");
 assert.match(integratedAppSource,
   /visibilitychange[\s\S]*?store\.startupRoute\(location\.hash, store\.currentUser\(\)\?\.id\)/,
   "resume must recover an unexpectedly empty hash before refreshing the route");

@@ -339,6 +339,10 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
   return liveOps.operationalStateStatus();
 }
 
+export function subscribeOperationalState(onChange) {
+  return liveOps.subscribeOperationalState(onChange);
+}
+
 function normalizeReceiptCounter() {
   if (Number.isInteger(state.receiptCounter) && state.receiptCounter >= 0) return;
   const highestIssued = state.receipts.reduce((highest, receipt) => {
@@ -4214,6 +4218,29 @@ export function clearAvatarCache() {
   ownAvatarRequest = null;
   sessionAvatarCache.clear();
   adminAvatarCache = null;
+}
+
+export function peekOwnAvatar() {
+  const user = approvedAvatarUser();
+  if (!user) return initialsAvatar();
+  if (ownAvatarCache?.profileId === user.id) return ownAvatarCache.presentation;
+  return initialsAvatar(user.id);
+}
+
+export function peekSessionAvatars(sessionId) {
+  const id = String(sessionId || "").trim();
+  const user = approvedAvatarUser();
+  const cached = sessionAvatarCache.get(id);
+  if (!user || cached?.profileId !== user.id) return null;
+  return cached.rows;
+}
+
+export function peekAdminAvatarRows() {
+  const user = currentUser();
+  const isAdmin = user?.status === "approved"
+    && ["admin", "superadmin", "super_admin"].includes(user.role);
+  if (!isAdmin || adminAvatarCache?.profileId !== user.id) return null;
+  return adminAvatarCache.rows;
 }
 
 export async function getOwnAvatar({ force = false } = {}) {

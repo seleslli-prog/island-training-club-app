@@ -74,9 +74,9 @@ function rosterRowMatchesViewer(row, viewer) {
   return false;
 }
 
-async function applyOwnAvatarToRoster(rows, viewer) {
+function applyOwnAvatarToRoster(rows, viewer) {
   if (!Array.isArray(rows) || !rows.length || !canManageOwnAvatar(viewer)) return rows;
-  const own = await store.getOwnAvatar().catch(() => null);
+  const own = store.peekOwnAvatar();
   if (!own?.url) return rows;
   return rows.map((row) => {
     if (!rosterRowMatchesViewer(row, viewer)) return row;
@@ -91,6 +91,37 @@ async function applyOwnAvatarToRoster(rows, viewer) {
   });
 }
 
+function commitAttendeeRoster(rosterHtml) {
+  const host = viewEl.querySelector("[data-attendee-roster]");
+  if (host) {
+    host.innerHTML = rosterHtml;
+    return;
+  }
+  const html = String(viewEl.innerHTML || "");
+  const marker = "data-attendee-roster>";
+  const start = html.indexOf(marker);
+  if (start < 0) return;
+  const contentStart = start + marker.length;
+  let i = contentStart;
+  let depth = 1;
+  while (i < html.length && depth > 0) {
+    const nextOpen = html.indexOf("<div", i);
+    const nextClose = html.indexOf("</div>", i);
+    if (nextClose < 0) return;
+    if (nextOpen >= 0 && nextOpen < nextClose) {
+      depth += 1;
+      i = nextOpen + 4;
+    } else {
+      depth -= 1;
+      if (depth === 0) {
+        viewEl.innerHTML = html.slice(0, contentStart) + rosterHtml + html.slice(nextClose);
+        return;
+      }
+      i = nextClose + 6;
+    }
+  }
+}
+
 function initialsRosterFromNames(attendeeNames) {
   return attendeeNames.map((displayName) => ({
     displayName,
@@ -98,6 +129,83 @@ function initialsRosterFromNames(attendeeNames) {
     source: "initials",
     state: "active",
   }));
+}
+
+function paintOwnAvatarChrome(user, generation) {
+  const cached = canManageOwnAvatar(user) ? store.peekOwnAvatar() : null;
+  avatarEl.classList.toggle("is-empty", !user);
+  avatarEl.setAttribute("aria-label", user ? "Profile" : "Sign in");
+  avatarEl.dataset.avatarSource = cached?.source || "initials";
+  avatarEl.innerHTML = views.avatarHTML(user, cached);
+  if (!canManageOwnAvatar(user)) return;
+  void store.getOwnAvatar().then((presentation) => {
+    if (generation !== renderGeneration) return;
+    commitOwnAvatarPresentation(presentation);
+  }).catch(() => {});
+}
+
+function cachedActivityRoster(sessionId, session, viewer) {
+  if (viewer?.status !== "approved" || !session) return { attendeeNames: undefined, avatarRows: null };
+  const cachedNames = store.attendeesFor(session);
+  const attendeeNames = cachedNames.length ? cachedNames : undefined;
+  const peeked = store.peekSessionAvatars(sessionId);
+  let avatarRows = Array.isArray(peeked) && peeked.length ? peeked : null;
+  if (!avatarRows && Array.isArray(attendeeNames) && attendeeNames.length) {
+    avatarRows = initialsRosterFromNames(attendeeNames);
+  }
+  return { attendeeNames, avatarRows };
+}
+
+async function fillActivityRoster(sessionId, session, viewer, generation) {
+  if (viewer?.status !== "approved" || !session) return;
+  if (!(session.kind === "paid" || store.sessionRequiresRsvp(session))) return;
+  const namesPromise = store.attendeeNamesFor(sessionId).catch((err) => {
+    console.warn("Unable to load attendee names", err);
+    return undefined;
+  });
+  const avatarsPromise = canManageOwnAvatar(viewer)
+    ? store.getSessionAvatars(sessionId).catch(() => null)
+    : Promise.resolve(null);
+  const [namesResult, fetchedAvatars] = await Promise.all([namesPromise, avatarsPromise]);
+  let attendeeNames = namesResult;
+  if (!Array.isArray(attendeeNames) || !attendeeNames.length) {
+    const cachedNames = store.attendeesFor(session);
+    if (cachedNames.length) attendeeNames = cachedNames;
+    else if (namesResult === undefined) attendeeNames = null;
+  }
+  let avatarRows = fetchedAvatars;
+  if (Array.isArray(attendeeNames) && attendeeNames.length) {
+    if (!Array.isArray(avatarRows) || !avatarRows.length) {
+      avatarRows = initialsRosterFromNames(attendeeNames);
+    } else {
+      avatarRows = avatarRows.map((row, index) => ({
+        ...row,
+        displayName: attendeeNames[index] || row.displayName,
+      }));
+    }
+  }
+  if (Array.isArray(avatarRows) && avatarRows.length) {
+    avatarRows = applyOwnAvatarToRoster(avatarRows, viewer);
+  }
+  if (generation !== renderGeneration) return;
+  commitAttendeeRoster(views.attendeeRosterInnerHTML(avatarRows, attendeeNames));
+}
+
+let operationalUiRefreshTimer = null;
+function scheduleOperationalUiRefresh() {
+  if (operationalUiRefreshTimer) return;
+  operationalUiRefreshTimer = setTimeout(() => {
+    operationalUiRefreshTimer = null;
+    if (viewEl.querySelector('[data-change="duty-set"][aria-busy="true"]')) return;
+    const [page, tab] = parseHash();
+    if (page === "pay") {
+      void renderWithFeedback();
+      return;
+    }
+    if (page === "admin" && (!tab || tab === "payments" || tab === "ops")) {
+      void renderWithFeedback();
+    }
+  }, 80);
 }
 
 export async function openOwnAvatarManager(openManager = openAvatarManager) {
@@ -298,11 +406,13 @@ const NAV_FOR = {
 // identity. Awaiting getSession/profiles/applications REST (each one a Kong
 // OPTIONS preflight) is what made Home → Schedule feel stuck on "Loading…".
 const BLOCKING_LIVE_IDENTITY_PAGES = new Set([
-  "account", "apply", "admin", "pay", "checkout", "booking", "receipt",
+  "account", "apply", "pay", "checkout", "booking", "receipt",
   "replacement",
 ]);
 
 function routeNeedsBlockingLiveIdentity(page) {
+  // Admin paints from the boot-time profile and operational cache. Waiting on
+  // getSession / profiles / applications here is another Kong OPTIONS stall.
   return BLOCKING_LIVE_IDENTITY_PAGES.has(page);
 }
 
@@ -588,49 +698,8 @@ async function render(generation = renderGeneration) {
       }
       const session = store.getSession(arg);
       const viewer = store.currentUser();
-      let attendeeNames;
-      let avatarRows = null;
-      if (viewer?.status === "approved") {
-        try {
-          attendeeNames = await store.attendeeNamesFor(arg);
-          // If the names RPC is empty but hydrated bookings show people
-          // (common when count is ahead of roster RPC), use cache names.
-          if (Array.isArray(attendeeNames) && !attendeeNames.length && session) {
-            const cachedNames = store.attendeesFor(session);
-            if (cachedNames.length) attendeeNames = cachedNames;
-          }
-        } catch (err) {
-          console.warn("Unable to load attendee names", err);
-          attendeeNames = session ? store.attendeesFor(session) : null;
-          if (Array.isArray(attendeeNames) && !attendeeNames.length) attendeeNames = null;
-        }
-        if ((session?.kind === "paid" || store.sessionRequiresRsvp(session))
-            && canManageOwnAvatar(viewer)) {
-          try {
-            avatarRows = await store.getSessionAvatars(arg);
-            if (Array.isArray(attendeeNames) && attendeeNames.length) {
-              if (!Array.isArray(avatarRows) || !avatarRows.length) {
-                avatarRows = initialsRosterFromNames(attendeeNames);
-              } else {
-                avatarRows = avatarRows.map((row, index) => ({
-                  ...row,
-                  displayName: attendeeNames[index] || row.displayName,
-                }));
-              }
-            }
-          } catch {
-            avatarRows = Array.isArray(attendeeNames) && attendeeNames.length
-              ? initialsRosterFromNames(attendeeNames)
-              : null;
-          }
-          // Session avatar resolver can omit photos for RSVP rosters; keep the
-          // viewer's header photo on their own Who's coming row.
-          if (Array.isArray(avatarRows) && avatarRows.length) {
-            avatarRows = await applyOwnAvatarToRoster(avatarRows, viewer);
-          }
-        }
-      }
-      out = views.viewActivity(arg, { attendeeNames, avatarRows });
+      const roster = cachedActivityRoster(arg, session, viewer);
+      out = views.viewActivity(arg, roster);
       break;
     }
     case "hyrox":
@@ -711,9 +780,6 @@ async function render(generation = renderGeneration) {
   // Keep the local filter cache paired with this generation's HTML commit.
   if (notificationsActive) notificationRouteRows = nextNotificationRouteRows;
   const user = store.currentUser();
-  const ownAvatar = canManageOwnAvatar(user)
-    ? await store.getOwnAvatar().catch(() => null)
-    : null;
   if (generation !== renderGeneration) return;
 
   viewEl.innerHTML = out;
@@ -721,10 +787,7 @@ async function render(generation = renderGeneration) {
     store.rememberLastRoute(location.hash, user?.id);
   }
   navEl.innerHTML = views.navHTML(NAV_FOR[page] ?? "home", user);
-  avatarEl.classList.toggle("is-empty", !user);
-  avatarEl.setAttribute("aria-label", user ? "Profile" : "Sign in");
-  avatarEl.dataset.avatarSource = ownAvatar?.source || "initials";
-  avatarEl.innerHTML = views.avatarHTML(user, ownAvatar);
+  paintOwnAvatarChrome(user, generation);
   if (!notificationsActive) renderNotificationChrome(user, false, generation);
   if (page === "activity") {
     const ownsGeneration = () => generation === renderGeneration;
@@ -736,6 +799,8 @@ async function render(generation = renderGeneration) {
     if (venueImage) mountVenueImageFallback(venueImage, { ownsGeneration });
     const detailPhoto = viewEl.querySelector(".detail-photo");
     if (detailPhoto) mountDetailPhotoFallback(detailPhoto, { ownsGeneration });
+    const session = store.getSession(arg);
+    void fillActivityRoster(arg, session, user, generation);
   }
   if (page === "admin" && arg === "activities") {
     const ownsGeneration = () => generation === renderGeneration;
@@ -2246,10 +2311,18 @@ function consumeAuthCallbackError() {
 }
 
 let liveAuthBound = false;
+let operationalUiBound = false;
+
+function bindOperationalUiRefresh() {
+  if (operationalUiBound || !isLive()) return;
+  operationalUiBound = true;
+  store.subscribeOperationalState(() => scheduleOperationalUiRefresh());
+}
 
 function bindLiveAuthState() {
   if (liveAuthBound || !isLive() || !supabase) return;
   liveAuthBound = true;
+  bindOperationalUiRefresh();
   // Supabase may emit SIGNED_IN again when an existing session regains focus.
   // Refresh identity without replacing the current route; only a pending
   // applicant still needs the follow-up redirect to /apply.
@@ -2380,10 +2453,18 @@ async function boot() {
   if (pendingVisitorHydrate) {
     try {
       await pendingVisitorHydrate;
+      bindOperationalUiRefresh();
       await renderWithFeedback();
     } catch (err) {
       toast(err.message || "Unable to load this week's sessions", true);
     }
+  } else {
+    bindOperationalUiRefresh();
+  }
+  if (canManageOwnAvatar(store.currentUser())) {
+    void store.getOwnAvatar().then((presentation) => {
+      commitOwnAvatarPresentation(presentation);
+    }).catch(() => {});
   }
   if (isLive()) await maybeRedirectToApply();
 }
