@@ -10,6 +10,6 @@
     "test": "node app/smoke.mjs",
     "test:live-auth": "node app/live-auth-smoke.mjs",
     "test:coverage": "node app/smoke.mjs",
-    "build": "node scripts/verify-static.mjs"
+    "verify": "node scripts/verify-static.mjs"
   }
 }

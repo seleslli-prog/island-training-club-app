@@ -42,8 +42,10 @@ cache on the device; authoritative live operational rows remain in Supabase.
 
 This is a **static no-build deployment**. Vercel serves `app/index.html` as
 committed and **does not inject** project environment variables into its inline
-script. Setting `SUPABASE_URL` or `SUPABASE_ANON_KEY` in Vercel project settings
-alone has no effect on this prototype.
+script. `vercel.json` pins `framework` and `buildCommand` to `null` and
+`outputDirectory` to `.` so CI's root `package.json` cannot make Vercel look
+for a `public/` folder. Setting `SUPABASE_URL` or `SUPABASE_ANON_KEY` in Vercel
+project settings alone has no effect on this prototype.
 
 The actual configuration seam is the inline script in `app/index.html`:
 

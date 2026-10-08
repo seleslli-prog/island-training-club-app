@@ -2325,6 +2325,18 @@ if (!appIndexSource.includes("window.SUPABASE_URL") || !appIndexSource.includes(
 }
 const canonicalProductionOrigin = "https://island-training-club.vercel.app";
 const vercelConfig = JSON.parse(readFileSync(resolve(__dirnameSmoke, "../vercel.json"), "utf8"));
+const packageConfig = JSON.parse(readFileSync(resolve(__dirnameSmoke, "../package.json"), "utf8"));
+assert.equal(vercelConfig.framework, null,
+  "Vercel must not auto-detect a framework that expects a public/ output");
+assert.equal(vercelConfig.buildCommand, null,
+  "Vercel must skip npm run build; this repo is static");
+assert.equal(vercelConfig.installCommand, null,
+  "Vercel must skip npm install for the static deploy");
+assert.equal(vercelConfig.outputDirectory, ".",
+  "Vercel must publish the repo root, not public/");
+assert.equal(packageConfig.scripts?.build, undefined,
+  "package.json must not define a build script; Vercel treats that as a framework compile");
+assert.equal(packageConfig.scripts?.verify, "node scripts/verify-static.mjs");
 assert.doesNotMatch(appIndexSource, /<base\b/i,
   "hash-only app routes must remain on the canonical root without a document base URL");
 for (const assetReference of [
