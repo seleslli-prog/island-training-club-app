@@ -140,6 +140,7 @@ function commitAttendeeRoster(rosterHtml) {
   const host = viewEl.querySelector("[data-attendee-roster]");
   if (host) {
     host.innerHTML = rosterHtml;
+    revealLoadedAvatars(host);
     return;
   }
   const html = String(viewEl.innerHTML || "");
@@ -202,6 +203,32 @@ function cachedActivityRoster(sessionId, session, viewer) {
   return { attendeeNames, avatarRows };
 }
 
+function rosterRowsFromNames(attendeeNames, session, photoRows) {
+  if (Array.isArray(attendeeNames) && attendeeNames.length) {
+    if (!Array.isArray(photoRows) || photoRows.length !== attendeeNames.length) {
+      return initialsRosterFromNames(attendeeNames);
+    }
+    return photoRows.map((row, index) => ({
+      ...row,
+      displayName: attendeeNames[index] || row.displayName,
+    }));
+  }
+  if (store.attendeeCountFor(session) === 0) return [];
+  return Array.isArray(photoRows) ? photoRows : null;
+}
+
+function paintActivityRoster(session, attendeeNames, avatarRows, viewer, generation) {
+  if (generation !== renderGeneration) return;
+  let rows = avatarRows;
+  if (Array.isArray(rows) && rows.length) {
+    rows = applyOwnAvatarToRoster(rows, viewer);
+  }
+  const nameCount = Array.isArray(attendeeNames) ? attendeeNames.length : 0;
+  const rosterCount = Array.isArray(rows) && rows.length ? rows.length : nameCount;
+  commitRsvpGoingCount(Math.max(store.attendeeCountFor(session), rosterCount));
+  commitAttendeeRoster(views.attendeeRosterInnerHTML(rows, attendeeNames));
+}
+
 async function fillActivityRoster(sessionId, session, viewer, generation) {
   if (viewer?.status !== "approved" || !session) return;
   if (!(session.kind === "paid" || store.sessionRequiresRsvp(session))) return;
@@ -217,35 +244,27 @@ async function fillActivityRoster(sessionId, session, viewer, generation) {
     if (cachedNames.length) attendeeNames = cachedNames;
     else if (attendeeNames === undefined) attendeeNames = null;
   }
-  const peeked = store.peekSessionAvatars(sessionId);
+  if (generation !== renderGeneration) return;
   const nameCount = Array.isArray(attendeeNames) ? attendeeNames.length : 0;
+  paintActivityRoster(
+    session,
+    attendeeNames,
+    rosterRowsFromNames(attendeeNames, session, null),
+    viewer,
+    generation,
+  );
+  const peeked = store.peekSessionAvatars(sessionId);
   const forceAvatars = !peeked || peeked.length !== nameCount
     || store.attendeeCountFor(session) !== (peeked.length || 0);
-  let avatarRows = null;
-  if (canManageOwnAvatar(viewer)) {
-    avatarRows = await store.getSessionAvatars(sessionId, { force: forceAvatars }).catch(() => peeked);
-  }
-  if (Array.isArray(attendeeNames) && attendeeNames.length) {
-    if (!Array.isArray(avatarRows) || avatarRows.length !== attendeeNames.length) {
-      avatarRows = initialsRosterFromNames(attendeeNames);
-    } else {
-      avatarRows = avatarRows.map((row, index) => ({
-        ...row,
-        displayName: attendeeNames[index] || row.displayName,
-      }));
-    }
-  } else if (store.attendeeCountFor(session) === 0) {
-    avatarRows = [];
-  }
-  if (Array.isArray(avatarRows) && avatarRows.length) {
-    avatarRows = applyOwnAvatarToRoster(avatarRows, viewer);
-  }
-  if (generation !== renderGeneration) return;
-  const rosterCount = Array.isArray(avatarRows) && avatarRows.length
-    ? avatarRows.length
-    : nameCount;
-  commitRsvpGoingCount(Math.max(store.attendeeCountFor(session), rosterCount));
-  commitAttendeeRoster(views.attendeeRosterInnerHTML(avatarRows, attendeeNames));
+  if (!canManageOwnAvatar(viewer)) return;
+  const photoRows = await store.getSessionAvatars(sessionId, { force: forceAvatars }).catch(() => peeked);
+  paintActivityRoster(
+    session,
+    attendeeNames,
+    rosterRowsFromNames(attendeeNames, session, photoRows),
+    viewer,
+    generation,
+  );
 }
 
 let operationalUiRefreshTimer = null;

@@ -2487,6 +2487,9 @@ assert.match(integratedAppSource, /paintOwnAvatarChrome/,
   "route chrome must paint cached initials immediately instead of awaiting avatar REST");
 assert.match(integratedAppSource, /fillActivityRoster/,
   "Activity Details must paint first and fill Who's coming without blocking the route");
+assert.match(integratedAppSource,
+  /paintActivityRoster\([\s\S]*getSessionAvatars/,
+  "Who's coming names and count must paint before attendee photo REST");
 assert.match(integratedAppSource, /commitRsvpGoingCount/,
   "RSVP going-so-far copy must update with Who's coming instead of waiting for a manual refresh");
 assert.match(integratedAppSource, /page === "activity"/,
