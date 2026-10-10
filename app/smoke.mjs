@@ -8984,6 +8984,25 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
       console.error("FAIL listed-member removal SQL must lift immutable avatar audit before delete");
     } else console.log("ok  listed-member removal is a one-shot SQL Editor script");
   }
+  const purgePath = join(root, "tools/sql/2026-10-10-purge-ops-before-2026-10-12.sql");
+  const purgeMigration = join(root, "supabase/migrations/2026-10-10-purge-ops-before-2026-10-12.sql");
+  if (existsSync(purgeMigration)) {
+    failures++;
+    console.error("FAIL pre-Oct-12 ops purge must not live under supabase/migrations");
+  }
+  if (!existsSync(purgePath)) {
+    failures++;
+    console.error("FAIL pre-Oct-12 ops purge SQL is missing from tools/sql");
+  } else {
+    const purge = readFileSync(purgePath, "utf8");
+    if (!purge.includes("2026-10-12")
+        || !purge.includes("archive.operational_bookings_before_20261012")
+        || !purge.includes("delete from public.operational_bookings")
+        || !/\bbegin\b/i.test(purge) || !/\bcommit\b/i.test(purge)) {
+      failures++;
+      console.error("FAIL pre-Oct-12 ops purge must archive-guard and delete old bookings in a transaction");
+    } else console.log("ok  pre-Oct-12 ops purge is a one-shot SQL Editor script");
+  }
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll smoke tests passed.");
