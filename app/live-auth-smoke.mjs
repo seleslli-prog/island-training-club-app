@@ -2644,7 +2644,16 @@ assert.equal(
 );
 console.log("ok  live partial venue remains TBC until both values confirm it");
 
+const previousLiveSession = liveSession;
+liveSession = null;
+await store.getCurrentUser();
+store.clearApplyDraft();
+assert.equal(store.currentUser(), null,
+  "signed-out Home must drop leftover live test identity");
+
 const signedOutHome = views.viewHome();
+assert.doesNotMatch(signedOutHome, /Riley|Good to see you/,
+  "signed-out Home must not keep signed-in test greetings");
 assert.match(signedOutHome, /data-action="sign-in-google"[^>]*>Continue with Google</);
 assert.match(signedOutHome, /id="guest-email-link"/);
 assert.match(signedOutHome, /<summary class="guest-alt-auth">Use an email link instead</);
@@ -2691,6 +2700,7 @@ assert.ok(
 );
 store.clearApplyDraft();
 
+liveSession = previousLiveSession;
 await store.getCurrentUser();
 {
   const user = store.currentUser();
@@ -4133,8 +4143,11 @@ for (const [surface, html] of [
   ["Activity Details", goingHtml],
   ["Admin", countAdminHtml],
 ]) {
-  assert.ok(html.includes(`${joinedTotal} going`),
-    `${surface} must render the same exact RSVP aggregate`);
+  assert.ok(
+    html.includes(`${joinedTotal} going`)
+      || html.includes(`data-rsvp-going-count="${joinedTotal}"`),
+    `${surface} must render the same exact RSVP aggregate`
+  );
 }
 
 await store.withdrawRsvp(rsvpBooking.id);

@@ -130,6 +130,7 @@ function applyOwnAvatarToRoster(rows, viewer) {
 
 function commitRsvpGoingCount(count) {
   const n = Math.max(0, Number(count) || 0);
+  if (typeof viewEl.querySelectorAll !== "function") return;
   viewEl.querySelectorAll("[data-rsvp-going-count]").forEach((el) => {
     el.textContent = String(n);
     el.setAttribute("data-rsvp-going-count", String(n));
@@ -213,6 +214,7 @@ function rosterRowsFromNames(attendeeNames, session, photoRows) {
       displayName: attendeeNames[index] || row.displayName,
     }));
   }
+  if (Array.isArray(photoRows) && photoRows.length) return photoRows;
   if (store.attendeeCountFor(session) === 0) return [];
   return Array.isArray(photoRows) ? photoRows : null;
 }
@@ -246,14 +248,12 @@ async function fillActivityRoster(sessionId, session, viewer, generation) {
   }
   if (generation !== renderGeneration) return;
   const nameCount = Array.isArray(attendeeNames) ? attendeeNames.length : 0;
-  paintActivityRoster(
-    session,
-    attendeeNames,
-    rosterRowsFromNames(attendeeNames, session, null),
-    viewer,
-    generation,
-  );
   const peeked = store.peekSessionAvatars(sessionId);
+  const earlyRows = rosterRowsFromNames(attendeeNames, session, peeked);
+  if (nameCount || store.attendeeCountFor(session) === 0
+      || (Array.isArray(peeked) && peeked.length)) {
+    paintActivityRoster(session, attendeeNames, earlyRows, viewer, generation);
+  }
   const forceAvatars = !peeked || peeked.length !== nameCount
     || store.attendeeCountFor(session) !== (peeked.length || 0);
   if (!canManageOwnAvatar(viewer)) return;
