@@ -6684,7 +6684,9 @@ installLocalFixtures();
   if (!bookingPage.includes("You’re going") || bookingPage.includes("Can’t make it? Defer")
       || bookingPage.includes("View receipt"))
     throw new Error("RSVP booking page must not offer payment deferral or receipts");
-  assert.match(bookingPage, /RSVP confirmed/);
+  assert.match(bookingPage, /Status<\/span><strong>confirmed/);
+  assert.doesNotMatch(bookingPage, />Attendance</,
+    "RSVP booking details must not repeat Status with an Attendance row");
   assert.doesNotMatch(bookingPage, /Pay your own bill|No payment needed|everyone pays their own bill/i,
     "RSVP booking details must not show a price or pay-your-own-bill tagline");
   const checkout = views.viewCheckout(lunch.id);

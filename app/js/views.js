@@ -2641,12 +2641,8 @@ export function viewBooking(bookingId) {
         <div class="line"><span>Session</span><strong>${esc(s.name)}</strong></div>
         <div class="line"><span>When</span><strong>${esc(fmtDate(s.dateISO))}${s.time ? ` · ${fmtTime(s.time)}` : ""}</strong></div>
         <div class="line"><span>Where</span><strong>${esc(assignedVenue || s.location || "Venue pending")}</strong></div>
-        <div class="line"><span>Status</span><strong>${esc(b.status)}</strong></div>
-        ${requiresRsvp
-          ? b.status === "confirmed"
-            ? '<div class="line total"><span>Attendance</span><strong>RSVP confirmed</strong></div>'
-            : ""
-          : `<div class="line total"><span>Price</span><strong>${fmtMoney(s.price)}</strong></div>`}
+        <div class="line${requiresRsvp ? " total" : ""}"><span>Status</span><strong>${esc(b.status)}</strong></div>
+        ${requiresRsvp ? "" : `<div class="line total"><span>Price</span><strong>${fmtMoney(s.price)}</strong></div>`}
       </div>
     </div></div>
     <div class="btn-row">
