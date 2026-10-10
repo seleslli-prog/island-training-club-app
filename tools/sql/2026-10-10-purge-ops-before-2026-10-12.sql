@@ -2,7 +2,8 @@
 -- AFTER tools/sql/2026-10-10-archive-ops-before-2026-10-12.sql on
 -- backup/ops-before-2026-10-12 has been applied.
 -- Removes bookings, awaiting-payment holds, receipts, queues, replacements,
--- RSVP counts, and related inbox rows for sessions dated before 2026-10-12.
+-- RSVP counts, and related inbox rows for sessions dated before 2026-10-12
+-- (Monday; 2026-10-11 is Sunday and is included).
 -- Does NOT delete operational_sessions themselves.
 -- Do NOT add this to supabase/migrations.
 
