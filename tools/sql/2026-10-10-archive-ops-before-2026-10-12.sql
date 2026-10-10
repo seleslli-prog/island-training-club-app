@@ -1,5 +1,6 @@
 -- Backup copy of live operational rows for sessions dated before 2026-10-12
--- (HKT calendar date). Paste into the Supabase SQL Editor and run once.
+-- (Monday; HKT). 2026-10-11 is Sunday and is included. Paste into the
+-- Supabase SQL Editor and run once.
 -- Does NOT delete anything. The matching purge script lives on
 -- chore/purge-ops-before-2026-10-12 and must run after this archive exists.
 -- Do NOT add this to supabase/migrations.
