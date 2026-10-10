@@ -99,7 +99,7 @@ export function avatarMarkup({
   const image = normalized.url
     ? `<img class="avatar__image" src="${escapeHTML(normalized.url)}" alt="${
       decorative ? "" : escapeHTML(accessibleName)
-    }" width="${pixelSize}" height="${pixelSize}"${eager ? "" : ' loading="lazy"'}>`
+    }" width="${pixelSize}" height="${pixelSize}"${eager ? ' fetchpriority="high"' : ' loading="lazy"'}>`
     : "";
   return `<span class="${escapeHTML(wrapperClass)}" style="--avatar-size:${pixelSize}px"${wrapperAccessibility}>` +
     `<span class="avatar__initials" aria-hidden="true">${initials}</span>${image}</span>`;

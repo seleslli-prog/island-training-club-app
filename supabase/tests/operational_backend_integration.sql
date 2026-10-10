@@ -3055,7 +3055,7 @@ begin
      time '11:00', 60, 'Test Venue', 1, 180, true);
 
   v_rsvp_body := 'You''re on the list for Post-Training Lunch on ' || v_routing_date::text
-    || '. Everyone pays their own bill — see you there.';
+    || '. See you there.';
   v_payment_marked_body := 'A member marked payment on ' || v_routing_date::text || '.';
   v_gym_finalized_body := 'Gym confirmation recorded for ' || v_routing_midtown_session || '.';
   v_cancelled_member_body := 'Your booking for ' || v_unique_cancel_session

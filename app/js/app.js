@@ -30,18 +30,43 @@ const avatarEl = document.getElementById("top-avatar");
 const toastStack = document.getElementById("toast-stack");
 const MAP_FALLBACK_HTML = `<p class="muted small activity-map-fallback" role="status">Couldn't find the venue on the map — tap Get directions instead.</p>`;
 
-export function revealAvatarInitials(image) {
-  const isAvatarImage = image?.classList?.contains?.("avatar__image")
+function isAvatarImage(image) {
+  return image?.classList?.contains?.("avatar__image")
     || String(image?.className || "").split(/\s+/).includes("avatar__image");
-  if (!isAvatarImage) return false;
+}
+
+export function revealAvatarInitials(image) {
+  if (!isAvatarImage(image)) return false;
   const wrapper = image.closest?.(".avatar") || image.parentElement;
   wrapper?.classList?.toggle?.("is-error", true);
+  wrapper?.classList?.toggle?.("is-ready", false);
   image.hidden = true;
   return true;
 }
 
+export function markAvatarImageReady(image) {
+  if (!isAvatarImage(image) || image.hidden) return false;
+  image.classList?.toggle?.("is-ready", true);
+  const wrapper = image.closest?.(".avatar") || image.parentElement;
+  wrapper?.classList?.toggle?.("is-ready", true);
+  return true;
+}
+
+function revealLoadedAvatars(root) {
+  const images = typeof root?.querySelectorAll === "function"
+    ? [...root.querySelectorAll("img.avatar__image")]
+    : [];
+  for (const image of images) {
+    if (image.complete && image.naturalWidth) markAvatarImageReady(image);
+  }
+}
+
 document.addEventListener("error", (event) => {
   revealAvatarInitials(event.target);
+}, true);
+
+document.addEventListener("load", (event) => {
+  markAvatarImageReady(event.target);
 }, true);
 
 export function commitOwnAvatarPresentation(presentation) {
@@ -49,8 +74,12 @@ export function commitOwnAvatarPresentation(presentation) {
   if (!user?.id) return false;
   avatarEl.dataset.avatarSource = presentation?.source || "initials";
   avatarEl.innerHTML = views.avatarHTML(user, presentation);
+  revealLoadedAvatars(avatarEl);
   const profileButton = viewEl.querySelector?.('[data-action="manage-profile-photo"]');
-  if (profileButton) profileButton.innerHTML = views.profileAvatarHTML(user, presentation);
+  if (profileButton) {
+    profileButton.innerHTML = views.profileAvatarHTML(user, presentation);
+    revealLoadedAvatars(profileButton);
+  }
   return true;
 }
 
@@ -137,6 +166,7 @@ function paintOwnAvatarChrome(user, generation) {
   avatarEl.setAttribute("aria-label", user ? "Profile" : "Sign in");
   avatarEl.dataset.avatarSource = cached?.source || "initials";
   avatarEl.innerHTML = views.avatarHTML(user, cached);
+  revealLoadedAvatars(avatarEl);
   if (!canManageOwnAvatar(user)) return;
   void store.getOwnAvatar().then((presentation) => {
     if (generation !== renderGeneration) return;
@@ -783,6 +813,7 @@ async function render(generation = renderGeneration) {
   if (generation !== renderGeneration) return;
 
   viewEl.innerHTML = out;
+  revealLoadedAvatars(viewEl);
   if (!viewEl.querySelector("[data-route-not-found]")) {
     store.rememberLastRoute(location.hash, user?.id);
   }

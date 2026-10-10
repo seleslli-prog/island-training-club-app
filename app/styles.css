@@ -195,8 +195,10 @@ input, select, textarea { font: inherit; }
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
-  background: var(--surface-3);
+  opacity: 0;
 }
+.avatar.is-ready .avatar__image,
+.avatar__image.is-ready { opacity: 1; }
 .avatar.is-error .avatar__image,
 .avatar__image[hidden] { display: none; }
 

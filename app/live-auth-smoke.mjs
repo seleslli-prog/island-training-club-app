@@ -309,7 +309,7 @@ const operationalTableRows = {
     { activity_id: "wnt", name: "Wednesday Night Training", venue: "TBC", weekday: 3, start_time: "19:30:00", duration_minutes: 60, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Strength", maps_query: null, requires_rsvp: true },
     { activity_id: "run", name: "ITC Run Club", venue: "TBC", weekday: 1, start_time: "19:30:00", duration_minutes: 45, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Run", maps_query: null, requires_rsvp: true },
     { activity_id: "water", name: "ITC Swimming", venue: "TBC", weekday: 2, start_time: "19:30:00", duration_minutes: 90, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Water", maps_query: null, requires_rsvp: true },
-    { activity_id: "lunch", name: "Post-Training Lunch", venue: "TBC", weekday: 6, start_time: "12:45:00", duration_minutes: 75, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Socials", maps_query: null, requires_rsvp: true },
+    { activity_id: "lunch", name: "Post-Training Lunch", venue: "TBC", weekday: 6, start_time: "12:00:00", duration_minutes: 75, capacity: null, price_hkd: 0, default_open: true, active: true, category: "Socials", maps_query: null, requires_rsvp: true },
   ],
   operational_bookings: [{
     id: "pooled-booking",
@@ -1046,7 +1046,7 @@ for (let week = 0; normalWeeklyFixtureDates.length < 4; week += 1) {
     id: `lunch-${iso}`,
     activity_id: "lunch",
     session_date: iso,
-    start_time: "12:45:00",
+    start_time: "12:00:00",
     duration_minutes: 75,
     venue: "TBC",
     capacity: null,
@@ -1351,7 +1351,7 @@ const seededRsvpLunchId = `lunch-${normalWeeklyFixtureDates[0]}`;
 const seededRsvpSnapshot = {
   name: "Post-Training Lunch",
   session_date: normalWeeklyFixtureDates[0],
-  start_time: "12:45:00",
+  start_time: "12:00:00",
   venue: "TBC",
   price_hkd: 0,
 };
@@ -1889,7 +1889,7 @@ assert.deepEqual(
   store.upcomingSessions(21)
     .filter((row) => row.dateISO === normalWeeklyFixtureDates[0])
     .map((row) => row.time),
-  ["09:15", "10:30", "12:45"],
+  ["09:15", "10:30", "12:00"],
   "live Saturday sessions must place lunch after both HYROX slots",
 );
 assert.equal(store.getBooking("pooled-booking"), null);
@@ -2767,6 +2767,8 @@ const firstAvatar = await store.getOwnAvatar();
 assert.equal(firstAvatar.source, "google");
 assert.deepEqual(store.peekOwnAvatar(), firstAvatar,
   "peekOwnAvatar must return the in-memory presentation without another resolver call");
+assert.equal(JSON.parse(mem.get("itc.ownAvatar.v1") || "null")?.presentation?.source, "google",
+  "own avatar presentation must persist for the next cold load");
 assert.equal(avatarResolveCalls.length, 1);
 assert.equal(new URL(avatarResolveCalls[0].url).searchParams.get("scope"), "self");
 assert.equal(avatarResolveCalls[0].options.method, "GET");
@@ -4153,7 +4155,7 @@ console.log("ok  exact RSVP aggregates survive member RLS and degrade without hi
 // apply to live RSVP sessions (not just locally-seeded free events).
 const saturdaySessions = store.upcomingSessions(14).filter((s) => s.dateISO === lunchSession.dateISO);
 const saturdayTimes = saturdaySessions.map((s) => s.time);
-assert.deepEqual(saturdayTimes, ["09:15", "10:30", "12:45"],
+assert.deepEqual(saturdayTimes, ["09:15", "10:30", "12:00"],
   "same-day live sessions must place lunch after both Island ECC slots");
 await store.setWeekVenue(lunchSession.id, { location: "Cafe Deco, Central", mapsQuery: "Cafe Deco, Central" });
 const overriddenLunch = store.getSession(lunchSession.id);
@@ -4183,7 +4185,7 @@ const lunchScheduleIndex = lunchScheduleHtml.indexOf(
 assert.ok(earlyScheduleIndex >= 0
   && earlyScheduleIndex < lateScheduleIndex
   && lateScheduleIndex < lunchScheduleIndex,
-"live Schedule must render 9:15 HYROX, 10:30 HYROX, then 12:45 lunch");
+"live Schedule must render 9:15 HYROX, 10:30 HYROX, then 12:00 lunch");
 if (!lunchScheduleHtml.includes("Cafe Deco, Central")
     || !lunchDetailHtml.includes("Cafe Deco, Central")) {
   throw new Error("live lunch venue override must appear on Schedule and Activity Details");

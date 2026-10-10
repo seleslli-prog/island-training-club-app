@@ -117,13 +117,13 @@ export const SEED_ACTIVITIES = [
     kind: "rsvp",
     category: "Socials",
     weekday: 6, // Saturday — follows the morning HYROX sessions
-    time: "12:45",
+    time: "12:00",
     durationMin: 75,
     location: "TBC",
     mapsQuery: "", // venue set per week by admins (weekly venue override)
     photo: PH + "community.webp",
     blurb:
-      "The other half of Saturday: refuel together after training. Everyone pays their own bill — tap Count me in so the organizer can book a table.",
+      "The other half of Saturday: refuel together after training. Tap Count me in so the organizer can book a table.",
     memberNote: "Venue is posted in the session note once the table is booked.",
     price: 0,
     capacity: null, // unlimited — the organizer books a table from the RSVP list

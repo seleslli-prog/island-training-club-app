@@ -215,6 +215,7 @@ test("decorative eager avatar emits empty alt and omits lazy loading", () => {
   });
   assert.match(html, /alt=""/);
   assert.match(html, /aria-hidden="true"/);
+  assert.match(html, /fetchpriority="high"/);
   assert.doesNotMatch(html, /loading="lazy"/);
 });
 

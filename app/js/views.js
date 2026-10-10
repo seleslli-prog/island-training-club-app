@@ -641,8 +641,8 @@ export function viewActivity(sessionId, options) {
     actionBlock = `<div class="banner mt16"><p>This session has already happened. See you at the next one.</p></div>`;
   } else if (store.sessionRequiresRsvp(s)) {
     // RSVP capability controls participation independently of the activity's
-    // presentation kind. Free activities retain walk-in framing, while Lunch
-    // retains its organizer and pay-your-own-bill copy.
+    // presentation kind. Free activities retain walk-in framing; Lunch keeps
+    // organizer headcount copy without in-app payment language.
     // Match the visible Who's coming roster when the count table lags.
     const goingCount = Math.max(store.attendeeCountFor(s), rsvpRosterCount);
     if (s.kind === "free") {
@@ -681,7 +681,7 @@ export function viewActivity(sessionId, options) {
       actionBlock = `
         <div class="banner mt16">
           <span class="kicker">You're going</span>
-          <p>${goingCount} going — see you there. Everyone pays their own bill at the venue.</p>
+          <p>${goingCount} going — see you there.</p>
         </div>
         <div class="btn-row ${showDirections ? "two" : ""}">
           <button class="btn ghost" type="button" data-action="rsvp-withdraw" data-booking="${booking.id}">Can't make it</button>
@@ -691,7 +691,7 @@ export function viewActivity(sessionId, options) {
       actionBlock = `
         <div class="free-banner">
           ${ICONS.pin}
-          <div><strong>Free to join — pay your own bill.</strong><br><span class="muted small">${goingCount} going so far · the organizer books a table from this list, so only tap if you're coming.</span></div>
+          <div><strong>Free to join.</strong><br><span class="muted small">${goingCount} going so far · the organizer books a table from this list, so only tap if you're coming.</span></div>
         </div>
         <div class="btn-row ${showDirections ? "two" : ""}">
           <button class="btn" type="button" data-action="rsvp-join" data-session="${s.id}">Count me in</button>
@@ -2559,7 +2559,7 @@ export function viewBooking(bookingId) {
       <h1 class="display sm center mt16">You’re going.</h1>
       <p class="subcopy center mt8">${s.kind === "free"
         ? "You’re on the headcount. Walk-ins are still welcome."
-        : "No payment needed — everyone pays their own bill at the venue."}</p>`;
+        : "You’re on the list. See you there."}</p>`;
     actions = `
       ${b.sessionId ? `<button class="btn ghost" type="button" data-action="ics-booking" data-booking="${b.id}">Add to calendar</button>` : ""}
       ${mine ? `<button class="btn ghost" type="button" data-action="rsvp-withdraw" data-booking="${b.id}">Can’t make it</button>` : ""}`;
@@ -2642,11 +2642,11 @@ export function viewBooking(bookingId) {
         <div class="line"><span>When</span><strong>${esc(fmtDate(s.dateISO))}${s.time ? ` · ${fmtTime(s.time)}` : ""}</strong></div>
         <div class="line"><span>Where</span><strong>${esc(assignedVenue || s.location || "Venue pending")}</strong></div>
         <div class="line"><span>Status</span><strong>${esc(b.status)}</strong></div>
-        ${requiresRsvp && s.kind === "free"
+        ${requiresRsvp
           ? b.status === "confirmed"
             ? '<div class="line total"><span>Attendance</span><strong>RSVP confirmed</strong></div>'
             : ""
-          : `<div class="line total"><span>Price</span><strong>${Number(s.price) > 0 ? fmtMoney(s.price) : "Pay your own bill"}</strong></div>`}
+          : `<div class="line total"><span>Price</span><strong>${fmtMoney(s.price)}</strong></div>`}
       </div>
     </div></div>
     <div class="btn-row">
@@ -2745,24 +2745,25 @@ export async function viewAdmin(tab = "members") {
   let memberUsers = null;
   let adminAvatarRows = null;
   let avatarLoadFailed = false;
+  let pendingApplicants = [];
   if (canonicalTab === "payments") {
     const cachedUsers = isLive() ? store.peekLivePaymentDirectory() : null;
     memberUsers = (cachedUsers || await store.listPaymentUsers())
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   } else if (canonicalTab === "members") {
-    memberUsers = (await store.listPaymentUsers({ force: true }))
-      .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }
-  let pendingApplicants = [];
-  if (canonicalTab === "members") {
-    const avatarPromise = store.peekAdminAvatarRows()
-      ? Promise.resolve(store.peekAdminAvatarRows())
-      : store.getAdminAvatarRows().catch(() => {
-          avatarLoadFailed = true;
-          return null;
-        });
-    pendingApplicants = await store.listApprovalCandidates();
-    adminAvatarRows = await avatarPromise;
+    const cachedAvatars = store.peekAdminAvatarRows();
+    if (!cachedAvatars) {
+      void store.getAdminAvatarRows().catch(() => {
+        avatarLoadFailed = true;
+      });
+    }
+    const [users, applicants] = await Promise.all([
+      store.listPaymentUsers({ force: true }),
+      store.listApprovalCandidates(),
+    ]);
+    memberUsers = users.sort((a, b) => a.fullName.localeCompare(b.fullName));
+    pendingApplicants = applicants;
+    adminAvatarRows = cachedAvatars;
   }
   let prayerRows = [];
   let prayerLoadFailed = false;

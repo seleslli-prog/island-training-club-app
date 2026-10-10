@@ -134,11 +134,13 @@ function liveApplicationCacheValid(userId) {
 }
 const AVATAR_CACHE_EXPIRY_SKEW_MS = 30_000;
 const AVATAR_APPROVED_ROLES = new Set(["member", "admin", "superadmin", "super_admin"]);
+const OWN_AVATAR_STORAGE_KEY = "itc.ownAvatar.v1";
 let ownAvatarCache = null;
 let ownAvatarRequest = null;
 let avatarRequestGeneration = 0;
 const sessionAvatarCache = new Map();
 let adminAvatarCache = null;
+let profilesInflight = null;
 
 let state = null;
 
@@ -4138,9 +4140,32 @@ const serviceAvatarPresentation = (input, profileId) => {
   return { profileId, ...normalizeAvatarPresentation(input) };
 };
 
+function persistOwnAvatar(profileId, presentation) {
+  try {
+    localStorage.setItem(OWN_AVATAR_STORAGE_KEY, JSON.stringify({ profileId, presentation }));
+  } catch {
+    // Private mode and quota errors must not block chrome.
+  }
+}
+
+function readPersistedOwnAvatar(profileId) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(OWN_AVATAR_STORAGE_KEY) || "null");
+    if (!raw || raw.profileId !== profileId || !raw.presentation) return null;
+    return serviceAvatarPresentation(raw.presentation, profileId);
+  } catch {
+    return null;
+  }
+}
+
+function rememberOwnAvatar(profileId, presentation) {
+  ownAvatarCache = { profileId, presentation };
+  persistOwnAvatar(profileId, presentation);
+}
+
 const cacheOwnAvatar = (presentation, profileId) => {
   const normalized = serviceAvatarPresentation(presentation, profileId);
-  ownAvatarCache = { profileId, presentation: normalized };
+  rememberOwnAvatar(profileId, normalized);
   avatarRequestGeneration += 1;
   ownAvatarRequest = null;
   return normalized;
@@ -4218,12 +4243,22 @@ export function clearAvatarCache() {
   ownAvatarRequest = null;
   sessionAvatarCache.clear();
   adminAvatarCache = null;
+  try {
+    localStorage.removeItem(OWN_AVATAR_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures while clearing.
+  }
 }
 
 export function peekOwnAvatar() {
   const user = approvedAvatarUser();
   if (!user) return initialsAvatar();
   if (ownAvatarCache?.profileId === user.id) return ownAvatarCache.presentation;
+  const persisted = readPersistedOwnAvatar(user.id);
+  if (persisted) {
+    ownAvatarCache = { profileId: user.id, presentation: persisted };
+    return persisted;
+  }
   return initialsAvatar(user.id);
 }
 
@@ -4258,7 +4293,7 @@ export async function getOwnAvatar({ force = false } = {}) {
     .then((presentation) => {
       const normalized = serviceAvatarPresentation(presentation, user.id);
       if (generation === avatarRequestGeneration && approvedAvatarUser()?.id === user.id) {
-        ownAvatarCache = { profileId: user.id, presentation: normalized };
+        rememberOwnAvatar(user.id, normalized);
         return normalized;
       }
       return ownAvatarCache?.profileId === approvedAvatarUser()?.id
@@ -4597,12 +4632,21 @@ export async function signOutLive() {
 
 export async function listProfiles() {
   if (!isLive() || !supabase) return allUsers();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return data || [];
+  if (profilesInflight) return profilesInflight;
+  const pending = (async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  })();
+  profilesInflight = pending;
+  try {
+    return await pending;
+  } finally {
+    if (profilesInflight === pending) profilesInflight = null;
+  }
 }
 
 function indemnityExportRecord({ profile, application = null, local = false }) {

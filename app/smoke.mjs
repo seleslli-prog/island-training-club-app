@@ -317,7 +317,7 @@ const orderedSaturdaySessions = data.sessionsInRange([
 ], new Date(2099, 0, 3), 1);
 assert.deepEqual(
   orderedSaturdaySessions.map((session) => session.time),
-  ["09:15", "10:30", "12:45"],
+  ["09:15", "10:30", "12:00"],
   "Saturday sessions must render chronologically so lunch follows both HYROX slots"
 );
 assert.deepEqual(
@@ -333,7 +333,7 @@ assert.deepEqual(
     "wnt:19:30",
     "hyrox-quarry-bay-early:09:15",
     "hyrox-quarry-bay:10:30",
-    "lunch:12:45",
+    "lunch:12:00",
   ],
   "recurring activity templates must sort by weekday, then start time"
 );
@@ -1433,6 +1433,18 @@ const rsvpIntegrityMigrationSource = readFileSync(
   resolve(__dirnameSmoke, "../supabase/migrations/20260829000008_rsvp_integrity.sql"),
   "utf8"
 );
+const lunchNoonRsvpCopyMigrationSource = readFileSync(
+  resolve(__dirnameSmoke, "../supabase/migrations/20261010000001_lunch_noon_rsvp_copy.sql"),
+  "utf8"
+);
+assert.match(lunchNoonRsvpCopyMigrationSource, /start_time = time '12:00'/,
+  "lunch template and future sessions must move to 12:00");
+assert.match(lunchNoonRsvpCopyMigrationSource,
+  /\|\| '\. See you there\.'/,
+  "new RSVP notifications must drop pay-your-own-bill copy");
+assert.match(lunchNoonRsvpCopyMigrationSource,
+  /replace\(\s*body,\s*' Everyone pays their own bill — see you there\.'/,
+  "existing RSVP notification bodies must be rewritten without pay-your-own-bill copy");
 const freeEventRsvpMigrationPath = resolve(
   __dirnameSmoke, "../supabase/migrations/20260920000001_free_event_rsvp_cancellation.sql"
 );
@@ -2462,6 +2474,14 @@ assert.match(integratedAppSource, /page === "admin" && \(!tab \|\| tab === "paym
 assert.doesNotMatch(integratedAppSource,
   /"account", "apply", "admin", "pay"/,
   "Admin must not block navigation on identity REST");
+assert.match(integratedAppSource, /markAvatarImageReady/,
+  "avatar photos must stay hidden until the image actually loads");
+assert.match(integratedStyleSource, /avatar\.is-ready \.avatar__image/,
+  "initials must remain visible until the profile photo is ready");
+assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"), /itc\.ownAvatar\.v1/,
+  "own avatar presentation must persist across reloads");
+assert.match(integratedViewSource, /listPaymentUsers\(\{ force: true \}\)[\s\S]*listApprovalCandidates/,
+  "Admin Members must load the directory and approval queue in parallel");
 assert.match(integratedAppSource,
   /visibilitychange[\s\S]*?store\.startupRoute\(location\.hash, store\.currentUser\(\)\?\.id\)/,
   "resume must recover an unexpectedly empty hash before refreshing the route");
@@ -6601,8 +6621,12 @@ installLocalFixtures();
     throw new Error("the lunch is uncapped — capacity and spots must be null");
   store.signIn("member@example.test");
   const lunchHtml = views.viewActivity(lunch.id);
+  if (lunch.time !== "12:00")
+    throw new Error("the recurring Saturday lunch must start at 12:00");
   if (!lunchHtml.includes("Count me in") || lunchHtml.includes("Book & pay"))
     throw new Error("RSVP activity should offer Count me in, not checkout");
+  assert.doesNotMatch(lunchHtml, /pays their own bill|pay your own bill|Pay your own bill/i,
+    "RSVP lunch copy must not mention paying your own bill");
   const rsvp = await store.rsvpSession("fixture-member", lunch.id);
   if (rsvp.status !== "confirmed" || rsvp.snapshot.price !== 0)
     throw new Error("RSVP should confirm instantly with no payment");
@@ -6624,6 +6648,9 @@ installLocalFixtures();
   if (!bookingPage.includes("You’re going") || bookingPage.includes("Can’t make it? Defer")
       || bookingPage.includes("View receipt"))
     throw new Error("RSVP booking page must not offer payment deferral or receipts");
+  assert.match(bookingPage, /RSVP confirmed/);
+  assert.doesNotMatch(bookingPage, /Pay your own bill|No payment needed|everyone pays their own bill/i,
+    "RSVP booking details must not show a price or pay-your-own-bill tagline");
   const checkout = views.viewCheckout(lunch.id);
   if (typeof checkout !== "string" || !checkout.includes("doesn’t exist"))
     throw new Error("RSVP sessions must not render checkout");
@@ -8360,7 +8387,7 @@ const recurringDayTimes = [...recurringDefaultsHtml.matchAll(
 )].map((match) => `${match[1]} ${match[2]}`);
 assert.deepEqual(
   recurringDayTimes,
-  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 09:15", "Sat 10:30", "Sat 12:45"],
+  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 09:15", "Sat 10:30", "Sat 12:00"],
   "Recurring Activity Defaults must sort by weekday, then start time"
 );
 if (!activitiesHtml.includes("Admin Tools") || activitiesHtml.includes("Club Operations")) {
