@@ -1926,7 +1926,7 @@ async function accountNotificationsEdit(user) {
       <p class="muted small">When a receipt is issued, send it from itc.admin.ops@gmail.com to the email on Membership Details. Off by default. Local mode records the send without contacting Gmail.</p>
       <label class="check"><input type="checkbox" name="community_news" ${hydrated.communityNews ? "checked" : ""}> Community news</label>
       <label class="check"><input type="checkbox" name="web_push_ops" ${hydrated.webPushOps ? "checked" : ""}> Web push</label>
-      <p class="muted small">Browser alerts for notifications in your inbox (live mode, HTTPS). Off by default. iPhone needs Add to Home Screen. In-app inbox still works either way.</p>
+      <p class="muted small">Same as pop-up alerts on this phone (live mode, HTTPS). Off by default. iPhone: open the Home Screen icon and Allow once — a Safari tab is not enough. Android Chrome can Allow from the browser. Inbox still works either way.</p>
       <div class="actions">
         <button class="btn" type="submit">Save changes</button>
         <a class="btn ghost" href="#/account/notifications">Cancel</a>

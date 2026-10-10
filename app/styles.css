@@ -1950,6 +1950,34 @@ img.detail-photo[src*="itc-hyrox-mood"] {
 
 .route-loader[hidden] { display: none; }
 
+.push-home-banner {
+  position: fixed;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 0px) + 72px);
+  transform: translateX(-50%);
+  z-index: 45;
+  width: min(440px, calc(100vw - 24px));
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .45);
+}
+.push-home-banner[hidden] { display: none; }
+.push-home-banner p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.push-home-banner__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ---- Toasts ----------------------------------------------------------- */
 
 .toast-stack {

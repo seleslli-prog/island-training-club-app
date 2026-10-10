@@ -4,8 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#030504">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ITC">
   <title>Island Training Club</title>
   <link rel="manifest" href="/app/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/itc/logo-favicon.png">
   <link rel="icon" type="image/png" sizes="48x48" href="/assets/itc/favicon-48.png">
   <link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preconnect" href="https://accounts.google.com">
@@ -43,6 +48,14 @@
 <main id="view" class="view" tabindex="-1"></main>
 
     <nav class="bottom-nav" id="bottom-nav" aria-label="Primary"></nav>
+  </div>
+
+  <div id="push-home-banner" class="push-home-banner" hidden>
+    <p data-push-home-copy>Allow pop-up alerts on this phone? That also turns on Web push in Profile — you do not need to switch it on separately. Your phone will ask Allow next.</p>
+    <div class="push-home-banner__actions">
+      <button type="button" class="btn sm" data-action="enable-home-screen-push">Allow on this phone</button>
+      <button type="button" class="btn ghost sm" data-action="dismiss-home-screen-push">Not now</button>
+    </div>
   </div>
 
   <div class="toast-stack" id="toast-stack" aria-live="polite"></div>

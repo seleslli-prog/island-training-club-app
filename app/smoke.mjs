@@ -1264,16 +1264,36 @@ console.log("ok  web push ops preference migration is phase-1 column only");
   const webPushClient = readFileSync(resolve(__dirnameSmoke, "js/web-push.js"), "utf8");
   assert.ok(webPushClient.includes("syncWebPushSubscription"), "web-push client helper missing");
   assert.ok(webPushClient.includes("push-sw.js"), "web-push client must resolve push-sw.js");
+  assert.ok(webPushClient.includes("isHomeScreenApp"), "web-push must detect Home Screen / standalone");
+  assert.ok(webPushClient.includes("ensureHomeScreenPush"), "web-push must restore installed-app subscriptions");
+  assert.ok(
+    webPushClient.includes("Reuse an existing subscription"),
+    "home-screen subscribe must reuse an existing PushSubscription",
+  );
+  assert.equal(
+    /if \(sub\) \{\s*try \{\s*await sub\.unsubscribe/m.test(webPushClient),
+    false,
+    "enabling web push must not always unsubscribe before subscribe (breaks iOS Home Screen)",
+  );
   assert.ok(webPushClient.includes("__itcSyncWebPush"), "web-push debug helper missing");
   assert.ok(webPushClient.includes("__itcTestNotification"), "web-push local banner test helper missing");
   assert.ok(
     webPushClient.includes("if (isLive())") && webPushClient.includes('new URL("/push-sw.js"'),
     "live web-push path helper must register /push-sw.js for canonical root pages",
   );
+  const indexHtml = readFileSync(resolve(__dirnameSmoke, "index.html"), "utf8");
+  assert.ok(indexHtml.includes("VAPID_PUBLIC_KEY"), "index.html must expose VAPID_PUBLIC_KEY");
   assert.ok(
-    readFileSync(resolve(__dirnameSmoke, "index.html"), "utf8").includes("VAPID_PUBLIC_KEY"),
-    "index.html must expose VAPID_PUBLIC_KEY",
+    indexHtml.includes('name="apple-mobile-web-app-capable"'),
+    "index.html must mark the Home Screen icon as a standalone iOS web app",
   );
+  assert.ok(
+    indexHtml.includes('data-action="enable-home-screen-push"'),
+    "installed-app Allow on this phone control missing",
+  );
+  const appJs = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
+  assert.ok(appJs.includes("restoreInstalledWebPush"), "boot must restore Home Screen web push");
+  assert.ok(appJs.includes("enableWebPushOpsPreference"), "Enable alerts must persist web_push_ops");
 }
 console.log("ok  web push delivery migration and push-only service worker markers");
 for (const marker of [

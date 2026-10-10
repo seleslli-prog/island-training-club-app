@@ -21,7 +21,15 @@ import {
   normalizeVenueLocation,
   TAMAR_DEFAULT_MEETING_POINT,
 } from "./venue.js";
-import { syncWebPushSubscription } from "./web-push.js";
+import {
+  ensureHomeScreenPush,
+  isHomeScreenApp,
+  isIosDevice,
+  syncWebPushSubscription,
+  webPushSupported,
+} from "./web-push.js";
+
+const PUSH_HOME_BANNER_DISMISS_KEY = "itc.pushHomeBanner.dismissed";
 
 const viewEl = document.getElementById("view");
 const navEl = document.getElementById("bottom-nav");
@@ -1083,6 +1091,24 @@ document.addEventListener("click", async (e) => {
   e.preventDefault?.();
 
   switch (action) {
+    case "enable-home-screen-push": {
+      try {
+        await withBusyControl(el, "Enabling…", async () => {
+          await store.enableWebPushOpsPreference();
+          await syncWebPushSubscription({ enabled: true });
+        });
+        hidePushHomeBanner();
+        toast("Web push is on — this phone can show pop-up alerts");
+      } catch (err) {
+        toast(err.message || "Unable to enable pop-up alerts", true);
+        void restoreInstalledWebPush();
+      }
+      break;
+    }
+    case "dismiss-home-screen-push":
+      try { localStorage.setItem(PUSH_HOME_BANNER_DISMISS_KEY, "1"); } catch (_err) { /* ignore */ }
+      hidePushHomeBanner();
+      break;
     case "avatar-hide":
     case "avatar-approve":
     case "avatar-reject":
@@ -2362,9 +2388,11 @@ function bindLiveAuthState() {
     setTimeout(async () => {
       try {
         await store.getCurrentUser();
+        await store.fetchApplicationForUser(store.currentUser());
         await syncApprovedGoogleAvatar({ ifMissing: true });
         await renderWithFeedback();
         await maybeRedirectToApply();
+        void restoreInstalledWebPush();
       } catch (err) {
         toast(err.message || "Sign-in failed", true);
       }
@@ -2469,6 +2497,7 @@ async function boot() {
   // details whenever the member returns from PayMe.
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") return;
+    void restoreInstalledWebPush();
     const resumedRoute = store.startupRoute(location.hash, store.currentUser()?.id);
     const recoveredRoute = resumedRoute !== location.hash;
     if (recoveredRoute) replaceRoute(resumedRoute);
@@ -2498,6 +2527,82 @@ async function boot() {
     }).catch(() => {});
   }
   if (isLive()) await maybeRedirectToApply();
+  void restoreInstalledWebPush();
+}
+
+function hidePushHomeBanner() {
+  const banner = document.getElementById("push-home-banner");
+  if (banner) banner.hidden = true;
+}
+
+function showPushHomeBanner({ denied = false, optedIn = false } = {}) {
+  const banner = document.getElementById("push-home-banner");
+  if (!banner) return;
+  const copy = banner.querySelector("[data-push-home-copy]");
+  if (copy) {
+    if (denied) {
+      copy.textContent = "Pop-up alerts are blocked on this phone. In Settings, allow notifications for ITC, then tap Allow on this phone.";
+    } else if (optedIn) {
+      copy.textContent = "Web push is already on in Profile. This phone still needs one Allow so ITC can show pop-up alerts. It is the same setting, not a second one.";
+    } else {
+      copy.textContent = "Allow pop-up alerts on this phone? That also turns on Web push in Profile — you do not need to switch it on separately. Your phone will ask Allow next.";
+    }
+  }
+  const enable = banner.querySelector('[data-action="enable-home-screen-push"]');
+  if (enable) enable.textContent = denied ? "Try again" : "Allow on this phone";
+  const later = banner.querySelector('[data-action="dismiss-home-screen-push"]');
+  if (later) later.hidden = !!optedIn && !denied;
+  banner.hidden = false;
+}
+
+function pushHomeBannerDismissed() {
+  try {
+    return localStorage.getItem(PUSH_HOME_BANNER_DISMISS_KEY) === "1";
+  } catch (_err) {
+    return false;
+  }
+}
+
+async function restoreInstalledWebPush() {
+  if (!isLive() || !webPushSupported()) {
+    hidePushHomeBanner();
+    return;
+  }
+  const user = store.currentUser();
+  if (!user) {
+    hidePushHomeBanner();
+    return;
+  }
+  let app = store.peekLiveApplication(user.id);
+  if (app === undefined) {
+    try {
+      app = await store.fetchApplicationForUser(user);
+    } catch (_err) {
+      app = null;
+    }
+  }
+  const optedIn = app?.web_push_ops === true || user.webPushOps === true;
+  const permission = Notification.permission;
+  const installed = isHomeScreenApp();
+
+  const needsPhoneAllow = installed && permission !== "granted";
+  // iPhone Home Screen: offer one tap (also turns Profile Web push on).
+  // If Profile is already on, remind this phone still needs Allow.
+  // Android Chrome tabs never see this; they use Profile → Web push.
+  const offerOptionalIos = isIosDevice() && !optedIn && !pushHomeBannerDismissed();
+  if (needsPhoneAllow && (optedIn || offerOptionalIos)) {
+    showPushHomeBanner({ denied: permission === "denied", optedIn });
+  } else {
+    hidePushHomeBanner();
+  }
+
+  if (permission === "granted" && optedIn) {
+    try {
+      await ensureHomeScreenPush({ prompt: false });
+    } catch (err) {
+      console.error("[itc web-push] restore", err);
+    }
+  }
 }
 
 export const bootPromise = boot().catch((err) => {

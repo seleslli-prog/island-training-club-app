@@ -35,6 +35,8 @@ self.addEventListener("push", (event) => {
     data: { url },
     tag: "itc-ops",
     renotify: true,
+    icon: "/assets/itc/logo-favicon.png",
+    badge: "/assets/itc/logo-favicon.png",
   };
   event.waitUntil(
     self.registration.showNotification(title, options).catch((err) => {

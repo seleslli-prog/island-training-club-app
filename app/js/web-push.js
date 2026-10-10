@@ -50,6 +50,28 @@ export function webPushSupported() {
     && "Notification" in window;
 }
 
+/** True when launched from an installed Home Screen / standalone PWA (required for iOS Web Push). */
+export function isHomeScreenApp() {
+  if (typeof window === "undefined") return false;
+  const nav = window.navigator;
+  if (nav?.standalone === true) return true;
+  try {
+    if (window.matchMedia?.("(display-mode: standalone)")?.matches) return true;
+    if (window.matchMedia?.("(display-mode: fullscreen)")?.matches) return true;
+    if (window.matchMedia?.("(display-mode: minimal-ui)")?.matches) return true;
+  } catch (_err) {
+    /* matchMedia can throw in some test shims */
+  }
+  return false;
+}
+
+export function isIosDevice() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  return navigator.platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1;
+}
+
 async function waitForActivation(reg) {
   const worker = reg.installing || reg.waiting || reg.active;
   if (!worker) return reg;
@@ -113,26 +135,25 @@ export async function syncWebPushSubscription({ enabled } = {}) {
     throw new Error("Web push is not configured yet (missing VAPID public key).");
   }
 
-  const permission = await Notification.requestPermission();
+  let permission = Notification.permission;
+  if (permission !== "granted") {
+    // iOS only prompts from a user gesture inside the Home Screen app.
+    permission = await Notification.requestPermission();
+  }
   if (permission !== "granted") {
     throw new Error("Browser notification permission was not granted.");
   }
 
   const reg = await registration();
+  // Reuse an existing subscription. iOS often fails if we unsubscribe then
+  // immediately subscribe again from the installed Home Screen app.
   let sub = await reg.pushManager.getSubscription();
-  if (sub) {
-    // Re-subscribe if the existing sub was created with a different VAPID key.
-    try {
-      await sub.unsubscribe();
-    } catch (_err) {
-      /* continue and create a fresh subscription */
-    }
-    sub = null;
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
   }
-  sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
-  });
 
   const json = sub.toJSON();
   const endpoint = json.endpoint;
@@ -163,10 +184,25 @@ export async function syncWebPushSubscription({ enabled } = {}) {
   return { ok: true, endpoint, scriptURL: reg.active?.scriptURL || null };
 }
 
+/**
+ * Restore push for an already-installed app when OS permission is granted.
+ * Never prompts unless `prompt` is true (must run from a tap on iOS).
+ */
+export async function ensureHomeScreenPush({ prompt = false } = {}) {
+  if (!isLive() || !supabase) return { ok: true, skipped: "local" };
+  if (!webPushSupported()) return { ok: true, skipped: "unsupported" };
+  const permission = Notification.permission;
+  if (permission === "denied") return { ok: false, skipped: "denied" };
+  if (permission !== "granted" && !prompt) return { ok: false, skipped: "needs-gesture" };
+  return syncWebPushSubscription({ enabled: true });
+}
+
 // Manual retry from DevTools: await window.__itcSyncWebPush(true)
 // Local banner smoke (no Edge Function): await window.__itcTestNotification()
 if (typeof window !== "undefined") {
   window.__itcSyncWebPush = (enabled = true) => syncWebPushSubscription({ enabled: !!enabled });
+  window.__itcEnsureHomeScreenPush = (prompt = false) => ensureHomeScreenPush({ prompt: !!prompt });
+  window.__itcIsHomeScreenApp = isHomeScreenApp;
   window.__itcWebPushPaths = appPaths;
   window.__itcTestNotification = async () => {
     if (!webPushSupported()) throw new Error("Web push unsupported in this browser");

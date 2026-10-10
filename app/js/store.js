@@ -4925,6 +4925,19 @@ export async function updateMyMembershipDetails(form) {
   return data;
 }
 
+export async function enableWebPushOpsPreference() {
+  const user = currentUser() || await getCurrentUser();
+  if (!user) throw new Error("Not signed in");
+  const app = isLive() ? await fetchApplicationForUser(user) : null;
+  return updateMyPrivacyPreferences({
+    session_alerts: app ? app.session_alerts !== false : user.sessionAlerts !== false,
+    email_receipts: app ? !!app.email_receipts : !!user.emailReceipts,
+    community_news: app ? !!app.community_news : !!user.communityNews,
+    hyrox_payment_reminders: app ? app.hyrox_payment_reminders !== false : user.hyroxPaymentReminders !== false,
+    web_push_ops: true,
+  });
+}
+
 export async function updateMyPrivacyPreferences(form) {
   const patch = privacyPatch(form);
   if (!isLive() || !supabase) {
