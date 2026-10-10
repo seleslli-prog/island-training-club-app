@@ -8945,5 +8945,39 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
   }
 }
 
+{
+  const { readFileSync, existsSync } = await import("node:fs");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const sqlPath = join(root, "tools/sql/2026-10-10-remove-listed-members.sql");
+  const migrationPath = join(root, "supabase/migrations/2026-10-10-remove-listed-members.sql");
+  const emails = [
+    "guitarforhymn17@gmail.com",
+    "jeffli32@msn.com",
+    "hf1395@aol.com",
+    "chandrangptl@gmail.com",
+    "johndoechang88@gmail.com",
+  ];
+  if (existsSync(migrationPath)) {
+    failures++;
+    console.error("FAIL listed-member removal must not live under supabase/migrations");
+  }
+  if (!existsSync(sqlPath)) {
+    failures++;
+    console.error("FAIL listed-member removal SQL is missing from tools/sql");
+  } else {
+    const sql = readFileSync(sqlPath, "utf8");
+    const missing = emails.filter((email) => !sql.includes(email));
+    if (missing.length) {
+      failures++;
+      console.error("FAIL listed-member removal SQL missing emails:", missing.join(", "));
+    } else if (!sql.includes("delete from auth.users") || !/\bbegin\b/i.test(sql) || !/\bcommit\b/i.test(sql)) {
+      failures++;
+      console.error("FAIL listed-member removal SQL must wrap auth.users delete in begin/commit");
+    } else console.log("ok  listed-member removal is a one-shot SQL Editor script");
+  }
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll smoke tests passed.");
 process.exit(failures ? 1 : 0);
