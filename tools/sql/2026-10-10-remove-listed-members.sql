@@ -160,6 +160,18 @@ update public.giving_campaigns
  where creator_profile_id in (select id from remove_members)
    and status <> 'closed';
 
+-- Avatar audit is immutable (update and delete both raise 42501), including
+-- ON DELETE CASCADE from profiles and ON DELETE SET NULL on actor_id.
+alter table public.profile_avatar_audit
+  disable trigger profile_avatar_audit_immutable;
+delete from public.profile_avatar_audit
+ where profile_id in (select id from remove_members);
+update public.profile_avatar_audit
+   set actor_id = null
+ where actor_id in (select id from remove_members);
+alter table public.profile_avatar_audit
+  enable trigger profile_avatar_audit_immutable;
+
 -- Profiles / applications / notifications / avatars / prayers / push
 -- cascade from auth.users.
 delete from auth.users

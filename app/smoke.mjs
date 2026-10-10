@@ -8975,6 +8975,10 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
     } else if (!sql.includes("delete from auth.users") || !/\bbegin\b/i.test(sql) || !/\bcommit\b/i.test(sql)) {
       failures++;
       console.error("FAIL listed-member removal SQL must wrap auth.users delete in begin/commit");
+    } else if (!sql.includes("disable trigger profile_avatar_audit_immutable")
+        || !sql.includes("delete from public.profile_avatar_audit")) {
+      failures++;
+      console.error("FAIL listed-member removal SQL must lift immutable avatar audit before delete");
     } else console.log("ok  listed-member removal is a one-shot SQL Editor script");
   }
 }
