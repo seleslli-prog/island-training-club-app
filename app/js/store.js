@@ -122,6 +122,58 @@ export function invalidateLiveNotificationsCache() {
   liveNotifications = null;
 }
 
+const notificationListeners = new Set();
+let notificationChannel = null;
+let notificationChannelUserId = null;
+
+export function subscribeLiveNotifications(onChange) {
+  notificationListeners.add(onChange);
+  return () => notificationListeners.delete(onChange);
+}
+
+function notifyLiveNotifications() {
+  for (const listener of notificationListeners) {
+    try { listener(); } catch (_err) { /* keep remaining listeners */ }
+  }
+}
+
+export async function stopNotificationRealtime() {
+  if (!notificationChannel || !supabase) {
+    notificationChannel = null;
+    notificationChannelUserId = null;
+    return;
+  }
+  try { await supabase.removeChannel(notificationChannel); } catch (_err) { /* ignore */ }
+  notificationChannel = null;
+  notificationChannelUserId = null;
+}
+
+export async function startNotificationRealtime() {
+  if (!isLive() || !supabase) return null;
+  if (typeof supabase.channel !== "function") return null;
+  const user = currentUser() || await getCurrentUser();
+  if (!user?.id) {
+    await stopNotificationRealtime();
+    return null;
+  }
+  if (notificationChannel && notificationChannelUserId === user.id) return notificationChannel;
+  await stopNotificationRealtime();
+  const channel = supabase.channel(`itc-notifications-${user.id}`)
+    .on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "notifications",
+      filter: `profile_id=eq.${user.id}`,
+    }, () => {
+      liveNotifications = null;
+      notifyLiveNotifications();
+    })
+    .subscribe();
+  notificationChannel = channel;
+  notificationChannelUserId = user.id;
+  return channel;
+}
+
 export function peekLivePaymentDirectory() {
   if (livePaymentDirectoryFetchedAt <= 0) return null;
   return [...livePaymentDirectory.values()];
@@ -325,6 +377,9 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
   await liveOps.hydrateOperationalState({ force, authenticated });
   await liveOps.startOperationalRealtime();
   if (authenticated) {
+    try { await startNotificationRealtime(); } catch (err) {
+      console.warn("startNotificationRealtime failed", err);
+    }
     try {
       await supabase.rpc("sweep_session_reminders");
     } catch (err) {
@@ -337,6 +392,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
     }
   } else {
     livePublishedAnnouncements = [];
+    await stopNotificationRealtime();
   }
   return liveOps.operationalStateStatus();
 }

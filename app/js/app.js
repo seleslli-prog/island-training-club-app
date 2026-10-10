@@ -249,11 +249,67 @@ async function fillActivityRoster(sessionId, session, viewer, generation) {
 }
 
 let operationalUiRefreshTimer = null;
+let notificationUiBound = false;
+let notificationUiRefreshTimer = null;
+let notificationRefreshInflight = false;
+let notificationRefreshQueued = false;
+let notificationPollTimer = null;
+
+async function refreshNotificationSurfaces() {
+  if (!isLive() || !store.currentUser()) return;
+  if (notificationRefreshInflight) {
+    notificationRefreshQueued = true;
+    return;
+  }
+  notificationRefreshInflight = true;
+  try {
+    store.invalidateLiveNotificationsCache();
+    const rows = await store.listMyNotifications();
+    const unread = rows.filter((row) => !row.read_at).length;
+    const onInbox = parseHash()[0] === "notifications";
+    commitNotificationCount(unread, onInbox);
+    if (onInbox) {
+      notificationRouteRows = rows;
+      await renderWithFeedback({ preserveScroll: true });
+    }
+  } catch (err) {
+    console.warn("notification refresh failed", err);
+  } finally {
+    notificationRefreshInflight = false;
+    if (notificationRefreshQueued) {
+      notificationRefreshQueued = false;
+      void refreshNotificationSurfaces();
+    }
+  }
+}
+
+function scheduleNotificationUiRefresh() {
+  if (notificationUiRefreshTimer) return;
+  notificationUiRefreshTimer = setTimeout(() => {
+    notificationUiRefreshTimer = null;
+    void refreshNotificationSurfaces();
+  }, 80);
+}
+
+function bindNotificationUiRefresh() {
+  if (notificationUiBound || !isLive()) return;
+  notificationUiBound = true;
+  store.subscribeLiveNotifications(() => scheduleNotificationUiRefresh());
+  if (notificationPollTimer) return;
+  notificationPollTimer = setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    if (!store.currentUser()) return;
+    void refreshNotificationSurfaces();
+  }, 45_000);
+}
+
+let operationalUiRefreshTimer = null;
 function scheduleOperationalUiRefresh() {
   if (operationalUiRefreshTimer) return;
   operationalUiRefreshTimer = setTimeout(() => {
     operationalUiRefreshTimer = null;
     if (viewEl.querySelector('[data-change="duty-set"][aria-busy="true"]')) return;
+    scheduleNotificationUiRefresh();
     const [page, tab] = parseHash();
     if (page === "activity") {
       const sessionId = tab;
@@ -2406,6 +2462,7 @@ function bindOperationalUiRefresh() {
   if (operationalUiBound || !isLive()) return;
   operationalUiBound = true;
   store.subscribeOperationalState(() => scheduleOperationalUiRefresh());
+  bindNotificationUiRefresh();
 }
 
 function bindLiveAuthState() {
@@ -2424,7 +2481,9 @@ function bindLiveAuthState() {
         await syncApprovedGoogleAvatar({ ifMissing: true });
         await renderWithFeedback();
         await maybeRedirectToApply();
+        try { await store.startNotificationRealtime(); } catch (_err) { /* ignore */ }
         void restoreInstalledWebPush();
+        void refreshNotificationSurfaces();
       } catch (err) {
         toast(err.message || "Sign-in failed", true);
       }
@@ -2530,6 +2589,7 @@ async function boot() {
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") return;
     void restoreInstalledWebPush();
+    void refreshNotificationSurfaces();
     const resumedRoute = store.startupRoute(location.hash, store.currentUser()?.id);
     const recoveredRoute = resumedRoute !== location.hash;
     if (recoveredRoute) replaceRoute(resumedRoute);

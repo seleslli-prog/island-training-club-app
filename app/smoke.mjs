@@ -2673,6 +2673,24 @@ for (const marker of [
     throw new Error(`integrated Notification domain missing ${marker}`);
   }
 }
+assert.match(integratedAppSource, /refreshNotificationSurfaces/,
+  "the notification bell must refresh without waiting for a tap on the icon");
+assert.match(integratedAppSource, /subscribeLiveNotifications/,
+  "live inbox changes must invalidate the notification bell");
+assert.match(
+  readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
+  /startNotificationRealtime/,
+  "live mode must subscribe to self-scoped notification rows",
+);
+const notificationsRealtimeMigration = readFileSync(
+  resolve(__dirnameSmoke, "../supabase/migrations/20261010000002_notifications_realtime.sql"),
+  "utf8",
+);
+assert.match(
+  notificationsRealtimeMigration,
+  /alter publication supabase_realtime add table public\.notifications/,
+  "notifications must be in the Realtime publication so the bell can update live",
+);
 console.log("ok  latest Notification domain markers coexist");
 {
   const notificationFallbacks = new Map([
