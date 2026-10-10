@@ -253,7 +253,6 @@ let notificationUiBound = false;
 let notificationUiRefreshTimer = null;
 let notificationRefreshInflight = false;
 let notificationRefreshQueued = false;
-let notificationPollTimer = null;
 
 async function refreshNotificationSurfaces() {
   if (!isLive() || !store.currentUser()) return;
@@ -268,9 +267,11 @@ async function refreshNotificationSurfaces() {
     const unread = rows.filter((row) => !row.read_at).length;
     const onInbox = parseHash()[0] === "notifications";
     commitNotificationCount(unread, onInbox);
+    // Only rewrite the inbox if the member is already looking at it.
+    // Never re-render Schedule/Home/Activity for a badge update.
     if (onInbox) {
       notificationRouteRows = rows;
-      await renderWithFeedback({ preserveScroll: true });
+      viewEl.innerHTML = await views.viewNotifications(new Date(), rows);
     }
   } catch (err) {
     console.warn("notification refresh failed", err);
@@ -295,21 +296,13 @@ function bindNotificationUiRefresh() {
   if (notificationUiBound || !isLive()) return;
   notificationUiBound = true;
   store.subscribeLiveNotifications(() => scheduleNotificationUiRefresh());
-  if (notificationPollTimer) return;
-  notificationPollTimer = setInterval(() => {
-    if (document.visibilityState !== "visible") return;
-    if (!store.currentUser()) return;
-    void refreshNotificationSurfaces();
-  }, 45_000);
 }
 
-let operationalUiRefreshTimer = null;
 function scheduleOperationalUiRefresh() {
   if (operationalUiRefreshTimer) return;
   operationalUiRefreshTimer = setTimeout(() => {
     operationalUiRefreshTimer = null;
     if (viewEl.querySelector('[data-change="duty-set"][aria-busy="true"]')) return;
-    scheduleNotificationUiRefresh();
     const [page, tab] = parseHash();
     if (page === "activity") {
       const sessionId = tab;
@@ -2481,9 +2474,8 @@ function bindLiveAuthState() {
         await syncApprovedGoogleAvatar({ ifMissing: true });
         await renderWithFeedback();
         await maybeRedirectToApply();
-        try { await store.startNotificationRealtime(); } catch (_err) { /* ignore */ }
+        void store.startNotificationRealtime();
         void restoreInstalledWebPush();
-        void refreshNotificationSurfaces();
       } catch (err) {
         toast(err.message || "Sign-in failed", true);
       }

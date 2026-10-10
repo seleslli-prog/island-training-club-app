@@ -2677,6 +2677,8 @@ assert.match(integratedAppSource, /refreshNotificationSurfaces/,
   "the notification bell must refresh without waiting for a tap on the icon");
 assert.match(integratedAppSource, /subscribeLiveNotifications/,
   "live inbox changes must invalidate the notification bell");
+assert.doesNotMatch(integratedAppSource, /notificationPollTimer|45_000/,
+  "notification auto-refresh must not poll on a timer during navigation");
 assert.match(
   readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
   /startNotificationRealtime/,

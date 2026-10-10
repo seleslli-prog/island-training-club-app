@@ -377,9 +377,7 @@ export async function hydrateLiveOperations({ ensureWindow = false, force = fals
   await liveOps.hydrateOperationalState({ force, authenticated });
   await liveOps.startOperationalRealtime();
   if (authenticated) {
-    try { await startNotificationRealtime(); } catch (err) {
-      console.warn("startNotificationRealtime failed", err);
-    }
+    void startNotificationRealtime();
     try {
       await supabase.rpc("sweep_session_reminders");
     } catch (err) {
