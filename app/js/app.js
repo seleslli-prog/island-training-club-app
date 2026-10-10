@@ -128,6 +128,14 @@ function applyOwnAvatarToRoster(rows, viewer) {
   });
 }
 
+function commitRsvpGoingCount(count) {
+  const n = Math.max(0, Number(count) || 0);
+  viewEl.querySelectorAll("[data-rsvp-going-count]").forEach((el) => {
+    el.textContent = String(n);
+    el.setAttribute("data-rsvp-going-count", String(n));
+  });
+}
+
 function commitAttendeeRoster(rosterHtml) {
   const host = viewEl.querySelector("[data-attendee-roster]");
   if (host) {
@@ -197,23 +205,28 @@ function cachedActivityRoster(sessionId, session, viewer) {
 async function fillActivityRoster(sessionId, session, viewer, generation) {
   if (viewer?.status !== "approved" || !session) return;
   if (!(session.kind === "paid" || store.sessionRequiresRsvp(session))) return;
-  const namesPromise = store.attendeeNamesFor(sessionId).catch((err) => {
+  let attendeeNames;
+  try {
+    attendeeNames = await store.attendeeNamesFor(sessionId);
+  } catch (err) {
     console.warn("Unable to load attendee names", err);
-    return undefined;
-  });
-  const avatarsPromise = canManageOwnAvatar(viewer)
-    ? store.getSessionAvatars(sessionId).catch(() => null)
-    : Promise.resolve(null);
-  const [namesResult, fetchedAvatars] = await Promise.all([namesPromise, avatarsPromise]);
-  let attendeeNames = namesResult;
+    attendeeNames = undefined;
+  }
   if (!Array.isArray(attendeeNames) || !attendeeNames.length) {
     const cachedNames = store.attendeesFor(session);
     if (cachedNames.length) attendeeNames = cachedNames;
-    else if (namesResult === undefined) attendeeNames = null;
+    else if (attendeeNames === undefined) attendeeNames = null;
   }
-  let avatarRows = fetchedAvatars;
+  const peeked = store.peekSessionAvatars(sessionId);
+  const nameCount = Array.isArray(attendeeNames) ? attendeeNames.length : 0;
+  const forceAvatars = !peeked || peeked.length !== nameCount
+    || store.attendeeCountFor(session) !== (peeked.length || 0);
+  let avatarRows = null;
+  if (canManageOwnAvatar(viewer)) {
+    avatarRows = await store.getSessionAvatars(sessionId, { force: forceAvatars }).catch(() => peeked);
+  }
   if (Array.isArray(attendeeNames) && attendeeNames.length) {
-    if (!Array.isArray(avatarRows) || !avatarRows.length) {
+    if (!Array.isArray(avatarRows) || avatarRows.length !== attendeeNames.length) {
       avatarRows = initialsRosterFromNames(attendeeNames);
     } else {
       avatarRows = avatarRows.map((row, index) => ({
@@ -221,11 +234,17 @@ async function fillActivityRoster(sessionId, session, viewer, generation) {
         displayName: attendeeNames[index] || row.displayName,
       }));
     }
+  } else if (store.attendeeCountFor(session) === 0) {
+    avatarRows = [];
   }
   if (Array.isArray(avatarRows) && avatarRows.length) {
     avatarRows = applyOwnAvatarToRoster(avatarRows, viewer);
   }
   if (generation !== renderGeneration) return;
+  const rosterCount = Array.isArray(avatarRows) && avatarRows.length
+    ? avatarRows.length
+    : nameCount;
+  commitRsvpGoingCount(Math.max(store.attendeeCountFor(session), rosterCount));
   commitAttendeeRoster(views.attendeeRosterInnerHTML(avatarRows, attendeeNames));
 }
 
@@ -236,8 +255,15 @@ function scheduleOperationalUiRefresh() {
     operationalUiRefreshTimer = null;
     if (viewEl.querySelector('[data-change="duty-set"][aria-busy="true"]')) return;
     const [page, tab] = parseHash();
+    if (page === "activity") {
+      const sessionId = tab;
+      const session = store.getSession(sessionId);
+      const user = store.currentUser();
+      void fillActivityRoster(sessionId, session, user, renderGeneration);
+      return;
+    }
     if (page === "pay") {
-      void renderWithFeedback();
+      void renderWithFeedback({ preserveScroll: true });
       return;
     }
     if (page === "admin" && (!tab || tab === "payments" || tab === "ops")) {
@@ -667,8 +693,10 @@ function renderNotificationChrome(user, active, generation, rowsPromise = null) 
   return request;
 }
 
-async function renderWithFeedback() {
+async function renderWithFeedback(options = {}) {
   const generation = ++renderGeneration;
+  const preserveScroll = options.preserveScroll === true;
+  const scrollY = preserveScroll ? window.scrollY : 0;
   const routeLoader = document.getElementById("route-loader");
   viewEl.setAttribute("aria-busy", "true");
   const timer = setTimeout(() => {
@@ -677,7 +705,7 @@ async function renderWithFeedback() {
     }
   }, 300);
   try {
-    await render(generation);
+    await render(generation, { preserveScroll, scrollY });
   } catch (err) {
     if (generation === renderGeneration) throw err;
   } finally {
@@ -689,7 +717,7 @@ async function renderWithFeedback() {
   }
 }
 
-async function render(generation = renderGeneration) {
+async function render(generation = renderGeneration, options = {}) {
   views.captureGuestEmailLink(viewEl);
   const parts = parseHash();
   const [page, arg, arg2] = parts.length ? parts : ["home"];
@@ -846,7 +874,11 @@ async function render(generation = renderGeneration) {
     const venueForms = viewEl.querySelectorAll?.('form[data-action="form-week-venue"]') || [];
     [...venueForms].forEach((form) => { void syncWeekVenuePicker(form, { ownsGeneration }); });
   }
-  window.scrollTo({ top: 0 });
+  if (options.preserveScroll) {
+    window.scrollTo({ top: options.scrollY || 0 });
+  } else {
+    window.scrollTo({ top: 0 });
+  }
   viewEl.focus({ preventScroll: true });
   prevPage = page;
 }
@@ -1681,11 +1713,11 @@ document.addEventListener("click", async (e) => {
     }
 
     case "rsvp-join": {
-      withBusyControl(el, "Counting you in…", async () => {
+      await withBusyControl(el, "Counting you in…", async () => {
         try {
           await store.rsvpSession(store.currentUser()?.id, el.dataset.session);
           toast("You’re coming");
-          await renderWithFeedback();
+          await renderWithFeedback({ preserveScroll: true });
         } catch (err) {
           toast(err.message || "Unable to RSVP", true);
         }
@@ -1695,11 +1727,11 @@ document.addEventListener("click", async (e) => {
 
     case "rsvp-withdraw": {
       if (!confirm("Cancel your RSVP? The team is counting heads.")) return;
-      withBusyControl(el, "Withdrawing…", async () => {
+      await withBusyControl(el, "Withdrawing…", async () => {
         try {
           await store.withdrawRsvp(el.dataset.booking);
           toast("RSVP cancelled");
-          await renderWithFeedback();
+          await renderWithFeedback({ preserveScroll: true });
         } catch (err) {
           toast(err.message || "Unable to cancel RSVP", true);
         }

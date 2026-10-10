@@ -656,7 +656,7 @@ export function viewActivity(sessionId, options) {
         actionBlock = `${freeBanner}
           <div class="banner mt16">
             <span class="kicker">You’re going</span>
-            <p>${goingCount} going — see you there. Walk-ins are still welcome.</p>
+            <p><span data-rsvp-going-count="${goingCount}">${goingCount}</span> going — see you there. Walk-ins are still welcome.</p>
           </div>
           <div class="btn-row">
             <button class="btn ghost" type="button" data-action="rsvp-withdraw" data-booking="${booking.id}">Can’t make it</button>
@@ -681,7 +681,7 @@ export function viewActivity(sessionId, options) {
       actionBlock = `
         <div class="banner mt16">
           <span class="kicker">You're going</span>
-          <p>${goingCount} going — see you there.</p>
+          <p><span data-rsvp-going-count="${goingCount}">${goingCount}</span> going — see you there.</p>
         </div>
         <div class="btn-row ${showDirections ? "two" : ""}">
           <button class="btn ghost" type="button" data-action="rsvp-withdraw" data-booking="${booking.id}">Can't make it</button>
@@ -691,7 +691,7 @@ export function viewActivity(sessionId, options) {
       actionBlock = `
         <div class="free-banner">
           ${ICONS.pin}
-          <div><strong>Free to join.</strong><br><span class="muted small">${goingCount} going so far · the organizer books a table from this list, so only tap if you're coming.</span></div>
+          <div><strong>Free to join.</strong><br><span class="muted small"><span data-rsvp-going-count="${goingCount}">${goingCount}</span> going so far · the organizer books a table from this list, so only tap if you're coming.</span></div>
         </div>
         <div class="btn-row ${showDirections ? "two" : ""}">
           <button class="btn" type="button" data-action="rsvp-join" data-session="${s.id}">Count me in</button>

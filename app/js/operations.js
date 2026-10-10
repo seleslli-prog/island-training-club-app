@@ -1179,8 +1179,29 @@ export async function liveSetOperationalAttendance(bookingId, arrived) {
   return liveBookingById(bookingId);
 }
 
+function upsertLiveBooking(row) {
+  if (!row?.id) return null;
+  const booking = buildBookingRow(row);
+  const index = liveCache.bookings.findIndex((item) => item.id === booking.id);
+  if (index >= 0) liveCache.bookings[index] = booking;
+  else liveCache.bookings.push(booking);
+  return booking;
+}
+
+function rememberLiveRsvpCount(sessionId, goingCount) {
+  if (!sessionId) return;
+  const fromBookings = liveConfirmedBookingsForSession(sessionId).length;
+  const n = Math.max(fromBookings, Number(goingCount) || 0);
+  liveCache.rsvpCounts.set(sessionId, n);
+}
+
 export async function liveReserveSession(sessionId) {
-  const row = await runOperationalRpc("reserve_operational_session", { p_session_id: sessionId });
+  const row = await runOperationalRpc("reserve_operational_session", { p_session_id: sessionId }, {
+    applyResult(result) {
+      const booking = upsertLiveBooking(result);
+      if (booking?.sessionId) rememberLiveRsvpCount(booking.sessionId, liveRsvpCountFor(booking.sessionId));
+    },
+  });
   return buildBookingRow(row);
 }
 
@@ -1226,6 +1247,22 @@ export async function liveDeleteEvent(sessionId) {
 export async function liveWithdrawRsvp(bookingId) {
   return runOperationalRpc("withdraw_operational_rsvp", {
     p_booking_id: bookingId,
+  }, {
+    applyResult() {
+      const booking = liveCache.bookings.find((item) => item.id === bookingId);
+      const sessionId = booking?.sessionId;
+      if (booking && (booking.status === "confirmed" || booking.status === "attended")) {
+        booking.status = "cancelled";
+        booking.cancelledSource = "member";
+      }
+      if (sessionId) {
+        const previous = liveRsvpCountFor(sessionId);
+        const next = previous == null
+          ? liveConfirmedBookingsForSession(sessionId).length
+          : Math.max(liveConfirmedBookingsForSession(sessionId).length, previous - 1);
+        liveCache.rsvpCounts.set(sessionId, next);
+      }
+    },
   });
 }
 

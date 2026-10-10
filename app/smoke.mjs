@@ -2487,6 +2487,12 @@ assert.match(integratedAppSource, /paintOwnAvatarChrome/,
   "route chrome must paint cached initials immediately instead of awaiting avatar REST");
 assert.match(integratedAppSource, /fillActivityRoster/,
   "Activity Details must paint first and fill Who's coming without blocking the route");
+assert.match(integratedAppSource, /commitRsvpGoingCount/,
+  "RSVP going-so-far copy must update with Who's coming instead of waiting for a manual refresh");
+assert.match(integratedAppSource, /page === "activity"/,
+  "operational realtime must refresh the RSVP activity roster without a manual reload");
+assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"), /invalidateSessionAvatars/,
+  "Count me in and Can't make it must drop the stale session avatar cache");
 assert.match(integratedAppSource, /subscribeOperationalState/,
   "Admin Payments duty must subscribe to operational realtime");
 assert.match(integratedAppSource, /page === "admin" && \(!tab \|\| tab === "payments"/,
@@ -5178,7 +5184,8 @@ if (lunchRsvp) {
     attendeeNames: ["Seles L."],
     avatarRows: [],
   });
-  if (!mismatchedCountHtml.includes("Seles L.") || !mismatchedCountHtml.includes("1 going")) {
+  if (!mismatchedCountHtml.includes("Seles L.")
+      || !mismatchedCountHtml.includes('data-rsvp-going-count="1"')) {
     throw new Error("RSVP activity must align going count with Who's coming roster length");
   }
 }
@@ -6657,14 +6664,23 @@ installLocalFixtures();
   const goingHtml = views.viewActivity(lunch.id);
   if (!goingHtml.includes("You're going") || !goingHtml.includes("rsvp-withdraw"))
     throw new Error("RSVP'd member should see the Going state and a withdraw action");
+  assert.match(goingHtml, /data-rsvp-going-count="1"/);
   assert.match(goingHtml, /Who’s coming/);
   assert.match(goingHtml, /Tester M\./);
+  await store.withdrawRsvp(rsvp.id);
+  assert.equal(store.attendeeCountFor(lunch), 0,
+    "Can't make it must drop the going count without a manual refresh");
+  const withdrawnHtml = views.viewActivity(lunch.id);
+  assert.match(withdrawnHtml, /Count me in/);
+  assert.match(withdrawnHtml, /data-rsvp-going-count="0"/);
+  assert.doesNotMatch(withdrawnHtml, /Tester M\./);
+  const rejoined = await store.rsvpSession("fixture-member", lunch.id);
   store.signOut();
   const visitorLunchHtml = views.viewActivity(lunch.id);
   assert.match(visitorLunchHtml, /Member-only: the attendee list is visible after approval/);
   assert.doesNotMatch(visitorLunchHtml, /Tester M\./);
   store.signIn("member@example.test");
-  const bookingPage = views.viewBooking(rsvp.id);
+  const bookingPage = views.viewBooking(rejoined.id);
   if (!bookingPage.includes("You’re going") || bookingPage.includes("Can’t make it? Defer")
       || bookingPage.includes("View receipt"))
     throw new Error("RSVP booking page must not offer payment deferral or receipts");
@@ -6739,7 +6755,8 @@ installLocalFixtures();
     throw new Error(`combined RSVP Schedule must remain Sunday-first; got ${combinedScheduleLabels.join(" ")}`);
   }
   const combinedActivityHtml = views.viewActivity(lunch.id);
-  if (!combinedActivityHtml.includes("1 going — see you there.")) {
+  if (!combinedActivityHtml.includes('data-rsvp-going-count="1"')
+      || !combinedActivityHtml.includes("going — see you there.")) {
     throw new Error("exact RSVP Activity Details must render the confirmed count of 1");
   }
 
@@ -6782,8 +6799,8 @@ installLocalFixtures();
   }
   console.log("ok  RSVP exact route and count agree across Sunday Schedule, Activity, and grouped Admin");
 
-  await store.withdrawRsvp(rsvp.id);
-  if (store.getBooking(rsvp.id).status !== "cancelled")
+  await store.withdrawRsvp(rejoined.id);
+  if (store.getBooking(rejoined.id).status !== "cancelled")
     throw new Error("withdraw should cancel the RSVP booking");
   const repeatedRsvp = await store.rsvpSession("fixture-member", lunch.id, rsvp.createdAt + 1000);
   await store.withdrawRsvp(repeatedRsvp.id);

@@ -3265,7 +3265,9 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
   const sessionId = typeof sessionOrId === "string" ? sessionOrId : sessionOrId?.id;
   if (isLive()) {
     // The reserve RPC branches on price_hkd = 0 and confirms immediately.
-    return liveOps.liveReserveSession(sessionId);
+    const booking = await liveOps.liveReserveSession(sessionId);
+    invalidateSessionAvatars(sessionId);
+    return booking;
   }
   requireAuthorizedPaymentOwner(userId);
   const session = getSession(sessionId);
@@ -3315,7 +3317,10 @@ export async function rsvpSession(userId, sessionOrId, now = Date.now()) {
 export async function withdrawRsvp(bookingId, now = Date.now()) {
   assertActiveBookingTarget(bookingId);
   if (isLive()) {
-    return liveOps.liveWithdrawRsvp(bookingId);
+    const existing = liveOps.liveBookingById(bookingId);
+    const result = await liveOps.liveWithdrawRsvp(bookingId);
+    invalidateSessionAvatars(existing?.sessionId);
+    return result;
   }
   const booking = getBooking(bookingId);
   if (!booking || booking.status !== "confirmed") return null;
@@ -4260,6 +4265,12 @@ export function peekOwnAvatar() {
     return persisted;
   }
   return initialsAvatar(user.id);
+}
+
+export function invalidateSessionAvatars(sessionId) {
+  const id = String(sessionId || "").trim();
+  if (id) sessionAvatarCache.delete(id);
+  else sessionAvatarCache.clear();
 }
 
 export function peekSessionAvatars(sessionId) {
