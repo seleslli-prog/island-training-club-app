@@ -2382,9 +2382,11 @@ assert.equal(packageConfig.scripts?.build, undefined,
 assert.equal(packageConfig.scripts?.verify, "node scripts/verify-static.mjs");
 assert.doesNotMatch(appIndexSource, /<base\b/i,
   "hash-only app routes must remain on the canonical root without a document base URL");
+assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
+  "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css"',
+  'href="/app/styles.css?v=membership-header-1"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
@@ -4428,8 +4430,8 @@ assert.match(integratedStyleSource, /\.receipt-lines \.line strong \{[\s\S]*over
   "Membership Details values must wrap without collapsing the label gap");
 assert.match(integratedStyleSource, /#form-membership-details \.line \{[\s\S]*display:\s*block;/,
   "Membership Details edit rows must stack as card-header lines");
-assert.doesNotMatch(integratedStyleSource, /#form-membership-details \.line \{[^}]*border-bottom:/,
-  "Membership Details edit header rows must not have divider borders");
+assert.match(integratedStyleSource, /#form-membership-details \.line \{[^}]*border:\s*0;/,
+  "Membership Details edit header rows must explicitly have no divider borders");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 assert.match(membershipDetailsEditHtml, /<span>Full name: <strong>/,
