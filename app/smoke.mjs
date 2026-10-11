@@ -2386,7 +2386,7 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=membership-header-1"',
+  'href="/app/styles.css?v=membership-header-2"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
