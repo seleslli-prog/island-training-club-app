@@ -4432,6 +4432,8 @@ assert.match(integratedStyleSource, /#form-membership-details \.line \{[\s\S]*di
   "Membership Details edit rows must stack as card-header lines");
 assert.match(integratedStyleSource, /#form-membership-details \.line \{[^}]*border:\s*0;/,
   "Membership Details edit header rows must explicitly have no divider borders");
+assert.match(integratedStyleSource, /#form-membership-details \.line \{[^}]*padding:\s*2px 2px;/,
+  "Membership Details edit header rows must stay compact");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 assert.match(membershipDetailsEditHtml, /<span>Full name: <strong>/,
