@@ -4422,6 +4422,10 @@ console.log("ok  session reminder / web-push expansion migration markers");
   assert.doesNotMatch(runbook, /[A-Za-z0-9]{16} [A-Za-z0-9]{16}/);
 }
 console.log("ok  email receipt migration, function, and runbook markers");
+assert.match(integratedStyleSource, /\.receipt-lines \.line \{[\s\S]*column-gap:\s*24px;/,
+  "Membership Details rows must keep a visible label/value gap");
+assert.match(integratedStyleSource, /\.receipt-lines \.line strong \{[\s\S]*overflow-wrap:\s*anywhere;/,
+  "Membership Details values must wrap without collapsing the label gap");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
