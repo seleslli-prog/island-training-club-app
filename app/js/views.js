@@ -72,15 +72,23 @@ const esc = (s) =>
     "'": "&#39;",
   })[c]);
 
+const nameTokens = (value) => String(value || "").toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+
+function containsNameTokens(value, target) {
+  const tokens = nameTokens(value);
+  const targetTokens = nameTokens(target);
+  if (!targetTokens.length || targetTokens.length > tokens.length) return false;
+  return tokens.some((_, index) => targetTokens.every((token, offset) => tokens[index + offset] === token));
+}
+
 // Home and Profile greetings use the participant's preferred name, but never
-// a value that duplicates the emergency contact. Older application records can
-// have that field crossed, so fall back to the signed-in profile name.
+// a value that contains the emergency contact. Older application records can
+// have that field crossed, sometimes with extra punctuation or emoji, so fall
+// back to the signed-in profile name.
 export function greetingName(user) {
   const preferred = String(user?.preferredName || "").trim();
   const emergency = String(user?.emergencyName || "").trim();
-  if (preferred && preferred.toLocaleLowerCase() !== emergency.toLocaleLowerCase()) {
-    return preferred;
-  }
+  if (preferred && !containsNameTokens(preferred, emergency)) return preferred;
   return String(user?.fullName || "").trim().split(/\s+/)[0] || "";
 }
 
