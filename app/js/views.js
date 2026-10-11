@@ -1749,8 +1749,8 @@ async function accountDetailsEdit(user) {
       title: "Edit Membership Details",
     })}
     <form id="form-membership-details" data-form="membership-details" class="card mt16"><div class="card-body">
-      <div class="line"><span>Full name</span><strong>${esc(user.fullName)}</strong></div>
-      <div class="line"><span>Email</span><strong>${esc(user.email)}</strong></div>
+      <div class="line"><span>Full name: <strong>${esc(user.fullName)}</strong></span></div>
+      <div class="line"><span>Email: <strong>${esc(user.email)}</strong></span></div>
       <div class="field">
         <label for="md-donorId">Donor ID</label>
         <input id="md-donorId" name="donorId" value="${esc(hydrated.donorId || "")}" placeholder="e.g. CHUI-08879" autocomplete="off">

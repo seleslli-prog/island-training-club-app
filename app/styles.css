@@ -1202,17 +1202,15 @@ img.detail-photo[src*="itc-hyrox-mood"] {
 .receipt-lines .line.total span { color: var(--ink); }
 
 #form-membership-details .line {
-  display: flex;
-  justify-content: space-between;
-  column-gap: 24px;
+  display: block;
   padding: 12px 2px;
   border-bottom: 1px solid var(--line-soft);
   font-size: 13px;
 }
 #form-membership-details .line span { color: var(--muted); }
 #form-membership-details .line strong {
-  min-width: 0;
-  text-align: right;
+  margin-left: 4px;
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 

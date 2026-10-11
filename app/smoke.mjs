@@ -4426,10 +4426,14 @@ assert.match(integratedStyleSource, /\.receipt-lines \.line \{[\s\S]*column-gap:
   "Membership Details rows must keep a visible label/value gap");
 assert.match(integratedStyleSource, /\.receipt-lines \.line strong \{[\s\S]*overflow-wrap:\s*anywhere;/,
   "Membership Details values must wrap without collapsing the label gap");
-assert.match(integratedStyleSource, /#form-membership-details \.line \{[\s\S]*column-gap:\s*24px;/,
-  "Membership Details edit rows must keep a visible label/value gap");
+assert.match(integratedStyleSource, /#form-membership-details \.line \{[\s\S]*display:\s*block;/,
+  "Membership Details edit rows must stack as card-header lines");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
+assert.match(membershipDetailsEditHtml, /<span>Full name: <strong>/,
+  "Membership Details edit should put Full name and its value on one line");
+assert.match(membershipDetailsEditHtml, /<span>Email: <strong>/,
+  "Membership Details edit should put Email and its value on one line");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
   if (!membershipDetailsHtml.includes(marker)) {
     failures++;
