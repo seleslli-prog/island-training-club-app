@@ -1201,6 +1201,21 @@ img.detail-photo[src*="itc-hyrox-mood"] {
 .receipt-lines .line.total { font-weight: 900; font-size: 15px; }
 .receipt-lines .line.total span { color: var(--ink); }
 
+#form-membership-details .line {
+  display: flex;
+  justify-content: space-between;
+  column-gap: 24px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+#form-membership-details .line span { color: var(--muted); }
+#form-membership-details .line strong {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 /* ---- Agreements: one quiet card stroke, no nested ghost outlines ------ */
 
 .agreements-page .card {
