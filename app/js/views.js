@@ -72,6 +72,14 @@ const esc = (s) =>
     "'": "&#39;",
   })[c]);
 
+// Home and pending Profile greetings use the signed-in profile identity,
+// never the application preferred-name / emergency-contact fields.
+export function greetingName(user) {
+  const preferred = String(user?.preferredName || "").trim();
+  if (preferred) return preferred;
+  return String(user?.fullName || "").trim().split(" ")[0] || "";
+}
+
 const todayISO = () => todayHktISO();
 
 export function replacementShareUrl(token, baseHref = globalThis.location?.href) {
@@ -348,7 +356,7 @@ export function viewHome() {
     const t = parseISO(iso).getTime();
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
-  const name = user ? esc(user.preferredName || user.fullName.split(" ")[0]) : null;
+  const name = user ? esc(greetingName(user)) : null;
 
   let rows;
   let emptyMsg;
@@ -1608,7 +1616,7 @@ async function accountPending(user) {
   const indemnity = indemnityState(hydrated);
   return `
     <div class="kicker">Profile · ${esc(user.email)}</div>
-    <h1 class="display">Thanks, ${esc(hydrated.preferredName || user.fullName.split(" ")[0])}.</h1>
+    <h1 class="display">Thanks, ${esc(greetingName(user))}.</h1>
     ${pendingBanner()}
     <div class="card mt16"><div class="card-body">
       <h3>Your application</h3>

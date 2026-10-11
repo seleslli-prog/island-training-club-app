@@ -3620,12 +3620,26 @@ for (const marker of [
 }
 store.currentUser().role = "pending";
 store.currentUser().status = "pending";
+const liveApp = applicationRows.get(authUser.id);
+const previousPreferredName = liveApp.preferred_name;
+liveApp.preferred_name = liveApp.emergency_name;
+store.invalidateLiveApplicationCache();
 const pendingAccount = await views.viewAccount();
+const pendingHome = views.viewHome();
 if (!pendingAccount.includes("+852 6123 4567")) {
   throw new Error("Pending Profile should render the fetched application phone");
 }
 if (!pendingAccount.includes("Taylor Coach · Coach · +852 6777 8888")) {
   throw new Error("Pending Profile should render the fetched application emergency contact and relationship");
+}
+if (!pendingAccount.includes("Thanks, Riley.")) {
+  throw new Error("Pending Profile greeting must use the profile name, not application preferred_name");
+}
+if (pendingAccount.includes("Thanks, Taylor")) {
+  throw new Error("Pending Profile greeting must not use the emergency contact or application preferred_name");
+}
+if (!pendingHome.includes("Good to see you, Riley.")) {
+  throw new Error("Pending Home greeting must use the profile name");
 }
 if (!pendingAccount.includes("Accepted")) {
   throw new Error("Pending Profile should render the fetched application waiver state");
@@ -3633,6 +3647,8 @@ if (!pendingAccount.includes("Accepted")) {
 if (!pendingAccount.includes("Yes")) {
   throw new Error("Pending Profile should render the fetched application photo consent");
 }
+liveApp.preferred_name = previousPreferredName;
+store.invalidateLiveApplicationCache();
 const gatedPaidSession = store.upcomingSessions(14).find((session) => session.kind === "paid");
 if (!gatedPaidSession) throw new Error("Live access checks need an upcoming paid session");
 store.currentUser().role = "super_admin";

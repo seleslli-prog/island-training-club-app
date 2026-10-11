@@ -3865,7 +3865,41 @@ const pendingAccount = await check("account (pending)", () => views.viewAccount(
 if (pendingAccount.includes('data-action="manage-profile-photo"')) {
   throw new Error("pending Profile must not expose photo management");
 }
+if (!pendingAccount.includes("Thanks, Test.")) {
+  throw new Error("pending Profile greeting must use the applicant profile name");
+}
+if (pendingAccount.includes("Thanks, E Person")) {
+  throw new Error("pending Profile greeting must not use the emergency contact name");
+}
 const pendingHome = views.viewHome();
+if (!pendingHome.includes("Good to see you, Test.")) {
+  throw new Error("pending Home greeting must use the applicant profile name");
+}
+assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "Alison" }), "Alison");
+assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "" }), "Alison");
+{
+  const greetingCase = store.applyForMembership(localApplicationFixture("alison-greeting@example.test", {
+    fullName: "Alison Kyle",
+    preferredName: "Alison",
+    emergencyName: "Crystal",
+    emergencyRelationship: "BFF",
+    emergencyPhone: "511083900",
+    indemnitySignature: "Alison Kyle",
+  }));
+  if (!greetingCase.ok) throw new Error("profile-greeting apply failed");
+  const greetingProfile = await views.viewAccount();
+  const greetingHome = views.viewHome();
+  if (!greetingProfile.includes("Thanks, Alison.")) {
+    throw new Error("Profile greeting must use the profile name after signup");
+  }
+  if (greetingProfile.includes("Thanks, Crystal")) {
+    throw new Error("Profile greeting must not use the emergency contact name after signup");
+  }
+  if (!greetingHome.includes("Good to see you, Alison.")) {
+    throw new Error("Home greeting must stay consistent with the Profile greeting");
+  }
+  store.signIn("test@example.com");
+}
 {
   // Pending applicants see "My Week" filtered to free sessions in the
   // current Sun–Sat window (same as Schedule / visitor Home).
