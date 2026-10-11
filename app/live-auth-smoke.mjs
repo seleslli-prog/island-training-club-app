@@ -2651,7 +2651,7 @@ store.clearApplyDraft();
 assert.equal(store.currentUser(), null,
   "signed-out Home must drop leftover live test identity");
 
-const signedOutHome = views.viewHome();
+const signedOutHome = await views.viewHome();
 assert.doesNotMatch(signedOutHome, /Riley|Good to see you/,
   "signed-out Home must not keep signed-in test greetings");
 assert.match(signedOutHome, /data-action="sign-in-google"[^>]*>Continue with Google</);
@@ -2672,7 +2672,7 @@ assert.doesNotMatch(views.navHTML("home", null), />Account</);
 assert.doesNotMatch(views.navHTML("home", null), />Profile</);
 assert.doesNotMatch(signedOutHome, /Loading this week's sessions/);
 store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
-const signedOutHomeWithDraft = views.viewHome();
+const signedOutHomeWithDraft = await views.viewHome();
 const signedOutAccount = await views.viewAccount();
 assert.doesNotMatch(
   signedOutHomeWithDraft,
@@ -3622,10 +3622,20 @@ store.currentUser().role = "pending";
 store.currentUser().status = "pending";
 const liveApp = applicationRows.get(authUser.id);
 const previousPreferredName = liveApp.preferred_name;
-liveApp.preferred_name = liveApp.emergency_name;
+liveApp.preferred_name = "Ali";
+store.invalidateLiveApplicationCache();
+const pendingPreferredAccount = await views.viewAccount();
+const pendingPreferredHome = await views.viewHome();
+if (!pendingPreferredAccount.includes("Thanks, Ali.")) {
+  throw new Error("Pending Profile greeting must use the filled preferred name");
+}
+if (!pendingPreferredHome.includes("Good to see you, Ali.")) {
+  throw new Error("Pending Home greeting must use the filled preferred name");
+}
+liveApp.preferred_name = "";
 store.invalidateLiveApplicationCache();
 const pendingAccount = await views.viewAccount();
-const pendingHome = views.viewHome();
+const pendingHome = await views.viewHome();
 if (!pendingAccount.includes("+852 6123 4567")) {
   throw new Error("Pending Profile should render the fetched application phone");
 }
@@ -3633,13 +3643,10 @@ if (!pendingAccount.includes("Taylor Coach · Coach · +852 6777 8888")) {
   throw new Error("Pending Profile should render the fetched application emergency contact and relationship");
 }
 if (!pendingAccount.includes("Thanks, Riley.")) {
-  throw new Error("Pending Profile greeting must use the profile name, not application preferred_name");
-}
-if (pendingAccount.includes("Thanks, Taylor")) {
-  throw new Error("Pending Profile greeting must not use the emergency contact or application preferred_name");
+  throw new Error("Pending Profile greeting must fall back to the profile name when preferred name is empty");
 }
 if (!pendingHome.includes("Good to see you, Riley.")) {
-  throw new Error("Pending Home greeting must use the profile name");
+  throw new Error("Pending Home greeting must fall back to the profile name when preferred name is empty");
 }
 if (!pendingAccount.includes("Accepted")) {
   throw new Error("Pending Profile should render the fetched application waiver state");
@@ -4690,7 +4697,7 @@ assert.deepEqual(applicationUpdates.at(-1), {
   emergency_relationship: "Coach",
 });
 
-const home = views.viewHome();
+const home = await views.viewHome();
 if (!home.includes("Good to see you, Riley.")) {
   throw new Error("Home did not greet the signed-in Google user");
 }

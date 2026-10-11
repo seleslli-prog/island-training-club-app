@@ -72,8 +72,8 @@ const esc = (s) =>
     "'": "&#39;",
   })[c]);
 
-// Home and pending Profile greetings use the signed-in profile identity,
-// never the application preferred-name / emergency-contact fields.
+// Home and Profile greetings: preferred name when filled, otherwise the
+// first word of the profile name.
 export function greetingName(user) {
   const preferred = String(user?.preferredName || "").trim();
   if (preferred) return preferred;
@@ -344,8 +344,9 @@ function visitorDraftActions() {
     </div>`;
 }
 
-export function viewHome() {
+export async function viewHome() {
   const user = store.currentUser();
+  const hydrated = user ? await hydrateLiveUser(user) : null;
   // Match Schedule's Sunday–Saturday week (sundayOf + 7 days), not Mon–Sun.
   const upcoming = store.upcomingSessions(14);
   const weekStart = sundayOf(todayLocal());
@@ -356,7 +357,7 @@ export function viewHome() {
     const t = parseISO(iso).getTime();
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
-  const name = user ? esc(greetingName(user)) : null;
+  const name = hydrated ? esc(greetingName(hydrated)) : null;
 
   let rows;
   let emptyMsg;
@@ -1616,7 +1617,7 @@ async function accountPending(user) {
   const indemnity = indemnityState(hydrated);
   return `
     <div class="kicker">Profile · ${esc(user.email)}</div>
-    <h1 class="display">Thanks, ${esc(greetingName(user))}.</h1>
+    <h1 class="display">Thanks, ${esc(greetingName(hydrated))}.</h1>
     ${pendingBanner()}
     <div class="card mt16"><div class="card-body">
       <h3>Your application</h3>

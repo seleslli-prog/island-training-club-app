@@ -2960,7 +2960,7 @@ for (const activityId of ["wnt", "run", "water"]) {
 const paid = allUpcoming.find((s) => s.kind === "paid" && !data.sessionStarted(s));
 const free = allUpcoming.find((s) => s.kind === "free");
 if (!paid || !free) throw new Error("expected both paid and free sessions in window");
-const localVisitorHome = views.viewHome();
+const localVisitorHome = await views.viewHome();
 if (!localVisitorHome.includes("<h2>This week — open to all</h2>")) {
   throw new Error("visitor Home must show the exact open-to-all h2");
 }
@@ -3818,13 +3818,13 @@ for (const [label, field] of [
 {
   store.signOut();
   store.clearApplyDraft();
-  const homeWithoutDraft = views.viewHome();
+  const homeWithoutDraft = await views.viewHome();
   if (homeWithoutDraft.includes("Continue your application")) {
     throw new Error("fresh visitor home should not advertise a draft");
   }
 
   store.saveApplyDraft({ fields: { mobile: "+852 6123 4567" } });
-  const homeWithDraft = views.viewHome();
+  const homeWithDraft = await views.viewHome();
   const accountWithDraft = await views.viewAccount();
   for (const [label, html] of [["home", homeWithDraft], ["account", accountWithDraft]]) {
     if (!html.includes("Continue your application")
@@ -3866,37 +3866,44 @@ if (pendingAccount.includes('data-action="manage-profile-photo"')) {
   throw new Error("pending Profile must not expose photo management");
 }
 if (!pendingAccount.includes("Thanks, Test.")) {
-  throw new Error("pending Profile greeting must use the applicant profile name");
+  throw new Error("pending Profile greeting must use the filled preferred name");
 }
-if (pendingAccount.includes("Thanks, E Person")) {
-  throw new Error("pending Profile greeting must not use the emergency contact name");
-}
-const pendingHome = views.viewHome();
+const pendingHome = await views.viewHome();
 if (!pendingHome.includes("Good to see you, Test.")) {
-  throw new Error("pending Home greeting must use the applicant profile name");
+  throw new Error("pending Home greeting must use the filled preferred name");
 }
-assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "Alison" }), "Alison");
+assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "Ali" }), "Ali");
 assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "" }), "Alison");
+assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "   " }), "Alison");
 {
-  const greetingCase = store.applyForMembership(localApplicationFixture("alison-greeting@example.test", {
+  const preferredCase = store.applyForMembership(localApplicationFixture("alison-preferred@example.test", {
     fullName: "Alison Kyle",
-    preferredName: "Alison",
-    emergencyName: "Crystal",
-    emergencyRelationship: "BFF",
-    emergencyPhone: "511083900",
+    preferredName: "Ali",
     indemnitySignature: "Alison Kyle",
   }));
-  if (!greetingCase.ok) throw new Error("profile-greeting apply failed");
-  const greetingProfile = await views.viewAccount();
-  const greetingHome = views.viewHome();
-  if (!greetingProfile.includes("Thanks, Alison.")) {
-    throw new Error("Profile greeting must use the profile name after signup");
+  if (!preferredCase.ok) throw new Error("preferred-name greeting apply failed");
+  const preferredProfile = await views.viewAccount();
+  const preferredHome = await views.viewHome();
+  if (!preferredProfile.includes("Thanks, Ali.")) {
+    throw new Error("Profile greeting must use the filled preferred name");
   }
-  if (greetingProfile.includes("Thanks, Crystal")) {
-    throw new Error("Profile greeting must not use the emergency contact name after signup");
+  if (!preferredHome.includes("Good to see you, Ali.")) {
+    throw new Error("Home greeting must use the filled preferred name");
   }
-  if (!greetingHome.includes("Good to see you, Alison.")) {
-    throw new Error("Home greeting must stay consistent with the Profile greeting");
+  store.signOut();
+  const fallbackCase = store.applyForMembership(localApplicationFixture("alison-fallback@example.test", {
+    fullName: "Alison Kyle",
+    preferredName: "",
+    indemnitySignature: "Alison Kyle",
+  }));
+  if (!fallbackCase.ok) throw new Error("profile-name greeting apply failed");
+  const fallbackProfile = await views.viewAccount();
+  const fallbackHome = await views.viewHome();
+  if (!fallbackProfile.includes("Thanks, Alison.")) {
+    throw new Error("Profile greeting must fall back to the profile name when preferred name is empty");
+  }
+  if (!fallbackHome.includes("Good to see you, Alison.")) {
+    throw new Error("Home greeting must fall back to the profile name when preferred name is empty");
   }
   store.signIn("test@example.com");
 }
@@ -4540,12 +4547,12 @@ if (!(await views.viewAccount()).includes("Indemnity confirmed on")) {
   failures++;
   console.error("FAIL acceptIndemnity did not confirm on Profile");
 } else console.log("ok  acceptIndemnity confirms on Profile");
-if (!views.viewHome().includes("Nothing booked this week")) {
+if (!(await views.viewHome()).includes("Nothing booked this week")) {
   failures++;
   console.error('FAIL "My week" should prompt when the member has no bookings');
 } else console.log('ok  "My week" empty state prompts to book');
 {
-  const emptyWeekHome = views.viewHome();
+  const emptyWeekHome = await views.viewHome();
   if (!emptyWeekHome.includes('href="#/schedule" style="color:var(--accent)">Find a session →</a>')) {
     failures++;
     console.error("FAIL empty My Week should keep Find a session");
@@ -5129,7 +5136,7 @@ const myWeekEndISO = data.isoDate(data.addDays(myWeekStart, 6));
 const myWeekStartISO = data.isoDate(myWeekStart);
 const bookingInMyWeek = booking.snapshot.dateISO >= myWeekStartISO
   && booking.snapshot.dateISO <= myWeekEndISO;
-const approvedHome = views.viewHome();
+const approvedHome = await views.viewHome();
 if (!approvedHome.includes("My Week")) {
   throw new Error("approved Home must show My Week");
 }
@@ -5148,7 +5155,7 @@ for (const session of allUpcoming.filter((item) => item.id !== booking.sessionId
 for (const status of ["reserved", "deferred", "cancelled", "attended"]) {
   try {
     booking.status = status;
-    if (views.viewHome().includes(bookedActivityLink)) {
+    if ((await views.viewHome()).includes(bookedActivityLink)) {
       throw new Error(`approved My Week must exclude ${status} bookings`);
     }
   } finally {
@@ -5160,14 +5167,14 @@ const futureSnapshotStartTime = booking.snapshot.startTime;
 try {
   booking.snapshot.dateISO = "2000-01-01";
   booking.snapshot.startTime = "00:00";
-  if (views.viewHome().includes(bookedActivityLink)) {
+  if ((await views.viewHome()).includes(bookedActivityLink)) {
     throw new Error("approved My Week must exclude confirmed bookings whose snapshot has started");
   }
 } finally {
   booking.snapshot.dateISO = futureSnapshotDateISO;
   booking.snapshot.startTime = futureSnapshotStartTime;
 }
-if (bookingInMyWeek && !views.viewHome().includes(bookedActivityLink)) {
+if (bookingInMyWeek && !(await views.viewHome()).includes(bookedActivityLink)) {
   throw new Error("confirmed future booking fixture must be restored after My Week mutations");
 }
 {
@@ -5185,7 +5192,7 @@ if (bookingInMyWeek && !views.viewHome().includes(bookedActivityLink)) {
     store.confirmBookingPayment(nextWeekReservation.id);
     store.signIn(signIn.user.email);
     const nextWeekLink = `href="#/activity/${nextWeekSession.id}"`;
-    const homeThisWeek = views.viewHome();
+    const homeThisWeek = await views.viewHome();
     if (homeThisWeek.includes(nextWeekLink)) {
       throw new Error("approved My Week must exclude confirmed bookings outside the current Sun–Sat week");
     }
@@ -5261,7 +5268,7 @@ if (!store.signIn("test@example.com").ok) throw new Error("member fixture must s
 
 // the booked class is badged on Home "My week" and on the Schedule row;
 // "My week" shows booked sessions only, so unbooked ones stay out
-const homeBooked = views.viewHome();
+const homeBooked = await views.viewHome();
 if (bookingInMyWeek) {
   if (!homeBooked.includes("Booked") || !homeBooked.includes("Island ECC")) {
     failures++;
@@ -5344,7 +5351,7 @@ const paymentsAndReceiptsHtml = await views.viewAccount("payments");
 const memberNotificationHtml = await views.viewNotifications(new Date(), await store.listMyNotifications());
 const retiredMemberPattern = /BFT Causeway Bay|Midtown28|Midtown 28|BFT \+ Midtown Pool|venue allocation|switch queue|Wait for Midtown/i;
 for (const [surface, html] of [
-  ["Home", views.viewHome()],
+  ["Home", await views.viewHome()],
   ["Schedule", views.viewSchedule()],
   ["Profile", bookingProfileHtml],
   ["Bookings", allBookingsHtml],
@@ -5449,7 +5456,7 @@ if (!(await views.viewAccount("details")).includes("member@example.test")) {
 installLocalFixtures({ withMemberBooking: true });
 store.signIn("member@example.test");
 await check("home (member)", () => views.viewHome());
-const memberHome = views.viewHome();
+const memberHome = await views.viewHome();
 const fixtureBooking = store.getBooking("fixture-booking");
 const fixtureSnap = fixtureBooking?.snapshot;
 const fixtureLink = fixtureBooking ? `href="#/activity/${fixtureBooking.sessionId}"` : "";
@@ -7430,7 +7437,7 @@ for (const api of [
 }
 const retiredMemberCopy = /BFT Causeway Bay|Midtown28|Midtown 28|BFT \+ Midtown Pool|venue allocation|switch queue|Wait for Midtown/i;
 for (const [surface, html] of [
-  ["visitor Home", views.viewHome()],
+  ["visitor Home", await views.viewHome()],
   ["Schedule", views.viewSchedule()],
   ["retired activity", views.viewActivity("hyrox-bft-2099-01-03")],
 ]) {

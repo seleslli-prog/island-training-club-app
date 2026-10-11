@@ -820,7 +820,7 @@ async function render(generation = renderGeneration, options = {}) {
   let out;
   switch (page) {
     case "home":
-      out = views.viewHome();
+      out = await views.viewHome();
       break;
     case "schedule":
       out = views.viewSchedule();
