@@ -365,7 +365,12 @@ function visitorDraftActions() {
 
 export async function viewHome() {
   const user = store.currentUser();
-  const hydrated = user ? await hydrateLiveUser(user) : null;
+  // Paint from the profile immediately after sign-in. The application row
+  // contains richer greeting/contact data and is refreshed after the first
+  // Home paint when it is not already cached.
+  const hydrated = user && store.peekLiveApplication(user.id) !== undefined
+    ? await hydrateLiveUser(user)
+    : user;
   // Match Schedule's Sunday–Saturday week (sundayOf + 7 days), not Mon–Sun.
   const upcoming = store.upcomingSessions(14);
   const weekStart = sundayOf(todayLocal());

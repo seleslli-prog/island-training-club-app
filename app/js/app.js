@@ -2477,6 +2477,24 @@ function bindOperationalUiRefresh() {
   bindNotificationUiRefresh();
 }
 
+function hydrateSignedInAfterPaint(user) {
+  if (!user) return;
+  void store.fetchApplicationForUser(user).then(async () => {
+    if (parseHash()[0] === "home") await renderWithFeedback();
+    await maybeRedirectToApply();
+  }).catch((err) => {
+    toast(err.message || "Application read failed", true);
+  });
+  void syncApprovedGoogleAvatar({ ifMissing: true }).catch(() => {});
+  if (user.status === "approved" || parseHash()[0] === "home") {
+    void store.hydrateLiveOperations({ ensureWindow: true }).then(() => {
+      if (parseHash()[0] === "home") void renderWithFeedback();
+    }).catch((err) => {
+      toast(err.message || "Unable to load live sessions", true);
+    });
+  }
+}
+
 function bindLiveAuthState() {
   if (liveAuthBound || !isLive() || !supabase) return;
   liveAuthBound = true;
@@ -2489,11 +2507,13 @@ function bindLiveAuthState() {
     setTimeout(async () => {
       try {
         await store.getCurrentUser();
-        await store.fetchApplicationForUser(store.currentUser());
-        await syncApprovedGoogleAvatar({ ifMissing: true });
+        const user = store.currentUser();
+        const fastHomePaint = user?.status === "approved" && parseHash()[0] === "home";
         await renderWithFeedback();
-        await maybeRedirectToApply();
-        void store.startNotificationRealtime();
+        if (!fastHomePaint) await maybeRedirectToApply();
+        if (fastHomePaint || user?.status === "approved") {
+          hydrateSignedInAfterPaint(user);
+        }
         void restoreInstalledWebPush();
       } catch (err) {
         toast(err.message || "Sign-in failed", true);
@@ -2521,9 +2541,7 @@ async function boot() {
         await store.getCurrentUser();
         const user = store.currentUser();
         if (user) {
-          await store.fetchApplicationForUser(user);
-          await syncApprovedGoogleAvatar({ ifMissing: true });
-          await store.hydrateLiveOperations({ ensureWindow: true });
+          hydrateSignedInAfterPaint(user);
         } else {
           // Signed-out Home should paint the join card before schedule RPCs return.
           pendingVisitorHydrate = store.hydrateLiveOperations({ ensureWindow: true });
@@ -2629,7 +2647,7 @@ async function boot() {
       commitOwnAvatarPresentation(presentation);
     }).catch(() => {});
   }
-  if (isLive()) await maybeRedirectToApply();
+  if (isLive()) void maybeRedirectToApply().catch(() => {});
   void restoreInstalledWebPush();
 }
 

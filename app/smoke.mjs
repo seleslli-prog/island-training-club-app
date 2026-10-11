@@ -2533,8 +2533,24 @@ const signedInListenerSource = integratedAppSource.match(
 assert.ok(signedInListenerSource, "live auth SIGNED_IN listener must remain wired");
 assert.doesNotMatch(signedInListenerSource, /location\.hash\s*=\s*"#\/home"/,
   "tab-refocus SIGNED_IN events must not replace the current route with Home");
-assert.match(signedInListenerSource, /await renderWithFeedback\(\);[\s\S]*?await maybeRedirectToApply\(\);/,
-  "SIGNED_IN must refresh the current route before checking pending-applicant routing");
+assert.match(signedInListenerSource, /await renderWithFeedback\(\);[\s\S]*?hydrateSignedInAfterPaint\(user\);/,
+  "SIGNED_IN must refresh the current route before starting post-paint hydration");
+assert.doesNotMatch(signedInListenerSource, /await store\.fetchApplicationForUser\(/,
+  "SIGNED_IN must not block the first route paint on the application query");
+const signedInBootSource = integratedAppSource.match(
+  /await store\.getCurrentUser\(\);\n\s*const user = store\.currentUser\(\);[\s\S]*?\/\/ Signed-out Home should paint the join card before schedule RPCs return\./
+)?.[0] || "";
+assert.ok(signedInBootSource, "signed-in live boot branch must remain identifiable");
+assert.doesNotMatch(signedInBootSource, /await store\.(fetchApplicationForUser|hydrateLiveOperations)\(/,
+  "signed-in boot must not block the first Home paint on application or operations hydration");
+assert.match(integratedAppSource, /function hydrateSignedInAfterPaint\(user\)/,
+  "signed-in application and operations hydration must have a post-paint path");
+assert.match(integratedAppSource,
+  /hydrateLiveOperations\(\{ ensureWindow: true \}\)\.then\([\s\S]*?parseHash\(\)\[0\] === "home"[\s\S]*?renderWithFeedback\(\)/,
+  "Home must refresh after background operations hydration completes");
+assert.match(integratedViewSource,
+  /export async function viewHome\(\) \{[\s\S]*?store\.peekLiveApplication\(user\.id\)/,
+  "Home must use the profile immediately when the live application is not cached");
 assert.match(integratedViewSource, /data-route-not-found/,
   "not-found output must expose a stable route-commit guard");
 console.log("ok  app launch, route commit and resume are wired to route handoff storage");
