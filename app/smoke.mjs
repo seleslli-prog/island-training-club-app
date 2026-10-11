@@ -4428,6 +4428,8 @@ assert.match(integratedStyleSource, /\.receipt-lines \.line strong \{[\s\S]*over
   "Membership Details values must wrap without collapsing the label gap");
 assert.match(integratedStyleSource, /#form-membership-details \.line \{[\s\S]*display:\s*block;/,
   "Membership Details edit rows must stack as card-header lines");
+assert.doesNotMatch(integratedStyleSource, /#form-membership-details \.line \{[^}]*border-bottom:/,
+  "Membership Details edit header rows must not have divider borders");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
 assert.match(membershipDetailsEditHtml, /<span>Full name: <strong>/,

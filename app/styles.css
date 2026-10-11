@@ -1204,7 +1204,6 @@ img.detail-photo[src*="itc-hyrox-mood"] {
 #form-membership-details .line {
   display: block;
   padding: 12px 2px;
-  border-bottom: 1px solid var(--line-soft);
   font-size: 13px;
 }
 #form-membership-details .line span { color: var(--muted); }
