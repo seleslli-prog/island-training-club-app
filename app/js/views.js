@@ -123,6 +123,13 @@ const fmtMonthYear = (ts) =>
     year: "numeric",
   });
 
+function memberSinceInputValue(ts) {
+  if (!ts) return "";
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+}
+
 // --- Shared fragments ---------------------------------------------------------
 
 function badgeFor(s, booking = null, reservation = null) {
@@ -1749,8 +1756,15 @@ async function accountDetailsEdit(user) {
       title: "Edit Membership Details",
     })}
     <form id="form-membership-details" data-form="membership-details" class="card mt16"><div class="card-body">
-      <div class="line"><span>Full name: <strong>${esc(user.fullName)}</strong></span></div>
       <div class="line"><span>Email: <strong>${esc(user.email)}</strong></span></div>
+      <div class="field">
+        <label for="md-full_name">Full name *</label>
+        <input id="md-full_name" name="full_name" value="${esc(user.fullName || "")}" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="md-member_since">Member since *</label>
+        <input id="md-member_since" name="member_since" type="date" value="${esc(memberSinceInputValue(hydrated.appliedAt))}" required>
+      </div>
       <div class="field">
         <label for="md-donorId">Donor ID</label>
         <input id="md-donorId" name="donorId" value="${esc(hydrated.donorId || "")}" placeholder="e.g. CHUI-08879" autocomplete="off">

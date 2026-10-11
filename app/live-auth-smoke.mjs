@@ -4445,8 +4445,17 @@ if (!detailsEdit.includes('data-form="membership-details"')) {
 if (!detailsEdit.includes("Save changes")) {
   throw new Error("Live details edit route should render the save action");
 }
-if (!detailsEdit.includes("Riley Runner") || !detailsEdit.includes("runner@example.com")) {
-  throw new Error("Live details edit route should show read-only identity rows");
+if (!detailsEdit.includes('name="full_name"') || !detailsEdit.includes('value="Riley Runner"')) {
+  throw new Error("Live details edit route should prefill Full name for editing");
+}
+if (detailsEdit.includes("<span>Full name:")) {
+  throw new Error("Live details edit route should not keep Full name as a header row");
+}
+if (!detailsEdit.includes("<span>Email: <strong>") || !detailsEdit.includes("runner@example.com")) {
+  throw new Error("Live details edit route should keep Email as a compact header");
+}
+if (!detailsEdit.includes('name="member_since"') || !detailsEdit.includes('type="date"') || !detailsEdit.includes('value="2026-08-05"')) {
+  throw new Error("Live details edit route should prefill Member since as a date input");
 }
 if (!detailsEdit.includes('value="+852 6123 4567"')) {
   throw new Error("Live details edit route should prefill the mobile number");
@@ -4608,6 +4617,40 @@ for (const banned of [
   "submitted_at",
 ]) {
   if (banned in membershipPatch) throw new Error(`membership patch should exclude ${banned}`);
+}
+{
+  const profileUpdatesBeforeIdentity = profileUpdates.length;
+  await store.updateMyMembershipDetails({
+    full_name: "Seles Li",
+    member_since: "2024-03-15",
+    mobile: "+852 9000 0000",
+    age_over_18: "yes",
+    emergency_name: "Alex Runner",
+    emergency_relationship: "Coach",
+    emergency_phone: "+852 9111 1111",
+    heard_source: "friend",
+    heard_detail: "Run club",
+    preferred_name: "Riley",
+  });
+  assert.ok(
+    profileUpdates.slice(profileUpdatesBeforeIdentity).some((update) => update.full_name === "Seles Li"),
+    "membership save should update profiles.full_name",
+  );
+  const identityPatch = applicationUpdates.at(-1);
+  assert.equal(identityPatch?.submitted_at, "2024-03-14T16:00:00.000Z",
+    "membership save should persist Member since as applications.submitted_at");
+  await store.updateMyMembershipDetails({
+    full_name: "Riley Runner",
+    member_since: "2026-08-05",
+    mobile: "+852 9000 0000",
+    age_over_18: "yes",
+    emergency_name: "Alex Runner",
+    emergency_relationship: "Coach",
+    emergency_phone: "+852 9111 1111",
+    heard_source: "friend",
+    heard_detail: "Run club",
+    preferred_name: "Riley",
+  });
 }
 await store.updateMyPrivacyPreferences({
   session_alerts: true,

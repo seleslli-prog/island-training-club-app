@@ -4835,6 +4835,23 @@ function localApplication(user) {
   };
 }
 
+function parseFullName(form) {
+  if (!Object.prototype.hasOwnProperty.call(form, "full_name")) return null;
+  const fullName = String(form.full_name || "").trim();
+  if (!fullName) throw new Error("Enter your full name");
+  if (fullName.length > 120) throw new Error("Full name must be 120 characters or fewer");
+  return fullName;
+}
+
+function parseMemberSince(value) {
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("Enter membership since date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new Error("Enter membership since date");
+  const ms = Date.parse(`${raw}T00:00:00+08:00`);
+  if (Number.isNaN(ms)) throw new Error("Enter membership since date");
+  return new Date(ms).toISOString();
+}
+
 function membershipPatch(form) {
   const isMinor = parseAgeOver18(form.age_over_18);
   const guardian = guardianFields(isMinor, form.guardian_name, form.guardian_phone);
@@ -4860,6 +4877,9 @@ function membershipPatch(form) {
     const rawDonorId = String(form.donorId || "").trim();
     if (donorIdProblem(rawDonorId)) throw new Error("Enter a valid Donor ID");
     patch.donor_id = rawDonorId ? normalizeDonorId(rawDonorId) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(form, "member_since")) {
+    patch.submitted_at = parseMemberSince(form.member_since);
   }
   if (!patch.mobile) throw new Error("Enter mobile number");
   if (!patch.heard_source) throw new Error("Choose how you heard about ITC");
@@ -4986,6 +5006,7 @@ export async function saveMyApplication(form) {
 
 export async function updateMyMembershipDetails(form) {
   const patch = membershipPatch(form);
+  const fullName = parseFullName(form);
   if (!isLive() || !supabase) {
     const user = currentUser();
     if (!user) throw new Error("Not signed in");
@@ -5000,11 +5021,26 @@ export async function updateMyMembershipDetails(form) {
     user.heardDetail = patch.heard_detail;
     user.preferredName = patch.preferred_name;
     if (Object.prototype.hasOwnProperty.call(patch, "donor_id")) user.donorId = patch.donor_id;
+    if (fullName) user.fullName = fullName;
+    if (patch.submitted_at) user.appliedAt = Date.parse(patch.submitted_at);
     save();
     return localApplication(user);
   }
   const cu = await getCurrentUser();
   if (!cu) throw new Error("Not signed in");
+  if (fullName) {
+    const { data: savedProfile, error: profileError } = await supabase
+      .from("profiles")
+      .update({ full_name: fullName })
+      .eq("id", cu.id)
+      .select("*")
+      .single();
+    if (profileError) throw profileError;
+    if (!savedProfile) throw new Error("Unable to save your full name");
+    liveProfile = savedProfile;
+    liveProfileFetchedAt = Date.now();
+    await getCurrentUser();
+  }
   const { data, error } = await supabase
     .from("applications")
     .update(patch)

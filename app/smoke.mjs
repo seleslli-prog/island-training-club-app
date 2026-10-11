@@ -4436,17 +4436,23 @@ assert.match(integratedStyleSource, /#form-membership-details \.line \{[^}]*padd
   "Membership Details edit header rows must stay compact");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
-assert.match(membershipDetailsEditHtml, /<span>Full name: <strong>/,
-  "Membership Details edit should put Full name and its value on one line");
+assert.doesNotMatch(membershipDetailsEditHtml, /<span>Full name:/,
+  "Membership Details edit should not keep Full name as a header row");
 assert.match(membershipDetailsEditHtml, /<span>Email: <strong>/,
   "Membership Details edit should put Email and its value on one line");
+assert.match(membershipDetailsEditHtml, /name="full_name"/,
+  "Membership Details edit should let the member change Full name");
+assert.match(membershipDetailsEditHtml, /name="member_since"/,
+  "Membership Details edit should let the member change Member since");
+assert.match(membershipDetailsEditHtml, /id="md-member_since"[^>]*type="date"|type="date"[^>]*id="md-member_since"/,
+  "Membership Details edit should use a date input for Member since");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
   if (!membershipDetailsHtml.includes(marker)) {
     failures++;
     console.error(`FAIL Membership Details summary missing ${marker}`);
   }
 }
-for (const field of ['name="emergency_relationship"', 'name="donorId"']) {
+for (const field of ['name="emergency_relationship"', 'name="donorId"', 'name="full_name"', 'name="member_since"']) {
   if (!membershipDetailsEditHtml.includes(field)) {
     failures++;
     console.error(`FAIL Membership Details edit form missing ${field}`);
@@ -5395,6 +5401,47 @@ if (store.currentUser().donorId !== "CHUI-8879") {
   failures++;
   console.error("FAIL Membership Details save should normalize and persist Donor ID");
 } else console.log("ok  Membership Details save includes Donor ID");
+{
+  const beforeIdentity = store.currentUser();
+  const originalName = beforeIdentity.fullName;
+  const originalSince = new Date(beforeIdentity.appliedAt).toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+  const identityPayload = {
+    mobile: beforeIdentity.phone,
+    age_over_18: beforeIdentity.isMinor ? "no" : "yes",
+    emergency_name: beforeIdentity.emergencyName,
+    emergency_relationship: beforeIdentity.emergencyRelationship,
+    emergency_phone: beforeIdentity.emergencyPhone,
+    heard_source: beforeIdentity.heard,
+    preferred_name: beforeIdentity.preferredName,
+    donorId: beforeIdentity.donorId,
+  };
+  await store.updateMyMembershipDetails({
+    ...identityPayload,
+    full_name: "Seles Li",
+    member_since: "2024-03-15",
+  });
+  const afterIdentity = store.currentUser();
+  assert.equal(afterIdentity.fullName, "Seles Li",
+    "Membership Details save should persist Full name");
+  assert.equal(
+    new Date(afterIdentity.appliedAt).toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" }),
+    "2024-03-15",
+    "Membership Details save should persist Member since",
+  );
+  const identitySummary = await views.viewAccount("details");
+  assert.match(identitySummary, /<span>Full name<\/span><strong>Seles Li<\/strong>/,
+    "Membership Details summary should show the saved Full name");
+  assert.match(identitySummary, /<span>Member since<\/span><strong>15 Mar 2024<\/strong>/,
+    "Membership Details summary should show the saved Member since date");
+  assert.match(await views.viewAccount(), /Member since Mar 2024/,
+    "Profile should show the saved Member since month");
+  await store.updateMyMembershipDetails({
+    ...identityPayload,
+    full_name: originalName,
+    member_since: originalSince,
+  });
+  console.log("ok  Membership Details save updates Full name and Member since");
+}
 
 // The stats and linked pages use the same canonical booking collection, so
 // each stat must equal the number of cards rendered by its destination.
