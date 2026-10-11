@@ -2526,47 +2526,61 @@ async function boot() {
   store.load();
   const authCallbackError = consumeAuthCallbackError();
   let pendingVisitorHydrate = null;
-  // Live mode: hydrate the synchronous view model before the first render
-  // so Home renders with the correct signed-in state. The callback lock
-  // is held by Supabase's own handler, so getCurrentUser() must not run
-  // while it is held. First-visit guests skip supabase-js until after paint
-  // so Continue with Google can navigate immediately.
+  let paintHomeFirst = false;
+  // Live mode hydrates identity after the first paint. This keeps the Home
+  // shell responsive while supabase-js, auth, and the profile query settle.
+  // The callback lock is held by Supabase's own handler, so getCurrentUser()
+  // must not run while it is held. First-visit guests also skip supabase-js
+  // until after paint so Continue with Google can navigate immediately.
+  let startLiveHydration = null;
   if (isLiveConfigured()) {
     const needClientNow = isLive() || peekStoredLiveSession() || returningFromAuthRedirect();
-    if (needClientNow) {
-      let bootError = null;
-      try {
-        await ensureLiveClient();
-        await store.completeGoogleSignInFromRedirect();
-        await store.getCurrentUser();
-        const user = store.currentUser();
-        if (user) {
-          hydrateSignedInAfterPaint(user);
-        } else {
-          // Signed-out Home should paint the join card before schedule RPCs return.
-          pendingVisitorHydrate = store.hydrateLiveOperations({ ensureWindow: true });
-        }
-      } catch (err) {
-        bootError = err;
+    startLiveHydration = () => {
+      if (needClientNow) {
+        if (authCallbackError) toast(authCallbackError, true);
+        return (async () => {
+          let user = null;
+          try {
+            await ensureLiveClient();
+            await store.completeGoogleSignInFromRedirect();
+            await store.getCurrentUser();
+            user = store.currentUser();
+          } catch (err) {
+            toast(err.message || "Application read failed", true);
+          }
+          bindLiveAuthState();
+          if (user && paintHomeFirst) {
+            hydrateSignedInAfterPaint(user);
+          } else if (user) {
+            try {
+              await store.fetchApplicationForUser(user);
+            } catch (err) {
+              toast(err.message || "Application read failed", true);
+            }
+            void syncApprovedGoogleAvatar({ ifMissing: true }).catch(() => {});
+            if (user.status === "approved") {
+              void store.hydrateLiveOperations({ ensureWindow: true }).catch(() => {});
+            }
+          } else if (isLive()) {
+            // Signed-out Home should paint the join card before schedule RPCs return.
+            await store.hydrateLiveOperations({ ensureWindow: true });
+          }
+        })();
       }
-      bindLiveAuthState();
       if (authCallbackError) toast(authCallbackError, true);
-      if (bootError) {
-        toast(bootError.message || "Application read failed", true);
-      }
-    } else {
-      if (authCallbackError) toast(authCallbackError, true);
-      pendingVisitorHydrate = (async () => {
+      return (async () => {
         await ensureLiveClient();
         bindLiveAuthState();
         await store.hydrateLiveOperations({ ensureWindow: true });
       })();
-    }
+    };
   } else if (authCallbackError) {
     toast(authCallbackError, true);
   }
+  paintHomeFirst = !location.hash || location.hash === "#/home";
   const startup = store.startupRoute(location.hash, store.currentUser()?.id);
   if (startup !== location.hash) replaceRoute(startup);
+  if (!paintHomeFirst && startLiveHydration) pendingVisitorHydrate = startLiveHydration();
   window.addEventListener("hashchange", async () => {
     const generation = ++renderGeneration;
     // The Payment/Auth baseline hydrates identity before rendering. Commit
@@ -2630,8 +2644,7 @@ async function boot() {
     }
   });
 
-  await renderWithFeedback();
-  if (pendingVisitorHydrate) {
+  if (!paintHomeFirst && pendingVisitorHydrate) {
     try {
       await pendingVisitorHydrate;
       bindOperationalUiRefresh();
@@ -2640,14 +2653,25 @@ async function boot() {
       toast(err.message || "Unable to load this week's sessions", true);
     }
   } else {
-    bindOperationalUiRefresh();
+    await renderWithFeedback();
+    if (paintHomeFirst && startLiveHydration) pendingVisitorHydrate = startLiveHydration();
+    if (pendingVisitorHydrate) {
+      try {
+        await pendingVisitorHydrate;
+        bindOperationalUiRefresh();
+        await renderWithFeedback();
+      } catch (err) {
+        toast(err.message || "Unable to load this week's sessions", true);
+      }
+    } else {
+      bindOperationalUiRefresh();
+    }
   }
   if (canManageOwnAvatar(store.currentUser())) {
     void store.getOwnAvatar().then((presentation) => {
       commitOwnAvatarPresentation(presentation);
     }).catch(() => {});
   }
-  if (isLive()) void maybeRedirectToApply().catch(() => {});
   void restoreInstalledWebPush();
 }
 

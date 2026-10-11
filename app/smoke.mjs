@@ -2537,12 +2537,19 @@ assert.match(signedInListenerSource, /await renderWithFeedback\(\);[\s\S]*?hydra
   "SIGNED_IN must refresh the current route before starting post-paint hydration");
 assert.doesNotMatch(signedInListenerSource, /await store\.fetchApplicationForUser\(/,
   "SIGNED_IN must not block the first route paint on the application query");
-const signedInBootSource = integratedAppSource.match(
-  /await store\.getCurrentUser\(\);\n\s*const user = store\.currentUser\(\);[\s\S]*?\/\/ Signed-out Home should paint the join card before schedule RPCs return\./
+const bootSourceForIdentity = integratedAppSource.slice(
+  integratedAppSource.indexOf("async function boot()"),
+  integratedAppSource.indexOf("function hidePushHomeBanner"),
+);
+const signedInBootSource = bootSourceForIdentity.match(
+  /await store\.getCurrentUser\(\);[\s\S]*?user = store\.currentUser\(\);[\s\S]*?bindLiveAuthState\(\);/
 )?.[0] || "";
 assert.ok(signedInBootSource, "signed-in live boot branch must remain identifiable");
-assert.doesNotMatch(signedInBootSource, /await store\.(fetchApplicationForUser|hydrateLiveOperations)\(/,
-  "signed-in boot must not block the first Home paint on application or operations hydration");
+const fastHomeBootSource = signedInBootSource.match(
+  /if \(user && paintHomeFirst\) \{[\s\S]*?\} else if \(user\)/
+)?.[0] || "";
+assert.doesNotMatch(fastHomeBootSource, /await store\.(fetchApplicationForUser|hydrateLiveOperations)\(/,
+  "signed-in Home boot must not block the first paint on application or operations hydration");
 assert.match(integratedAppSource, /function hydrateSignedInAfterPaint\(user\)/,
   "signed-in application and operations hydration must have a post-paint path");
 assert.match(integratedAppSource,
@@ -2595,12 +2602,18 @@ assert.doesNotMatch(
 assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPrivacyPreferences\(/,
   "Notifications must persist reminder preferences through the form delegate");
 assert.match(integratedAppSource,
-  /pendingVisitorHydrate = store\.hydrateLiveOperations\(\{ ensureWindow: true \}\)/,
+  /startLiveHydration = \(\) => \{[\s\S]*?await store\.hydrateLiveOperations\(\{ ensureWindow: true \}\)/,
   "signed-out live boot must not await schedule hydrate before the first Home paint");
 assert.match(integratedAppSource, /peekStoredLiveSession\(\)|returningFromAuthRedirect\(\)/,
   "first-visit guests must not wait on supabase-js before Continue with Google can navigate");
 assert.match(integratedAppSource, /await ensureLiveClient\(\)/,
   "live boot must load supabase-js on demand instead of from a blocking classic script");
+const bootSource = integratedAppSource.slice(
+  integratedAppSource.indexOf("async function boot()"),
+  integratedAppSource.indexOf("function hidePushHomeBanner"),
+);
+assert.match(bootSource, /await renderWithFeedback\(\);\n\s*if \(paintHomeFirst && startLiveHydration\) pendingVisitorHydrate = startLiveHydration\(\);/,
+  "the first Home paint must happen before live client and identity hydration");
 {
   const configSource = readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8");
   assert.match(configSource, /export function isLiveConfigured/,
