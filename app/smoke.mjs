@@ -3873,6 +3873,16 @@ if (!pendingHome.includes("Good to see you, Test.")) {
   throw new Error("pending Home greeting must use the filled preferred name");
 }
 assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "Ali" }), "Ali");
+assert.equal(views.greetingName({
+  fullName: "Alison Kyle",
+  preferredName: "Crystal 🥐",
+  emergencyName: "Crystal",
+}), "Alison");
+assert.equal(views.greetingName({
+  fullName: "Alison Kyle",
+  preferredName: "Ali 🥐",
+  emergencyName: "Crystal",
+}), "Ali 🥐");
 assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "" }), "Alison");
 assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "   " }), "Alison");
 {
@@ -3908,7 +3918,7 @@ assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "   " 
   store.signOut();
   const contaminatedCase = store.applyForMembership(localApplicationFixture("alison-contaminated@example.test", {
     fullName: "Alison Kyle",
-    preferredName: "Crystal",
+    preferredName: "Crystal 🥐",
     emergencyName: "Crystal",
     indemnitySignature: "Alison Kyle",
   }));
