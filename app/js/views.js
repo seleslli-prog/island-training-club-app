@@ -72,12 +72,16 @@ const esc = (s) =>
     "'": "&#39;",
   })[c]);
 
-// Home and Profile greetings: preferred name when filled, otherwise the
-// first word of the profile name.
+// Home and Profile greetings use the participant's preferred name, but never
+// a value that duplicates the emergency contact. Older application records can
+// have that field crossed, so fall back to the signed-in profile name.
 export function greetingName(user) {
   const preferred = String(user?.preferredName || "").trim();
-  if (preferred) return preferred;
-  return String(user?.fullName || "").trim().split(" ")[0] || "";
+  const emergency = String(user?.emergencyName || "").trim();
+  if (preferred && preferred.toLocaleLowerCase() !== emergency.toLocaleLowerCase()) {
+    return preferred;
+  }
+  return String(user?.fullName || "").trim().split(/\s+/)[0] || "";
 }
 
 const todayISO = () => todayHktISO();

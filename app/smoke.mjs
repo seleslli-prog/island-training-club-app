@@ -3905,6 +3905,24 @@ assert.equal(views.greetingName({ fullName: "Alison Kyle", preferredName: "   " 
   if (!fallbackHome.includes("Good to see you, Alison.")) {
     throw new Error("Home greeting must fall back to the profile name when preferred name is empty");
   }
+  store.signOut();
+  const contaminatedCase = store.applyForMembership(localApplicationFixture("alison-contaminated@example.test", {
+    fullName: "Alison Kyle",
+    preferredName: "Crystal",
+    emergencyName: "Crystal",
+    indemnitySignature: "Alison Kyle",
+  }));
+  if (!contaminatedCase.ok) throw new Error("contaminated greeting apply failed");
+  const contaminatedProfile = await views.viewAccount();
+  const contaminatedHome = await views.viewHome();
+  if (!contaminatedProfile.includes("Thanks, Alison.")
+      || !contaminatedHome.includes("Good to see you, Alison.")) {
+    throw new Error("Home and Profile greetings must ignore a preferred name that matches the emergency contact");
+  }
+  if (contaminatedProfile.includes("Thanks, Crystal.")
+      || contaminatedHome.includes("Good to see you, Crystal.")) {
+    throw new Error("Home and Profile greetings must never use the emergency contact name");
+  }
   store.signIn("test@example.com");
 }
 {
