@@ -168,6 +168,7 @@ applicationRows.set("pending-submitted", {
   profiles: pendingProfiles[0],
 });
 const applicationUpdates = [];
+const applicationUpdateErrors = [];
 const profileUpdates = [];
 let applicationReadError = null;
 let applicationReadGate = null;
@@ -758,6 +759,16 @@ const fakeSupabase = {
                 throw new Error("Application update did not target the signed-in user");
               }
               applicationUpdates.push(structuredClone(patch));
+              const forced = applicationUpdateErrors.shift();
+              if (forced) {
+                return {
+                  select() {
+                    return {
+                      single: async () => ({ data: null, error: forced }),
+                    };
+                  },
+                };
+              }
               const next = {
                 ...(applicationRows.get(value) || { profile_id: value }),
                 ...patch,
@@ -4633,6 +4644,28 @@ for (const banned of [
 ]) {
   if (banned in privacyPatch) throw new Error(`privacy patch should exclude ${banned}`);
 }
+applicationUpdates.length = 0;
+await store.enableWebPushOpsPreference();
+assert.deepEqual(applicationUpdates.at(-1), { web_push_ops: true },
+  "Allow on this phone must only persist web_push_ops");
+applicationUpdates.length = 0;
+applicationUpdateErrors.push({
+  message: "Could not find the 'session_alerts' column of 'applications' in the schema cache",
+});
+await store.updateMyPrivacyPreferences({
+  session_alerts: true,
+  hyrox_payment_reminders: false,
+  email_receipts: false,
+  community_news: false,
+  web_push_ops: true,
+});
+assert.equal(applicationUpdates.length, 2, "privacy save should retry without session_alerts");
+assert.ok("session_alerts" in applicationUpdates[0]);
+assert.equal("session_alerts" in applicationUpdates[1], false);
+assert.deepEqual(
+  Object.keys(applicationUpdates[1]).sort(),
+  ["community_news", "email_receipts", "hyrox_payment_reminders", "web_push_ops"],
+);
 applicationUpdates.length = 0;
 const preservedWaiver = await store.acceptMyIndemnity({
   signature: "Riley Runner",

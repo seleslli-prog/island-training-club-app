@@ -4876,6 +4876,32 @@ function privacyPatch(form) {
   };
 }
 
+function missingApplicationsColumn(error) {
+  const message = String(error?.message || "");
+  const cache = message.match(/Could not find the '([^']+)' column of 'applications'/i);
+  if (cache) return cache[1];
+  const pg = message.match(/column applications\.([^\s]+) does not exist/i);
+  if (pg) return pg[1];
+  return null;
+}
+
+async function updateLiveApplication(profileId, patch) {
+  let nextPatch = { ...patch };
+  for (;;) {
+    const { data, error } = await supabase
+      .from("applications")
+      .update(nextPatch)
+      .eq("profile_id", profileId)
+      .select()
+      .single();
+    if (!error) return data;
+    const column = missingApplicationsColumn(error);
+    if (!column || !Object.prototype.hasOwnProperty.call(nextPatch, column)) throw error;
+    delete nextPatch[column];
+    if (!Object.keys(nextPatch).length) throw error;
+  }
+}
+
 export async function fetchApplicationForUser(user) {
   if (!isLive() || !supabase || !user || !user.id) return null;
   if (liveApplicationCacheValid(user.id)) return liveApplication;
@@ -4993,14 +5019,16 @@ export async function updateMyMembershipDetails(form) {
 export async function enableWebPushOpsPreference() {
   const user = currentUser() || await getCurrentUser();
   if (!user) throw new Error("Not signed in");
-  const app = isLive() ? await fetchApplicationForUser(user) : null;
-  return updateMyPrivacyPreferences({
-    session_alerts: app ? app.session_alerts !== false : user.sessionAlerts !== false,
-    email_receipts: app ? !!app.email_receipts : !!user.emailReceipts,
-    community_news: app ? !!app.community_news : !!user.communityNews,
-    hyrox_payment_reminders: app ? app.hyrox_payment_reminders !== false : user.hyroxPaymentReminders !== false,
-    web_push_ops: true,
-  });
+  if (!isLive() || !supabase) {
+    user.webPushOps = true;
+    save();
+    return localApplication(user);
+  }
+  const cu = await getCurrentUser();
+  if (!cu) throw new Error("Not signed in");
+  const data = await updateLiveApplication(cu.id, { web_push_ops: true });
+  rememberLiveApplication(cu.id, data);
+  return data;
 }
 
 export async function updateMyPrivacyPreferences(form) {
@@ -5018,13 +5046,7 @@ export async function updateMyPrivacyPreferences(form) {
   }
   const cu = await getCurrentUser();
   if (!cu) throw new Error("Not signed in");
-  const { data, error } = await supabase
-    .from("applications")
-    .update(patch)
-    .eq("profile_id", cu.id)
-    .select()
-    .single();
-  if (error) throw error;
+  const data = await updateLiveApplication(cu.id, patch);
   rememberLiveApplication(cu.id, data);
   return data;
 }

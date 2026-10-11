@@ -1294,6 +1294,17 @@ console.log("ok  web push ops preference migration is phase-1 column only");
   const appJs = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
   assert.ok(appJs.includes("restoreInstalledWebPush"), "boot must restore Home Screen web push");
   assert.ok(appJs.includes("enableWebPushOpsPreference"), "Enable alerts must persist web_push_ops");
+  const storeJs = readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8");
+  const enableFn = storeJs.slice(
+    storeJs.indexOf("export async function enableWebPushOpsPreference"),
+    storeJs.indexOf("export async function updateMyPrivacyPreferences"),
+  );
+  assert.ok(enableFn.includes("web_push_ops: true"), "Allow on this phone must persist web_push_ops");
+  assert.equal(
+    enableFn.includes("session_alerts"),
+    false,
+    "Allow on this phone must not write session_alerts",
+  );
 }
 console.log("ok  web push delivery migration and push-only service worker markers");
 for (const marker of [
@@ -4356,6 +4367,12 @@ if (!data.webPushOpsKindEligible("operational_payment_marked")
   );
   assert.ok(sessionAlertsPrefMigration.includes("rename column session_reminders to session_alerts"));
   assert.ok(sessionAlertsPrefMigration.includes("a.session_alerts = false"));
+  const ensureSessionAlertsMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261011000001_ensure_session_alerts.sql"),
+    "utf8",
+  );
+  assert.ok(ensureSessionAlertsMigration.includes("add column if not exists session_alerts"));
+  assert.ok(ensureSessionAlertsMigration.toLowerCase().includes("notify pgrst, 'reload schema'"));
 }
 console.log("ok  session reminder / web-push expansion migration markers");
 {
@@ -8911,6 +8928,25 @@ assert.doesNotMatch(confirmedInviteHtml, new RegExp(replacementRequest.inviteTok
 store.signOut();
 assert.match(await views.viewReplacementInvite(replacementRequest.inviteToken), /Sign in to view this invite/);
 console.log("ok  replacement route preserves sign-in gate, privacy, and confirmed-member copy");
+
+{
+  installLocalFixtures();
+  if (!store.signIn("member@example.test").ok) {
+    failures++;
+    console.error("FAIL Allow on this phone needs the fixture member");
+  } else {
+    const member = store.currentUser();
+    member.sessionAlerts = false;
+    member.emailReceipts = true;
+    member.webPushOps = false;
+    const enabled = await store.enableWebPushOpsPreference();
+    if (!member.webPushOps || member.sessionAlerts !== false || member.emailReceipts !== true
+      || enabled?.web_push_ops !== true) {
+      failures++;
+      console.error("FAIL Allow on this phone must turn on web push without rewriting other prefs");
+    } else console.log("ok  Allow on this phone turns on web push without rewriting other prefs");
+  }
+}
 
 {
   installLocalFixtures();
