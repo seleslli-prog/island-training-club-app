@@ -3580,7 +3580,7 @@ function adminOneOffEvents() {
           </div>
         </div>
         <div class="external-paid-only hidden">
-          <div class="field"><label for="oe-external-price">External price (HKD) *</label><input id="oe-external-price" name="externalPrice" type="number" min="1" step="1" placeholder="e.g. 250"></div>
+          <div class="field"><label for="oe-external-price">Price (HKD) *</label><input id="oe-external-price" name="externalPrice" type="number" min="1" step="1" placeholder="e.g. 250"></div>
           <p class="muted small">Shown to members only; payment and signup stay in the announcement link.</p>
         </div>
         <button class="btn sm mt8" type="submit">Add event</button>
