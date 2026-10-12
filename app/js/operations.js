@@ -93,6 +93,8 @@ function buildTemplateRow(row) {
     category: row.category || null,
     maps_query: row.maps_query || null,
     requires_rsvp: !!row.requires_rsvp,
+    external_payment: !!row.external_payment,
+    external_price_hkd: row.external_price_hkd == null ? null : Number(row.external_price_hkd),
   };
 }
 
@@ -104,6 +106,8 @@ function buildSessionRow(row, templatesById = null) {
   const metadata = ACTIVITY_PRESENTATION.get(row.activity_id);
   const template = templatesById?.get(row.activity_id) ?? null;
   const oneOff = String(row.activity_id).startsWith("event-");
+  const externalPayment = !!row.external_payment || !!template?.external_payment;
+  const externalPrice = row.external_price_hkd ?? template?.external_price_hkd ?? null;
   const freePresentation = oneOff || FREE_PRESENTATION_ACTIVITY_IDS.has(row.activity_id);
   const legacyMidtown = row.activity_id === "hyrox-midtown"
     && row.venue === "Midtown 28";
@@ -122,7 +126,7 @@ function buildSessionRow(row, templatesById = null) {
     // RSVP capability is separate from presentation: recurring community
     // sessions and free one-offs stay `free`, while Lunch keeps its dedicated
     // RSVP presentation. Paid sessions retain the reserve/pay pipeline.
-    kind: !!row.external_payment
+    kind: externalPayment
       ? "external_paid"
       : Number(row.price_hkd) > 0
         ? "paid"
@@ -130,8 +134,8 @@ function buildSessionRow(row, templatesById = null) {
           ? "free"
           : template?.requires_rsvp ? "rsvp" : "free",
     requiresRsvp: !!template?.requires_rsvp,
-    externalPayment: !!row.external_payment,
-    externalPrice: row.external_price_hkd == null ? null : Number(row.external_price_hkd),
+    externalPayment,
+    externalPrice: externalPrice == null ? null : Number(externalPrice),
     category: template?.category || metadata?.category || (oneOff ? "Other" : "HYROX"),
     weekday: date.getDay(),
     oneOff,
