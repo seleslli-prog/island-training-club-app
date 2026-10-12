@@ -2536,6 +2536,9 @@ assert.match(
 );
 const integratedAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
 const integratedStyleSource = readFileSync(resolve(__dirnameSmoke, "styles.css"), "utf8");
+assert.match(integratedStyleSource,
+  /detail-photo\[src\*="itc-fitness-x-faith-2"\][\s\S]*object-position:\s*center bottom/,
+  "Fitness x Faith photo must crop from the top by preserving the bottom of the image");
 const manifest = JSON.parse(readFileSync(resolve(__dirnameSmoke, "manifest.webmanifest"), "utf8"));
 assert.equal(manifest.start_url, "/",
   "installed app launches must use the canonical root with an empty hash so the last route can restore");
