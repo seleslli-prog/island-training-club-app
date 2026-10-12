@@ -330,10 +330,10 @@ function scheduleOperationalUiRefresh() {
       void fillActivityRoster(sessionId, session, user, renderGeneration);
       return;
     }
-    if (page === "pay") {
-      void renderWithFeedback({ preserveScroll: true });
-      return;
-    }
+    // The payment route already force-hydrates before painting collector
+    // PayMe/FPS details. Refreshing it from that hydration's own notification
+    // starts another render, which hides the loader from the previous one and
+    // loops. Returning from PayMe still refreshes via visibilitychange.
     if (page === "admin" && (!tab || tab === "payments" || tab === "ops")) {
       void renderWithFeedback();
     }

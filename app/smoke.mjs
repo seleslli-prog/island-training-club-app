@@ -2682,6 +2682,10 @@ assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPr
 assert.match(integratedAppSource,
   /startLiveHydration = \(\) => \{[\s\S]*?await store\.hydrateLiveOperations\(\{ ensureWindow: true \}\)/,
   "signed-out live boot must not await schedule hydrate before the first Home paint");
+assert.doesNotMatch(integratedAppSource, /if \(page === "pay"\) \{\s*void renderWithFeedback/,
+  "payment route must not reload itself from the operations listener");
+assert.match(integratedAppSource, /case "pay":[\s\S]*hydrateLiveOperations\(\{ force: true \}\)[\s\S]*viewPay\(arg\)/,
+  "payment route must fetch collector details once before painting instructions");
 assert.match(integratedAppSource, /peekStoredLiveSession\(\)|returningFromAuthRedirect\(\)/,
   "first-visit guests must not wait on supabase-js before Continue with Google can navigate");
 assert.match(integratedAppSource, /await ensureLiveClient\(\)/,
