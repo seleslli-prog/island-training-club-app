@@ -510,3 +510,33 @@ assert.match(adminHtml, /data-action="decline"/);
 assert.equal(referred.ok, true);
 
 console.log("ok  Admin approvals show referral context without changing decisions");
+
+const referralMigration = readFileSync(new URL("../supabase/migrations/20261012000001_referral_invites.sql", import.meta.url), "utf8");
+const referralSqlTest = readFileSync(new URL("../supabase/tests/referral_invites_integration.sql", import.meta.url), "utf8");
+const liveAuthRunbook = readFileSync(new URL("../docs/runbooks/live-auth.md", import.meta.url), "utf8");
+assert.match(referralMigration, /create table public\.referral_invites/i);
+assert.match(referralMigration, /token_hash\s+text not null unique/i);
+assert.match(referralMigration, /revoke all on table public\.referral_invites[\s\S]*from public, anon, authenticated/i);
+for (const rpc of [
+  "create_referral_invite(text, timestamptz)",
+  "get_referral_invite(text)",
+  "accept_referral_invite(text)",
+  "cancel_referral_invite(uuid)",
+  "list_my_referral_invites()",
+  "list_referral_context_for_admin()",
+  "sweep_referral_invites(timestamptz)",
+]) {
+  assert.match(referralMigration, new RegExp(`grant execute on function public\\.${rpc.replace(/[()]/g, "\\$&")} to authenticated`, "i"));
+  assert.doesNotMatch(referralMigration, new RegExp(`grant execute on function public\\.${rpc.replace(/[()]/g, "\\$&")} to anon`, "i"));
+}
+assert.match(referralMigration, /current_user_role\(\) <> 'pending'/);
+assert.match(referralMigration, /applications[\s\S]*profile_id = v_uid/);
+assert.match(referralMigration, /profiles\.created_at >= referral_invites\.created_at|v_profile\.created_at < v_invite\.created_at/);
+assert.match(referralMigration, /for update/);
+assert.match(referralSqlTest, /concurrent token/i);
+assert.match(referralSqlTest, /month boundary/i);
+assert.match(referralSqlTest, /active-invite cap/i);
+assert.match(referralSqlTest, /cleanup/i);
+assert.match(liveAuthRunbook, /20260921000002_declined_profile_decisions\.sql[\s\S]*20261012000001_referral_invites\.sql/);
+
+console.log("ok  referral migration keeps invite writes behind authenticated RPCs");

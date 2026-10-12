@@ -1655,3 +1655,10 @@ The supplied Hyrox indemnity source is already implemented. The following copy i
 
 The data model supports the real text from day one. Updating the text is
 a small SQL or HTML edit per the Edit-placeholder-copy section above.
+
+## Referral invites
+
+Apply `20261012000001_referral_invites.sql` after
+`20260921000002_declined_profile_decisions.sql`. The migration adds the
+referral invite table and authenticated RPCs only. It does not grant browser
+writes, store raw invite tokens, or change membership approval.
