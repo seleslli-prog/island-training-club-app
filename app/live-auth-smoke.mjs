@@ -2,6 +2,7 @@
 // Run directly with: node app/live-auth-smoke.mjs
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7587,3 +7588,56 @@ assert.equal(
   "failed live replacement mutations must not overwrite the cache",
 );
 console.log("ok  live HYROX replacement hashing, RPC payloads, redaction, and failure preservation");
+
+const referralCalls = [];
+const previousReferralHandler = operationalRpcHandler;
+operationalRpcHandler = (name, args) => {
+  if (String(name).includes("referral")) {
+    referralCalls.push({ name, args });
+    if (name === "create_referral_invite" && args?.p_token_hash === "missing") {
+      return Promise.resolve({ data: null, error: { code: "PGRST202", message: "Could not find the function public.create_referral_invite" } });
+    }
+    return Promise.resolve({
+      data: {
+        id: "referral-1",
+        status: name === "accept_referral_invite" ? "accepted" : "pending",
+        createdAt: "2099-01-01T00:00:00.000Z",
+        expiresAt: "2099-01-08T00:00:00.000Z",
+        referrerPreferredName: "Ada",
+        inviteeId: "bee",
+        acceptedAt: "2099-01-02T00:00:00.000Z",
+      },
+      error: null,
+    });
+  }
+  return previousReferralHandler(name, args);
+};
+const rawReferralToken = "raw-referral-token";
+const referralHash = await operations.hashReferralToken(rawReferralToken);
+assert.equal(referralHash, createHash("sha256").update(rawReferralToken).digest("hex"));
+await operations.liveCreateReferralInvite(referralHash, Date.parse("2099-01-08T00:00:00.000Z"));
+assert.equal(referralCalls.at(-1).name, "create_referral_invite");
+assert.deepEqual(referralCalls.at(-1).args, {
+  p_token_hash: referralHash,
+  p_expires_at: "2099-01-08T00:00:00.000Z",
+});
+assert.equal(JSON.stringify(referralCalls.at(-1).args).includes(rawReferralToken), false);
+await operations.liveReferralInvite(referralHash);
+await operations.liveAcceptReferralInvite(referralHash);
+await operations.liveCancelReferralInvite("referral-1");
+await operations.liveListMyReferralInvites();
+await operations.liveListReferralContextForAdmin();
+assert.deepEqual(referralCalls.map((call) => call.name), [
+  "create_referral_invite",
+  "get_referral_invite",
+  "accept_referral_invite",
+  "cancel_referral_invite",
+  "list_my_referral_invites",
+  "list_referral_context_for_admin",
+]);
+await assert.rejects(
+  () => operations.liveCreateReferralInvite("missing", Date.parse("2099-01-08T00:00:00.000Z")),
+  /Referral setup is temporarily unavailable/
+);
+operationalRpcHandler = previousReferralHandler;
+console.log("ok  live referral RPCs hash tokens and preserve approval decisions");

@@ -513,7 +513,7 @@ localStorage.setItem("itc.prototype.v1", JSON.stringify({
   duty: {},
 }));
 const renamedState = store.load();
-assert.equal(renamedState.version, 23, "legacy state must advance through the HYROX, attendance, and prayer migrations");
+assert.equal(renamedState.version, 24, "legacy state must advance through the HYROX, attendance, prayer, and referral migrations");
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").hyroxPaymentReminders, true);
 assert.equal(renamedState.hyroxCycles["legacy-cycle"]?.collectorPaymentReminderSentAt ?? null, null);
 assert.ok(renamedState.activities.some((activity) => activity.id === "hyrox-bft"));
@@ -559,7 +559,8 @@ for (const booking of v19ReplacementFixture.bookings) {
 delete v19ReplacementFixture.replacementRequests;
 localStorage.setItem("itc.prototype.v1", JSON.stringify(v19ReplacementFixture));
 const migratedReplacement = store.load();
-assert.equal(migratedReplacement.version, 23, "replacement migration must preserve data through the current v23 state version");
+assert.equal(migratedReplacement.version, 24, "replacement migration must preserve data through the current v24 state version");
+assert.ok(Array.isArray(migratedReplacement.referralInvites), "referral migration must initialize an empty invite list");
 assert.ok(Array.isArray(migratedReplacement.replacementRequests));
 assert.ok(Array.isArray(migratedReplacement.replacementAudit));
 assert.ok(migratedReplacement.bookings.every((booking) =>
@@ -3803,7 +3804,7 @@ v22PrayerSnapshot.prayers = [
 ];
 mem.set("itc.prototype.v1", JSON.stringify(v22PrayerSnapshot));
 const migratedPrayerState = store.load();
-assert.equal(migratedPrayerState.version, 23);
+assert.equal(migratedPrayerState.version, 24);
 assert.deepEqual(migratedPrayerState.prayers.map((row) => row.id), [
   "legacy-prayer-a",
   "legacy-prayer-b",
@@ -4284,8 +4285,8 @@ store.resetLocalData();
   localStorage.setItem("itc.prototype.v1", JSON.stringify(locationV13));
   store.load();
   const migratedV13 = JSON.parse(localStorage.getItem("itc.prototype.v1"));
-  if (migratedV13.version !== 23) {
-    throw new Error("legacy migration chain must persist version 23");
+  if (migratedV13.version !== 24) {
+    throw new Error("legacy migration chain must persist version 24");
   }
   const repairedWater = store.activities().find((activity) => activity.id === "water");
   if (repairedWater.location !== "TBC" || repairedWater.mapsQuery !== ""
@@ -6271,10 +6272,10 @@ console.log("ok  reset");
     failures++;
     console.error("FAIL v10 migration must clear session tied to a removed demo user");
   } else console.log("ok  v10 migration clears removed session");
-  if (migrated.version !== 23) {
+  if (migrated.version !== 24) {
     failures++;
-    console.error(`FAIL integrated migration must advance version to 23, got ${migrated.version}`);
-  } else console.log("ok  integrated migration advances genuine v9 state to v23");
+    console.error(`FAIL integrated migration must advance version to 24, got ${migrated.version}`);
+  } else console.log("ok  integrated migration advances genuine v9 state to v24");
 }
 
 {
@@ -6293,7 +6294,7 @@ console.log("ok  reset");
   store.load();
   const v14 = JSON.parse(mem.get("itc.prototype.v1"));
   const migratedUser = v14.users.find((user) => user.id === "real-v13-member");
-  if (v14.version !== 23 || !migratedUser) throw new Error("v23 migration lost the genuine member");
+  if (v14.version !== 24 || !migratedUser) throw new Error("v24 migration lost the genuine member");
   for (const field of ["indemnitySignature", "indemnitySignedAt", "indemnityFormVersion", "emergencyRelationship"]) {
     if (!(field in migratedUser) || migratedUser[field] !== null) {
       throw new Error(`v14 migration should initialize ${field} to null`);
@@ -6323,15 +6324,15 @@ console.log("ok  reset");
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v21));
   const migrated = store.load();
   const migratedBooking = migrated.bookings[0];
-  assert.equal(migrated.version, 23);
+  assert.equal(migrated.version, 24);
   assert.equal(migratedBooking.attendedAt, null);
   assert.equal(migratedBooking.attendedBy, null);
   assert.deepEqual(
     Object.fromEntries(Object.keys(preservedBooking).map((key) => [key, migratedBooking[key]])),
     preservedBooking,
-    "v22 attendance migration must preserve every pre-attendance booking field through v23",
+    "v22 attendance migration must preserve every pre-attendance booking field through v24",
   );
-  console.log("ok  v22 attendance migration preserves booking data through v23");
+  console.log("ok  v22 attendance migration preserves booking data through v24");
 }
 
 // --- Admin payment/attendance state seam -----------------------------------
@@ -7559,11 +7560,12 @@ for (const fixture of sourceSnapshots) {
     && !Array.isArray(migrated.paymentPayouts);
   const suppliedPayoutsPreserved = fixture.version !== 12
     || migrated.paymentPayouts["real-admin"]?.fpsPhone === "+852 6000 0000";
-  if (migrated.version !== 23 || suppliedIds.some((id) => !serialized.includes(id))
+  if (migrated.version !== 24 || !Array.isArray(migrated.referralInvites)
+      || suppliedIds.some((id) => !serialized.includes(id))
       || !payoutMapValid || !suppliedPayoutsPreserved) {
     failures++;
-    console.error(`FAIL genuine v${fixture.version} fixture must reach v23 intact`);
-  } else console.log(`ok  genuine v${fixture.version} fixture reaches v23 intact`);
+    console.error(`FAIL genuine v${fixture.version} fixture must reach v24 intact`);
+  } else console.log(`ok  genuine v${fixture.version} fixture reaches v24 intact`);
 }
 
 for (const invalidCounter of [null, -1, 1.5, "broken"]) {

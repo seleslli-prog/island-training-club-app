@@ -1427,10 +1427,10 @@ function accountReferrals(user) {
   `;
 }
 
-export function viewReferralInvite(token) {
+export async function viewReferralInvite(token) {
   let preview;
   try {
-    preview = store.referralInvitePreview(token);
+    preview = await store.referralInvite(token);
   } catch (error) {
     return `<div class="kicker">Referral</div><h1 class="display sm mt16">Invite unavailable</h1><p class="subcopy mt8">${esc(error.message)}</p>`;
   }

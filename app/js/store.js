@@ -939,7 +939,16 @@ export function referralInvitesForCurrentUser(now = Date.now()) {
 }
 
 export async function createReferralInvite(now = Date.now()) {
-  if (isLive()) throw new Error("Referral setup is temporarily unavailable. Please contact ITC.");
+  if (isLive()) {
+    const user = requireReferralCreator();
+    const inviteToken = crypto.randomUUID?.() || uid("referral");
+    const invite = await liveOps.liveCreateReferralInvite(
+      await liveOps.hashReferralToken(inviteToken),
+      now + REFERRAL_INVITE_TTL_MS,
+    );
+    referralTokens.set(invite.id, inviteToken);
+    return { ...invite, referrerId: user.id, inviteToken };
+  }
   const user = requireReferralCreator();
   sweepReferralInvites(now);
   const quota = referralQuota({ invites: state.referralInvites, referrerId: user.id, now });
@@ -963,7 +972,7 @@ export async function createReferralInvite(now = Date.now()) {
 }
 
 export async function cancelReferralInvite(inviteId, now = Date.now()) {
-  if (isLive()) throw new Error("Referral setup is temporarily unavailable. Please contact ITC.");
+  if (isLive()) return liveOps.liveCancelReferralInvite(inviteId);
   const user = requireReferralCreator();
   sweepReferralInvites(now);
   const invite = state.referralInvites.find((item) => item.id === inviteId);
@@ -1005,6 +1014,11 @@ function referralInviteByTokenHash(tokenHash) {
   return state.referralInvites.find((invite) => invite.tokenHash === tokenHash) ?? null;
 }
 
+export async function referralInvite(token) {
+  if (isLive()) return liveOps.liveReferralInvite(await liveOps.hashReferralToken(token));
+  return referralInvitePreview(token);
+}
+
 export function referralInvitePreview(token) {
   const invite = referralInviteByTokenHash(hashReferralTokenSync(token));
   if (!invite) throw new Error("This referral invite is no longer available.");
@@ -1017,7 +1031,7 @@ export function referralInvitePreview(token) {
 }
 
 export async function acceptReferralInvite(token, now = Date.now()) {
-  if (isLive()) throw new Error("Referral setup is temporarily unavailable. Please contact ITC.");
+  if (isLive()) return liveOps.liveAcceptReferralInvite(await liveOps.hashReferralToken(token));
   const user = currentUser();
   if (!user) throw new Error("Authentication required.");
   sweepReferralInvites(now);
@@ -5077,23 +5091,33 @@ export async function listApprovalCandidates() {
       };
     });
   }
-  const [profiles, applications] = await Promise.all([
+  const [profiles, applications, referralContext] = await Promise.all([
     listProfiles(),
     listPendingApplications(),
+    liveOps.liveListReferralContextForAdmin().catch(() => []),
   ]);
+  const referralByInvitee = new Map((referralContext || []).map((item) => [item.inviteeId, item]));
   const applicationByProfile = new Map(applications.map((item) => [item.id, item]));
   return orderApprovalCandidates(profiles
     .filter((profile) => profile.role === "pending")
     .map((profile) => {
       const application = applicationByProfile.get(profile.id);
+      const referral = referralByInvitee.get(profile.id);
       return application
-        ? { ...application, applicationSubmitted: true }
+        ? {
+            ...application,
+            applicationSubmitted: true,
+            referrerPreferredName: referral?.referrerPreferredName || null,
+            referralAcceptedAt: referral?.acceptedAt || null,
+          }
         : {
             id: profile.id,
             fullName: profile.full_name || profile.email,
             email: profile.email,
             appliedAt: profile.created_at,
             applicationSubmitted: false,
+            referrerPreferredName: referral?.referrerPreferredName || null,
+            referralAcceptedAt: referral?.acceptedAt || null,
           };
     }));
 }

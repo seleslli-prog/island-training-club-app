@@ -417,6 +417,9 @@ function operationalProblem(error) {
   if (error.code === "PGRST202" && message.includes("operational_replacement")) {
     return new Error("Replacement setup is temporarily unavailable. Please contact ITC.");
   }
+  if (error.code === "PGRST202" && message.includes("referral")) {
+    return new Error("Referral setup is temporarily unavailable. Please contact ITC.");
+  }
   if (message.includes("Session is cancelled")) return new Error("Session is cancelled.");
   if (message.includes("Session is full")) return new Error("Session is full.");
   if (message.includes("Session is not open")) return new Error("Session is not open.");
@@ -1276,6 +1279,78 @@ export function liveReplacementRequestByToken() {
 
 export function liveReceiptById(id) {
   return liveCache.receipts.find((r) => r.id === id) || null;
+}
+
+export async function hashReferralToken(token) {
+  const value = String(token || "");
+  if (!value || !globalThis.crypto?.subtle) {
+    throw new Error("Secure referral invite hashing is unavailable.");
+  }
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function referralExpiryISO(expiresAt) {
+  const timestamp = expiresAt instanceof Date ? expiresAt.getTime() : Number(expiresAt);
+  if (!Number.isFinite(timestamp)) throw new Error("Referral invite expiry is invalid.");
+  return new Date(timestamp).toISOString();
+}
+
+function referralInviteFromRpc(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    status: row.status,
+    createdAt: Date.parse(row.createdAt || row.created_at),
+    expiresAt: Date.parse(row.expiresAt || row.expires_at),
+    inviteeId: row.inviteeId || row.invitee_profile_id || null,
+    acceptedAt: Date.parse(row.acceptedAt || row.accepted_at) || null,
+    referrerPreferredName: row.referrerPreferredName || row.referrer_preferred_name || null,
+  };
+}
+
+export async function liveCreateReferralInvite(tokenHash, expiresAt) {
+  const row = await runOperationalRpc("create_referral_invite", {
+    p_token_hash: tokenHash,
+    p_expires_at: referralExpiryISO(expiresAt),
+  });
+  return referralInviteFromRpc(row);
+}
+
+export async function liveReferralInvite(tokenHash) {
+  const row = await runOperationalRpc("get_referral_invite", {
+    p_token_hash: tokenHash,
+  }, { skipRefresh: true });
+  return referralInviteFromRpc(row);
+}
+
+export async function liveAcceptReferralInvite(tokenHash) {
+  const row = await runOperationalRpc("accept_referral_invite", {
+    p_token_hash: tokenHash,
+  });
+  return referralInviteFromRpc(row);
+}
+
+export async function liveCancelReferralInvite(inviteId) {
+  const row = await runOperationalRpc("cancel_referral_invite", {
+    p_invite_id: inviteId,
+  });
+  return referralInviteFromRpc(row);
+}
+
+export async function liveListMyReferralInvites() {
+  const rows = await runOperationalRpc("list_my_referral_invites", {}, { skipRefresh: true });
+  return (Array.isArray(rows) ? rows : []).map(referralInviteFromRpc).filter(Boolean);
+}
+
+export async function liveListReferralContextForAdmin() {
+  const rows = await runOperationalRpc("list_referral_context_for_admin", {}, { skipRefresh: true });
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    inviteeId: row.inviteeId || row.invitee_profile_id,
+    referrerPreferredName: row.referrerPreferredName || row.referrer_preferred_name,
+    acceptedAt: Date.parse(row.acceptedAt || row.accepted_at) || null,
+    status: row.status,
+  }));
 }
 
 export async function hashReplacementToken(token) {

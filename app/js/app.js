@@ -582,7 +582,7 @@ async function render(generation = renderGeneration) {
       out = await views.viewAccount(arg, arg2);
       break;
     case "referral":
-      out = views.viewReferralInvite(arg);
+      out = await views.viewReferralInvite(arg);
       break;
     case "apply": {
       const u = store.currentUser();
