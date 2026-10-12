@@ -22,6 +22,9 @@ const views = await import("./js/views.js");
 const data = await import("./js/data.js");
 const { buildIndemnityCsv } = await import("./js/exports.js");
 
+const wntSeed = data.SEED_ACTIVITIES.find((activity) => activity.id === "wnt");
+assert.equal(wntSeed?.durationMin, 90, "Wednesday Night Training seed duration must be 90 minutes");
+
 const indemnityExportCsv = buildIndemnityCsv([{
   fullName: 'O"Connor, Ada',
   email: "ada@example.test",

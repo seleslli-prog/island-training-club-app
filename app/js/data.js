@@ -26,7 +26,7 @@ export const SEED_ACTIVITIES = [
     category: "Strength",
     weekday: 3, // Wednesday
     time: "19:30",
-    durationMin: 60,
+    durationMin: 90,
     location: "TBC",
     mapsQuery: "", // venue to be confirmed — no directions link until set
     photo: PH + "main.webp",
