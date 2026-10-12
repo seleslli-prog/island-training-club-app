@@ -3401,8 +3401,9 @@ export async function createOneOffEvent(fields) {
   const location = String(fields.location ?? "").trim();
   const mapsQuery = String(fields.mapsQuery ?? "").trim();
   const category = String(fields.category ?? "").trim() || "Other";
-  const price = Math.max(0, Number(fields.price) || 0);
-  const capacity = price > 0 ? Math.max(1, Number(fields.capacity) || 20) : null;
+  const externalPayment = fields.externalPayment === true;
+  const price = externalPayment ? 0 : Math.max(0, Number(fields.price) || 0);
+  const capacity = externalPayment ? null : (price > 0 ? Math.max(1, Number(fields.capacity) || 20) : null);
   if (!name) throw new Error("Enter the event name.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) throw new Error("Pick the event date.");
   if (!time) throw new Error("Pick the start time.");
@@ -3410,7 +3411,8 @@ export async function createOneOffEvent(fields) {
   if (!location) throw new Error("Enter the venue.");
   const payload = {
     name, dateISO, time, durationMin, location, mapsQuery, category, price, capacity,
-    requiresRsvp: price === 0,
+    requiresRsvp: !externalPayment && price === 0,
+    externalPayment,
   };
   if (isLive()) {
     return liveOps.liveCreateEvent(payload);
@@ -3421,8 +3423,9 @@ export async function createOneOffEvent(fields) {
     oneOff: true,
     dateISO,
     name,
-    kind: price > 0 ? "paid" : "free",
-    requiresRsvp: price === 0,
+    kind: externalPayment ? "external_paid" : price > 0 ? "paid" : "free",
+    requiresRsvp: !externalPayment && price === 0,
+    externalPayment,
     category,
     weekday: parseISO(dateISO).getDay(),
     time,
@@ -3431,7 +3434,7 @@ export async function createOneOffEvent(fields) {
     mapsQuery: mapsQuery || location,
     photo: "../assets/itc/main.webp",
     price,
-    capacity: price > 0 ? capacity : null,
+    capacity,
     blurb: "",
     memberNote: "",
     published: true,
