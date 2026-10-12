@@ -7,8 +7,8 @@
 
 ## Decisions
 
-1. **Events:** operational booking, payment, and venue shared rows (`WEB_PUSH_OPS_KINDS`), plus shared community announcements. Venue audit title `Session venue updated` is excluded. Community audit kind `community_announcement_audit` is excluded.
-2. **Gate:** `applications.web_push_ops` (opt-in) **and** a row in `push_subscriptions`. Community inbox rows are already limited to members with `community_news` (plus the publishing admin). Push does not add a second community-news check; it mirrors the inbox row when web push is on.
+1. **Events:** every trusted in-app notification row, including application events, approvals, role changes, welcome/member alerts, operations, reminders, and community announcements. The inbox insert boundary remains server-owned.
+2. **Gate:** `applications.web_push_ops` (opt-in) **and** a row in `push_subscriptions`. Push mirrors the trusted inbox row when web push is on.
 3. **Inbox remains source of truth.** Push mirrors allowlisted inserts; it does not replace in-app notifications.
 4. **Service worker:** [`app/push-sw.js`](../../app/push-sw.js) is **push-only** (no offline/asset cache). Explicit exception to the prototype “no service worker” rule for this live channel only.
 5. **Click path:** production opens `/#/…` on the site root. Live Vercel redirects `/app/` to `/`. Local prototype pages under `/app/` still register `push-sw.js` from that directory.
@@ -30,23 +30,16 @@ OFF → unsubscribe + delete rows.
 
 Production registers `/push-sw.js` with scope `/` (`vercel.json` rewrites that URL to `/app/push-sw.js`).
 
-## Allowlist
+## Eligibility
 
-| Kind | Push? |
-|---|---|
-| `operational_booking_reserved` | yes |
-| `operational_rsvp_confirmed` | yes |
-| `operational_payment_approved` | yes |
-| `operational_session_deferred` | yes |
-| `operational_session_cancelled` | yes |
-| `operational_session_cancelled_no_defer` | yes |
-| `operational_session_venue_updated` | shared titles only: `Venue confirmed`, `Venue updated` |
-| `community_announcement_published` | yes; destination `#/community/announcements` |
-| `community_announcement_audit` | no |
-| Admin / payment-ops kinds (`operational_payment_marked`, `admin_*`, …) | no |
+`public.web_push_ops_kind_eligible` returns true for every trusted notification
+category. Delivery still requires both `applications.web_push_ops = true` and
+a row in `push_subscriptions`; browser clients cannot create notification rows.
 
-Client constant: `WEB_PUSH_OPS_KINDS` in `app/js/data.js`.  
-SQL: `public.web_push_ops_kind_eligible`, replaced by `20260930000001_web_push_community_announcement.sql`.
+The convergence migration is
+`20261012000001_repair_notification_delivery.sql`. It reasserts application
+submission and profile-role producers, snapshots the notification payload into
+`pg_net`, and sends it to the `send-web-push` Edge Function.
 
 ## What is on main
 

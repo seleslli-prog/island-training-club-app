@@ -1233,6 +1233,49 @@ console.log("ok  web push ops preference migration is phase-1 column only");
       `web push community migration missing ${marker}`,
     );
   }
+  const notificationDeliveryRepairMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261012000001_repair_notification_delivery.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "add column if not exists destination",
+    "add column if not exists session_alerts",
+    "create table if not exists public.push_subscriptions",
+    "create table if not exists private.web_push_settings",
+    "create or replace function public.web_push_ops_kind_eligible",
+    "select true",
+    "notification_id",
+    "profile_id",
+    "destination",
+    "notifications_request_web_push",
+    "applications_notify_admins_submitted",
+    "profiles_audit_role_change",
+    "notify_admins_application_submitted",
+    "record_role_change",
+    "net.http_post",
+  ]) {
+    assert.ok(
+      notificationDeliveryRepairMigration.toLowerCase().includes(marker.toLowerCase()),
+      `notification delivery repair migration missing ${marker}`,
+    );
+  }
+  for (const kind of [
+    "admin_application_submitted",
+    "admin_application_approved",
+    "admin_application_declined",
+    "admin_role_promoted",
+    "admin_role_demoted",
+    "admin_membership_revoked",
+    "welcome",
+    "community_announcement_published",
+    "operational_session_reminder_tomorrow",
+    "operational_session_reminder_morning",
+  ]) {
+    assert.ok(
+      notificationDeliveryRepairMigration.includes(kind),
+      `all notification categories must be push-eligible: ${kind}`,
+    );
+  }
   assert.equal(
     webPushCommunityMigration.includes("'community_announcement_audit'"),
     false,
