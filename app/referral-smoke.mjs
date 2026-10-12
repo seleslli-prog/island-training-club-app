@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 const mem = new Map();
 globalThis.localStorage = {
@@ -320,3 +321,104 @@ store.declineApplicant(started.user.id);
 assert.equal(store.referralForApplicant(started.user.id).status, "accepted");
 
 console.log("ok  local referral acceptance keeps the monthly slot and resumes one application");
+
+const views = await import("./js/views.js");
+const appSource = readFileSync(new URL("./js/app.js", import.meta.url), "utf8");
+const storeSource = readFileSync(new URL("./js/store.js", import.meta.url), "utf8");
+const screenAt = Date.parse("2026-10-12T04:00:00.000Z");
+
+function screenFixture(invites) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    version: 24,
+    sessionUserId: "ada",
+    users: [{
+      id: "ada",
+      role: "member",
+      status: "approved",
+      email: "ada@itc.test",
+      fullName: "Ada Chan",
+      preferredName: "Ada",
+      createdAt: screenAt - DAY,
+    }, {
+      id: "pending-user",
+      role: "pending",
+      status: "pending",
+      email: "pending@itc.test",
+      fullName: "Pending Person",
+      preferredName: "Pending",
+      createdAt: screenAt,
+      appliedAt: screenAt,
+    }],
+    referralInvites: invites,
+    bookings: [],
+    receipts: [],
+  }));
+  store.load();
+}
+
+const activeInvite = {
+  id: "ref-active",
+  referrerId: "ada",
+  tokenHash: "a".repeat(64),
+  status: "pending",
+  createdAt: screenAt,
+  expiresAt: screenAt + policy.REFERRAL_INVITE_TTL_MS,
+  inviteeId: null,
+  acceptedAt: null,
+  applicationId: null,
+};
+const acceptedInvites = [1, 2].map((index) => ({
+  id: `ref-accepted-${index}`,
+  referrerId: "ada",
+  tokenHash: String(index).repeat(64),
+  status: "accepted",
+  createdAt: screenAt,
+  expiresAt: screenAt + policy.REFERRAL_INVITE_TTL_MS,
+  inviteeId: `invitee-${index}`,
+  acceptedAt: screenAt + index,
+  applicationId: null,
+}));
+screenFixture([...acceptedInvites, activeInvite]);
+const profile = await views.viewAccount();
+assert.match(profile, /Refer a Friend/);
+assert.match(profile, /href="#\/account\/referrals"/);
+const referrals = await views.viewAccount("referrals");
+assert.match(referrals, /<h1[^>]*>Refer a Friend<\/h1>/);
+assert.match(referrals, /2 of 3 referrals used this month/);
+assert.match(referrals, /1 of 3 active invites/);
+assert.match(referrals, /data-action="referral-create"/);
+assert.match(referrals, /data-action="referral-cancel"/);
+screenFixture([]);
+const copyInvite = await store.createReferralInvite(screenAt + 30);
+const copyPage = await views.viewAccount("referrals");
+assert.match(copyPage, /Copy link/);
+assert.match(copyPage, new RegExp(copyInvite.inviteToken));
+
+screenFixture([1, 2, 3].map((index) => ({ ...acceptedInvites[0], id: `full-${index}`, acceptedAt: screenAt + index })));
+assert.match(await views.viewAccount("referrals"), /You have used all 3 referrals this month\./);
+assert.match(await views.viewAccount("referrals"), /disabled/);
+screenFixture([1, 2, 3].map((index) => ({ ...activeInvite, id: `active-${index}`, createdAt: screenAt + index })));
+assert.match(await views.viewAccount("referrals"), /You already have 3 active invites\./);
+
+localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...store.load(), sessionUserId: "pending-user" }));
+store.load();
+assert.doesNotMatch(await views.viewAccount(), /Refer a Friend/);
+
+screenFixture([]);
+const screenInvite = await store.createReferralInvite(screenAt + 20);
+store.signOut();
+const signedOut = await views.viewReferralInvite(screenInvite.inviteToken);
+assert.match(signedOut, /Invited by Ada\./);
+assert.match(signedOut, /href="#\/account"/);
+assert.doesNotMatch(signedOut, /data-action="referral-accept"/);
+assert.equal(store.load().referralInvites.every((invite) => invite.status === "pending"), true);
+
+store.startReferralAccount({ fullName: "Bee Lee", preferredName: "Bee", email: "bee-screen@itc.test", now: screenAt + 10 });
+const signedIn = await views.viewReferralInvite(screenInvite.inviteToken);
+assert.match(signedIn, /Invited by Ada\./);
+assert.match(signedIn, /data-action="referral-accept"/);
+assert.match(appSource, /case "referral-accept"[\s\S]*#\/apply/);
+assert.match(storeSource, /history\|referrals/);
+assert.match(appSource, /referral: "account"/);
+
+console.log("ok  referral screens show quota, invite state, and the accept route");

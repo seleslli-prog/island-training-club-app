@@ -66,10 +66,11 @@ const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
   /^#\/(?:home|schedule|giving|notifications|apply)$/,
   /^#\/community(?:\/(?:prayers|fellowship|meals|announcements|about))?$/,
-  /^#\/account(?:\/(?:details(?:\/edit)?|indemnity|donor|payments|privacy(?:\/edit)?|bookings(?:\/attended)?|history))?$/,
+  /^#\/account(?:\/(?:details(?:\/edit)?|indemnity|donor|payments|privacy(?:\/edit)?|bookings(?:\/attended)?|history|referrals))?$/,
   new RegExp(`^#/(?:activity|checkout|pay|booking|receipt)/${ROUTE_ID}$`),
   new RegExp(`^#/hyrox/${ROUTE_ID}(?:/register)?$`),
   new RegExp(`^#/replacement/${ROUTE_ID}$`),
+  new RegExp(`^#/referral/${ROUTE_ID}$`),
   /^#\/admin(?:\/(?:members|activities|prayers|giving|payments))?$/,
   new RegExp(`^#/admin/(?:activity|campaign)/${ROUTE_ID}$`),
 ];
@@ -83,6 +84,7 @@ let liveGivingCampaign = null;
 // in memory only; device-local persistence stores UUID-keyed operations.
 let livePaymentDirectory = new Map();
 const liveReplacementTokens = new Map();
+const referralTokens = new Map();
 const LIVE_PROFILE_TTL_MS = 30_000;
 const AVATAR_CACHE_EXPIRY_SKEW_MS = 30_000;
 const AVATAR_APPROVED_ROLES = new Set(["member", "admin", "superadmin", "super_admin"]);
@@ -931,7 +933,9 @@ export function referralInvitesForCurrentUser(now = Date.now()) {
   sweepReferralInvites(now);
   const user = currentUser();
   if (!user) return [];
-  return state.referralInvites.filter((invite) => invite.referrerId === user.id);
+  return state.referralInvites
+    .filter((invite) => invite.referrerId === user.id)
+    .map((invite) => ({ ...invite, inviteToken: referralTokens.get(invite.id) }));
 }
 
 export async function createReferralInvite(now = Date.now()) {
@@ -953,6 +957,7 @@ export async function createReferralInvite(now = Date.now()) {
     applicationId: null,
   };
   state.referralInvites.push(invite);
+  referralTokens.set(invite.id, inviteToken);
   save();
   return { ...invite, inviteToken };
 }

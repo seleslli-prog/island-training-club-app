@@ -7,6 +7,7 @@
 
 import * as store from "./store.js";
 import { isLive } from "./config.js";
+import { referralQuota } from "./referral-policy.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
 import { projectHomeWeek } from "./home-workflow.js";
@@ -1333,7 +1334,7 @@ export async function viewAccount(section, sub) {
   // Live mode: when no live application exists, render an unavailable card so
   // the Profile surface doesn't pretend to have data it can't actually show.
   if (isLive()) {
-    const allowedWithoutApp = ["details/edit", "privacy/edit"];
+    const allowedWithoutApp = ["details/edit", "privacy/edit", "referrals"];
     const path = `${section || "home"}${sub ? `/${sub}` : ""}`;
     if (!allowedWithoutApp.includes(path)) {
       try {
@@ -1390,9 +1391,61 @@ export async function viewAccount(section, sub) {
     case "history":
       if (isLive()) await store.ensureHistoryData(user.id);
       return accountBookings(user, "all");
+    case "referrals":
+      return accountReferrals(user);
     default:
       return viewNotFound();
   }
+}
+
+function accountReferrals(user) {
+  const invites = store.referralInvitesForCurrentUser();
+  const quota = referralQuota({ invites, referrerId: user.id });
+  const active = invites.filter((invite) => invite.status === "pending" && invite.expiresAt > Date.now());
+  const history = invites.filter((invite) => invite.status !== "pending" || invite.expiresAt <= Date.now());
+  const inviteRow = (invite) => {
+    const shareUrl = invite.inviteToken
+      ? `${globalThis.location?.origin || ""}${globalThis.location?.pathname || "/"}#/referral/${invite.inviteToken}`
+      : "";
+    return `<div class="card mt8"><div class="card-body">
+      <strong>${esc(invite.status)}</strong>
+      <p class="muted small">Expires ${esc(fmtDate(new Date(invite.expiresAt).toISOString().slice(0, 10)))}</p>
+      ${shareUrl ? `<p class="mono small">${esc(shareUrl)}</p><button class="btn ghost sm" type="button" data-action="copy-referral" data-value="${esc(shareUrl)}">Copy link</button>` : ""}
+      ${invite.status === "pending" ? `<button class="btn ghost sm" type="button" data-action="referral-cancel" data-invite="${esc(invite.id)}">Cancel invite</button>` : ""}
+    </div></div>`;
+  };
+  return `
+    ${profileSubpageHeader({ title: "Refer a Friend" })}
+    <p class="subcopy mt8">${quota.acceptedCount} of 3 referrals used this month</p>
+    <p class="muted small">${quota.activeCount} of 3 active invites</p>
+    ${quota.reason ? `<p class="form-error">${esc(quota.reason)}</p>` : ""}
+    <button class="btn mt16" type="button" data-action="referral-create"${quota.canCreate ? "" : " disabled"}>Create invite</button>
+    <h2 class="mt24">Active invites</h2>
+    ${active.map(inviteRow).join("") || `<div class="empty mt8">No active invites.</div>`}
+    <h2 class="mt24">History</h2>
+    ${history.map(inviteRow).join("") || `<div class="empty mt8">No earlier invites.</div>`}
+  `;
+}
+
+export function viewReferralInvite(token) {
+  let preview;
+  try {
+    preview = store.referralInvitePreview(token);
+  } catch (error) {
+    return `<div class="kicker">Referral</div><h1 class="display sm mt16">Invite unavailable</h1><p class="subcopy mt8">${esc(error.message)}</p>`;
+  }
+  const user = store.currentUser();
+  const name = preview.referrerPreferredName;
+  if (!user) {
+    return `<div class="kicker">Referral</div>
+      <h1 class="display sm mt16">Invited by ${esc(name)}.</h1>
+      <p class="subcopy mt8">Sign in or create an account, then accept this invitation to start the normal ITC application.</p>
+      <a class="btn mt16" href="#/account">Sign in</a>`;
+  }
+  return `<div class="kicker">Referral</div>
+    <h1 class="display sm mt16">Invited by ${esc(name)}.</h1>
+    <p class="subcopy mt8">Accepting starts the normal membership application. It does not approve you automatically.</p>
+    <button class="btn mt16" type="button" data-action="referral-accept" data-token="${esc(token)}">Accept invitation</button>`;
 }
 
 
@@ -1607,6 +1660,7 @@ async function accountMember(user) {
       )}
       ${profileRow("#/account/payments", ICONS.dollar, "Payments & Receipts", "Bookings, donations and orders")}
       ${profileRow("#/account/privacy", ICONS.bell, "Privacy & Notifications", "Consent and communication choices")}
+      ${profileRow("#/account/referrals", ICONS.user, "Refer a Friend", "Invite someone new to ITC")}
     </div>
 
     <div class="btn-row">

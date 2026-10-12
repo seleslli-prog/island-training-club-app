@@ -243,6 +243,7 @@ const NAV_FOR = {
   pay: "account",
   booking: "account",
   replacement: "account",
+  referral: "account",
   receipt: "account",
   admin: "admin",
 };
@@ -579,6 +580,9 @@ async function render(generation = renderGeneration) {
       break;
     case "account":
       out = await views.viewAccount(arg, arg2);
+      break;
+    case "referral":
+      out = views.viewReferralInvite(arg);
       break;
     case "apply": {
       const u = store.currentUser();
@@ -1108,6 +1112,45 @@ document.addEventListener("click", async (e) => {
           toast("Booking cancelled — refund issued");
           render();
         } catch (err) { toast(err.message || "Unable to cancel booking", true); }
+      }
+      break;
+
+    case "referral-create":
+      if (controlBusy.has(el)) break;
+      try {
+        await withBusyControl(el, "Creating invite…", async () => {
+          await store.createReferralInvite(Date.now());
+          toast("Referral invite created");
+          await renderWithFeedback();
+        });
+      } catch (err) { toast(err.message || "Unable to create referral invite", true); }
+      break;
+    case "referral-cancel":
+      if (controlBusy.has(el)) break;
+      try {
+        await withBusyControl(el, "Cancelling…", async () => {
+          await store.cancelReferralInvite(el.dataset.invite, Date.now());
+          toast("Referral invite cancelled");
+          await renderWithFeedback();
+        });
+      } catch (err) { toast(err.message || "Unable to cancel referral invite", true); }
+      break;
+    case "referral-accept":
+      if (controlBusy.has(el)) break;
+      try {
+        await withBusyControl(el, "Accepting…", async () => {
+          await store.acceptReferralInvite(el.dataset.token, Date.now());
+          toast("Invitation accepted");
+          location.hash = "#/apply";
+        });
+      } catch (err) { toast(err.message || "Unable to accept referral invite", true); }
+      break;
+    case "copy-referral":
+      try {
+        await navigator.clipboard.writeText(el.dataset.value || "");
+        toast("Invite link copied");
+      } catch {
+        toast("Unable to copy invite link", true);
       }
       break;
 
