@@ -5066,10 +5066,16 @@ export async function listPendingApplications() {
 
 export async function listApprovalCandidates() {
   if (!isLive() || !supabase) {
-    return pendingApplicants().map((user) => ({
-      ...user,
-      applicationSubmitted: true,
-    }));
+    return pendingApplicants().map((user) => {
+      const referral = referralForApplicant(user.id);
+      const referrer = referral ? state.users.find((item) => item.id === referral.referrerId) : null;
+      return {
+        ...user,
+        applicationSubmitted: user.appliedAt != null,
+        referrerPreferredName: referrer?.preferredName || null,
+        referralAcceptedAt: referral?.acceptedAt || null,
+      };
+    });
   }
   const [profiles, applications] = await Promise.all([
     listProfiles(),

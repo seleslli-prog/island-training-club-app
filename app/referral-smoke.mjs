@@ -422,3 +422,91 @@ assert.match(storeSource, /history\|referrals/);
 assert.match(appSource, /referral: "account"/);
 
 console.log("ok  referral screens show quota, invite state, and the accept route");
+
+const adminAt = Date.parse("2026-10-01T16:00:00.000Z");
+localStorage.setItem(STORAGE_KEY, JSON.stringify({
+  version: 24,
+  sessionUserId: "ada",
+  users: [{
+    id: "ada",
+    role: "member",
+    status: "approved",
+    email: "ada@itc.test",
+    fullName: "Ada Chan",
+    preferredName: "Ada",
+    createdAt: adminAt - DAY,
+  }, {
+    id: "admin",
+    role: "admin",
+    status: "approved",
+    email: "admin@itc.test",
+    fullName: "Admin Lee",
+    preferredName: "Admin",
+    createdAt: adminAt - DAY,
+  }],
+  referralInvites: [],
+  bookings: [],
+  receipts: [],
+}));
+store.load();
+const adminInvite = await store.createReferralInvite(adminAt - 1000);
+store.signOut();
+const referred = store.startReferralAccount({
+  fullName: "Bee Lee",
+  preferredName: "Bee",
+  email: "bee-admin@itc.test",
+  now: adminAt - 500,
+});
+await store.acceptReferralInvite(adminInvite.inviteToken, adminAt);
+store.applyForMembership({
+  fullName: "Bee Lee",
+  preferredName: "Bee",
+  email: "bee-admin@itc.test",
+  phone: "90000000",
+  emergencyName: "Pat Lee",
+  emergencyRelationship: "parent",
+  emergencyPhone: "90000001",
+  heard: "friend",
+  ageConfirmed: true,
+  mediaConsent: false,
+  donorId: "",
+  indemnity: true,
+  indemnitySignature: "Bee Lee",
+  indemnitySignedAt: "2026-10-01",
+});
+store.signOut();
+store.startReferralAccount({
+  fullName: "Plain Applicant",
+  preferredName: "Plain",
+  email: "plain@itc.test",
+  now: adminAt + 1,
+});
+store.applyForMembership({
+  fullName: "Plain Applicant",
+  preferredName: "Plain",
+  email: "plain@itc.test",
+  phone: "90000002",
+  emergencyName: "Pat Plain",
+  emergencyRelationship: "sibling",
+  emergencyPhone: "90000003",
+  heard: "event",
+  ageConfirmed: true,
+  mediaConsent: false,
+  donorId: "",
+  indemnity: true,
+  indemnitySignature: "Plain Applicant",
+  indemnitySignedAt: "2026-10-01",
+});
+store.signIn("admin@itc.test");
+const adminHtml = await views.viewAdmin("members");
+const approvals = adminHtml.slice(adminHtml.indexOf("Ready for review"));
+const beeCard = approvals.slice(approvals.indexOf("Bee Lee"), approvals.indexOf("Plain Applicant"));
+const plainCard = approvals.slice(approvals.indexOf("Plain Applicant"));
+assert.match(beeCard, /Referred by Ada/);
+assert.match(beeCard, /Accepted 2 Oct/);
+assert.doesNotMatch(plainCard, /Referred by/);
+assert.match(adminHtml, /data-action="approve"/);
+assert.match(adminHtml, /data-action="decline"/);
+assert.equal(referred.ok, true);
+
+console.log("ok  Admin approvals show referral context without changing decisions");

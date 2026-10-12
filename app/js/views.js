@@ -3369,6 +3369,7 @@ function adminApprovals(pending) {
         <dt>Age 18+ / guardian</dt><dd>${u.isMinor ? "Under 18 · guardian required" : "18 or over"}</dd>
         <dt>Indemnity</dt><dd>${indemnityStatus(u)}</dd>
         <dt>Photo consent</dt><dd>${u.mediaConsent ? "Yes" : "No"}</dd>
+        ${u.referrerPreferredName ? `<dt>Referral</dt><dd>Referred by ${esc(u.referrerPreferredName)}</dd><dt>Referral accepted</dt><dd>Accepted ${esc(new Date(u.referralAcceptedAt).toLocaleDateString("en-HK", { day: "numeric", month: "short", timeZone: "Asia/Hong_Kong" }))}</dd>` : ""}
       </dl>
       <div class="actions">
         ${decisionButton(u, "approve")}
