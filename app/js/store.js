@@ -37,7 +37,7 @@ import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.
 import { markLocalNotificationRead, normalizeLocalNotification, orderNotificationsForUser } from "./notification-workflow.js";
 import { applicationDecisionProblem, orderApprovalCandidates } from "./admin-workflow.js";
 import { decideReplacementProblem, replacementDuplicateForUser, replacementEligibility } from "./replacement-workflow.js";
-import { REFERRAL_INVITE_TTL_MS, REFERRAL_RETENTION_MS, referralQuota } from "./referral-policy.js";
+import { REFERRAL_INVITE_TTL_MS, REFERRAL_RETENTION_MS, referralAcceptanceProblem, referralQuota } from "./referral-policy.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -861,9 +861,53 @@ function requireReferralCreator() {
   return user;
 }
 
+function hashReferralTokenSync(token) {
+  const data = new TextEncoder().encode(String(token));
+  const paddedLength = Math.ceil((data.length + 9) / 64) * 64;
+  const bytes = new Uint8Array(paddedLength);
+  bytes.set(data);
+  bytes[data.length] = 0x80;
+  const view = new DataView(bytes.buffer);
+  view.setUint32(paddedLength - 4, data.length * 8, false);
+  const k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const right = (value, bits) => (value >>> bits) | (value << (32 - bits));
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+  let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+  for (let offset = 0; offset < bytes.length; offset += 64) {
+    const w = new Uint32Array(64);
+    for (let index = 0; index < 16; index += 1) w[index] = view.getUint32(offset + index * 4, false);
+    for (let index = 16; index < 64; index += 1) {
+      const s0 = right(w[index - 15], 7) ^ right(w[index - 15], 18) ^ (w[index - 15] >>> 3);
+      const s1 = right(w[index - 2], 17) ^ right(w[index - 2], 19) ^ (w[index - 2] >>> 10);
+      w[index] = (w[index - 16] + s0 + w[index - 7] + s1) >>> 0;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let index = 0; index < 64; index += 1) {
+      const s1 = right(e, 6) ^ right(e, 11) ^ right(e, 25);
+      const choice = (e & f) ^ (~e & g);
+      const temp1 = (h + s1 + choice + k[index] + w[index]) >>> 0;
+      const s0 = right(a, 2) ^ right(a, 13) ^ right(a, 22);
+      const majority = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (s0 + majority) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0; d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
+  }
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map((value) => value.toString(16).padStart(8, "0")).join("");
+}
+
 async function hashReferralToken(token) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(token)));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return hashReferralTokenSync(token);
 }
 
 export function sweepReferralInvites(now = Date.now()) {
@@ -929,6 +973,66 @@ export async function cancelReferralInvite(inviteId, now = Date.now()) {
   invite.cancelledBy = user.id;
   save();
   return { ...invite };
+}
+
+export function startReferralAccount({ fullName, preferredName, email, now = Date.now() }) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized || state.users.some((user) => user.email.toLowerCase() === normalized)) {
+    return { ok: false, reason: "duplicate" };
+  }
+  const user = {
+    id: uid("u"),
+    role: "pending",
+    status: "pending",
+    fullName: String(fullName || "").trim(),
+    preferredName: String(preferredName || "").trim(),
+    email: normalized,
+    createdAt: now,
+    appliedAt: null,
+  };
+  state.users.push(user);
+  state.sessionUserId = user.id;
+  save();
+  return { ok: true, user };
+}
+
+function referralInviteByTokenHash(tokenHash) {
+  return state.referralInvites.find((invite) => invite.tokenHash === tokenHash) ?? null;
+}
+
+export function referralInvitePreview(token) {
+  const invite = referralInviteByTokenHash(hashReferralTokenSync(token));
+  if (!invite) throw new Error("This referral invite is no longer available.");
+  const referrer = state.users.find((user) => user.id === invite.referrerId);
+  return {
+    referrerPreferredName: referrer?.preferredName || referrer?.fullName || "ITC member",
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+  };
+}
+
+export async function acceptReferralInvite(token, now = Date.now()) {
+  if (isLive()) throw new Error("Referral setup is temporarily unavailable. Please contact ITC.");
+  const user = currentUser();
+  if (!user) throw new Error("Authentication required.");
+  sweepReferralInvites(now);
+  const invite = referralInviteByTokenHash(await hashReferralToken(token));
+  const problem = referralAcceptanceProblem({
+    invite,
+    invitee: user,
+    hasApplication: user.appliedAt != null,
+    now,
+  });
+  if (problem) throw new Error(problem);
+  invite.status = "accepted";
+  invite.inviteeId = user.id;
+  invite.acceptedAt = now;
+  save();
+  return { ...invite };
+}
+
+export function referralForApplicant(userId) {
+  return state.referralInvites.find((invite) => invite.status === "accepted" && invite.inviteeId === userId) ?? null;
 }
 
 export function signOut() {
@@ -1061,7 +1165,14 @@ export function isIndemnityCurrent(user) {
 
 export function applyForMembership(form) {
   const email = String(form.email).trim().toLowerCase();
-  if (state.users.some((u) => u.email.toLowerCase() === email)) {
+  const current = currentUser();
+  const acceptedReferral = current
+    && current.status === "pending"
+    && current.appliedAt == null
+    && current.email.toLowerCase() === email
+    ? state.referralInvites.find((invite) => invite.status === "accepted" && invite.inviteeId === current.id)
+    : null;
+  if (!acceptedReferral && state.users.some((u) => u.email.toLowerCase() === email)) {
     return { ok: false, reason: "duplicate" };
   }
   if (!form.indemnity) throw new Error("Read and accept the Indemnity");
@@ -1073,8 +1184,7 @@ export function applyForMembership(form) {
     emergencyPhone: form.emergencyPhone,
   });
   const acceptedAt = Date.now();
-  const user = {
-    id: uid("u"),
+  const fields = {
     role: "pending",
     status: "pending",
     fullName: form.fullName.trim(),
@@ -1094,7 +1204,9 @@ export function applyForMembership(form) {
     indemnityFormVersion: acceptance.formVersion,
     appliedAt: Date.now(),
   };
-  state.users.push(user);
+  const user = acceptedReferral ? Object.assign(current, fields) : { id: uid("u"), ...fields };
+  if (!acceptedReferral) state.users.push(user);
+  if (acceptedReferral) acceptedReferral.applicationId = user.id;
   state.sessionUserId = user.id; // applicant keeps public-level access while pending
   save();
   return { ok: true, user };
