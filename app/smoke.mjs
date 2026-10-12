@@ -2429,7 +2429,7 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=membership-header-2"',
+  'href="/app/styles.css?v=fitness-faith-photo-3"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
@@ -2527,7 +2527,7 @@ const integratedViewSource = readFileSync(resolve(__dirnameSmoke, "js/views.js")
 const integratedAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
 const integratedStyleSource = readFileSync(resolve(__dirnameSmoke, "styles.css"), "utf8");
 assert.match(integratedStyleSource,
-  /detail-photo\[src\*="itc-fitness-x-faith-2"\][\s\S]*height:\s*300px[\s\S]*object-position:\s*center top/,
+  /detail-photo\[src\*="itc-fitness-x-faith-2"\][\s\S]*height:\s*320px[\s\S]*object-position:\s*center 22%/,
   "Fitness x Faith portrait poster must use a fitted crop window");
 const manifest = JSON.parse(readFileSync(resolve(__dirnameSmoke, "manifest.webmanifest"), "utf8"));
 assert.equal(manifest.start_url, "/",
