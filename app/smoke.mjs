@@ -2642,6 +2642,17 @@ for (const retiredAdminHelper of [
 }
 assert.doesNotMatch(integratedViewSource, /function adminHyroxProvisioningInfo/);
 assert.match(integratedViewSource, /function venueDisplayName\(session\)/);
+const eventPhotoMigrationSource = readFileSync(
+  resolve(__dirnameSmoke, "../supabase/migrations/20261012000005_fitness_x_faith_photo.sql"),
+  "utf8",
+);
+assert.match(eventPhotoMigrationSource, /ITC Fitness x Faith 2/,
+  "Fitness x Faith photo migration must target only the requested event");
+assert.match(eventPhotoMigrationSource, /itc-fitness-x-faith-2\.jpeg/,
+  "Fitness x Faith photo migration must reference the checked-in asset");
+const eventOperationsSource = readFileSync(resolve(__dirnameSmoke, "js/operations.js"), "utf8");
+assert.match(eventOperationsSource, /photo_url/,
+  "live event templates must carry their targeted photo URL");
 const operationsSource = readFileSync(resolve(__dirnameSmoke, "js/operations.js"), "utf8");
 assert.match(operationsSource, /external_payment/,
   "live operational templates and sessions must retain external-payment metadata");
