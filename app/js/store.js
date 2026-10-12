@@ -37,6 +37,7 @@ import { effectiveAttendeeId, paymentStateForBooking } from "./payment-workflow.
 import { markLocalNotificationRead, normalizeLocalNotification, orderNotificationsForUser } from "./notification-workflow.js";
 import { applicationDecisionProblem, orderApprovalCandidates } from "./admin-workflow.js";
 import { decideReplacementProblem, replacementDuplicateForUser, replacementEligibility } from "./replacement-workflow.js";
+import { REFERRAL_INVITE_TTL_MS, REFERRAL_RETENTION_MS, referralQuota } from "./referral-policy.js";
 import { normalizeMeetingPoint, normalizeVenueLocation } from "./venue.js";
 import * as liveOps from "./operations.js";
 import {
@@ -59,7 +60,7 @@ const APPLY_DRAFT_KEY = "itc.apply.draft.v1";
 const APPLY_DRAFT_VERSION = 1;
 const LAST_ROUTE_KEY = "itc.last-route.v1";
 const LAST_ROUTE_VERSION = 1;
-const STATE_VERSION = 23;
+const STATE_VERSION = 24;
 
 const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
@@ -238,6 +239,7 @@ function freshState() {
     hyroxCycleQueues: {},
     replacementRequests: [],
     replacementAudit: [],
+    referralInvites: [],
     notifications: [],
     duty: {},
   };
@@ -325,6 +327,7 @@ function migrate() {
       || Array.isArray(state.hyroxCycleQueues)) state.hyroxCycleQueues = {};
   if (!Array.isArray(state.replacementRequests)) state.replacementRequests = [];
   if (!Array.isArray(state.replacementAudit)) state.replacementAudit = [];
+  if (!Array.isArray(state.referralInvites)) state.referralInvites = [];
   // v14 carries forward the additive UUID-keyed operations map for every
   // accepted v9-v13 snapshot.
   for (const user of state.users) {
@@ -753,6 +756,11 @@ function migrate() {
       }
     }
   }
+  if (v < 24) {
+    // v24: referral invites are additive. Existing members and applications
+    // remain unchanged while the new collection starts empty.
+    if (!Array.isArray(state.referralInvites)) state.referralInvites = [];
+  }
   state.version = STATE_VERSION;
 }
 
@@ -841,6 +849,86 @@ export function signIn(email) {
   state.sessionUserId = user.id;
   save();
   return { ok: true, user };
+}
+
+const REFERRAL_CREATOR_ROLES = new Set(["member", "admin", "superadmin", "super_admin"]);
+
+function requireReferralCreator() {
+  const user = currentUser();
+  if (!user || user.status !== "approved" || !REFERRAL_CREATOR_ROLES.has(user.role)) {
+    throw new Error("Approved membership required.");
+  }
+  return user;
+}
+
+async function hashReferralToken(token) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(token)));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function sweepReferralInvites(now = Date.now()) {
+  if (isLive()) return;
+  const before = JSON.stringify(state.referralInvites);
+  state.referralInvites = state.referralInvites.flatMap((invite) => {
+    if (invite.status === "pending" && invite.expiresAt <= now) {
+      return [{ ...invite, status: "expired", expiredAt: invite.expiresAt }];
+    }
+    return [invite];
+  }).filter((invite) => {
+    if (invite.status === "expired") return invite.expiresAt + REFERRAL_RETENTION_MS > now;
+    if (invite.status === "cancelled") return invite.cancelledAt + REFERRAL_RETENTION_MS > now;
+    return true;
+  });
+  if (JSON.stringify(state.referralInvites) !== before) save();
+}
+
+export function referralInvitesForCurrentUser(now = Date.now()) {
+  if (isLive()) return [];
+  sweepReferralInvites(now);
+  const user = currentUser();
+  if (!user) return [];
+  return state.referralInvites.filter((invite) => invite.referrerId === user.id);
+}
+
+export async function createReferralInvite(now = Date.now()) {
+  if (isLive()) throw new Error("Referral setup is temporarily unavailable. Please contact ITC.");
+  const user = requireReferralCreator();
+  sweepReferralInvites(now);
+  const quota = referralQuota({ invites: state.referralInvites, referrerId: user.id, now });
+  if (!quota.canCreate) throw new Error(quota.reason);
+  const inviteToken = crypto.randomUUID?.() || uid("referral");
+  const invite = {
+    id: uid("referral"),
+    referrerId: user.id,
+    tokenHash: await hashReferralToken(inviteToken),
+    status: "pending",
+    createdAt: now,
+    expiresAt: now + REFERRAL_INVITE_TTL_MS,
+    inviteeId: null,
+    acceptedAt: null,
+    applicationId: null,
+  };
+  state.referralInvites.push(invite);
+  save();
+  return { ...invite, inviteToken };
+}
+
+export async function cancelReferralInvite(inviteId, now = Date.now()) {
+  if (isLive()) throw new Error("Referral setup is temporarily unavailable. Please contact ITC.");
+  const user = requireReferralCreator();
+  sweepReferralInvites(now);
+  const invite = state.referralInvites.find((item) => item.id === inviteId);
+  if (!invite || invite.referrerId !== user.id) {
+    throw new Error("Not authorized for this referral invite.");
+  }
+  if (invite.status !== "pending") {
+    throw new Error("Only a pending referral invite can be cancelled.");
+  }
+  invite.status = "cancelled";
+  invite.cancelledAt = now;
+  invite.cancelledBy = user.id;
+  save();
+  return { ...invite };
 }
 
 export function signOut() {
