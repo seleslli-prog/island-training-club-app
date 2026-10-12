@@ -95,6 +95,7 @@ function buildTemplateRow(row) {
     requires_rsvp: !!row.requires_rsvp,
     external_payment: !!row.external_payment,
     external_price_hkd: row.external_price_hkd == null ? null : Number(row.external_price_hkd),
+    photo_url: row.photo_url || null,
   };
 }
 
@@ -146,7 +147,7 @@ function buildSessionRow(row, templatesById = null) {
     location: venue,
     mapsQuery,
     venue,
-    photo: metadata?.photo || (oneOff ? "../assets/itc/main.webp" : "../assets/itc/itc-hyrox-mood.webp"),
+    photo: template?.photo_url || metadata?.photo || (oneOff ? "../assets/itc/main.webp" : "../assets/itc/itc-hyrox-mood.webp"),
     blurb: metadata?.blurb || "",
     memberNote: metadata?.memberNote || "",
     capacity: row.capacity,
