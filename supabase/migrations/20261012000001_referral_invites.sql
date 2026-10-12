@@ -279,7 +279,30 @@ revoke all on function public.list_referral_context_for_admin() from public, ano
 
 grant execute on function public.sweep_referral_invites(timestamptz) to authenticated;
 grant execute on function public.create_referral_invite(text, timestamptz) to authenticated;
+grant execute on function public.get_referral_invite(text) to anon;
 grant execute on function public.get_referral_invite(text) to authenticated;
+
+create or replace function public.link_referral_application()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.referral_invites
+     set application_id = new.profile_id
+   where invitee_profile_id = new.profile_id
+     and status = 'accepted'
+     and application_id is null;
+  return new;
+end;
+$$;
+
+revoke all on function public.link_referral_application() from public, anon, authenticated;
+
+create trigger referral_invites_link_application
+  after insert on public.applications
+  for each row execute function public.link_referral_application();
 grant execute on function public.accept_referral_invite(text) to authenticated;
 grant execute on function public.cancel_referral_invite(uuid) to authenticated;
 grant execute on function public.list_my_referral_invites() to authenticated;

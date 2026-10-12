@@ -527,8 +527,13 @@ for (const rpc of [
   "sweep_referral_invites(timestamptz)",
 ]) {
   assert.match(referralMigration, new RegExp(`grant execute on function public\\.${rpc.replace(/[()]/g, "\\$&")} to authenticated`, "i"));
-  assert.doesNotMatch(referralMigration, new RegExp(`grant execute on function public\\.${rpc.replace(/[()]/g, "\\$&")} to anon`, "i"));
+  if (rpc === "get_referral_invite(text)") {
+    assert.match(referralMigration, /grant execute on function public\.get_referral_invite\(text\) to anon/i);
+  } else {
+    assert.doesNotMatch(referralMigration, new RegExp(`grant execute on function public\\.${rpc.replace(/[()]/g, "\\$&")} to anon`, "i"));
+  }
 }
+assert.match(referralMigration, /after insert on public\.applications/i);
 assert.match(referralMigration, /current_user_role\(\) <> 'pending'/);
 assert.match(referralMigration, /applications[\s\S]*profile_id = v_uid/);
 assert.match(referralMigration, /profiles\.created_at >= referral_invites\.created_at|v_profile\.created_at < v_invite\.created_at/);
