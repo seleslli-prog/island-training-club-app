@@ -2647,6 +2647,9 @@ assert.match(operationsSource, /external_payment/,
   "live operational templates and sessions must retain external-payment metadata");
 assert.match(operationsSource, /row\.external_payment[\s\S]*template\?\.external_payment/,
   "legacy live sessions must inherit external-payment mode from their template");
+const sessionStoreSource = readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8");
+assert.match(sessionStoreSource, /session\?\.externalPayment[\s\S]*external_paid/,
+  "external paid events must never enter the RSVP or waitlist path");
 assert.match(integratedViewSource, /Mark confirmed with \$\{esc\(venueName\)\}/);
 assert.match(integratedViewSource, /function adminCapacityLine\(count, capacity\)/);
 assert.match(readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8"),

@@ -1684,6 +1684,7 @@ export function spotsLeft(session) {
 }
 
 export function sessionRequiresRsvp(session) {
+  if (session?.externalPayment || session?.kind === "external_paid") return false;
   return Boolean(session?.requiresRsvp || session?.kind === "rsvp");
 }
 
