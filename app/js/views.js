@@ -1412,8 +1412,8 @@ function communityAnnouncements() {
   return `
     <a class="back-link" href="#/community">← Community</a>
     <h1 class="display sm mt16">Announcements</h1>
-    ${anniversary}
     ${publishedSection}
+    ${anniversary}
     ${adminCompose}`;
 }
 

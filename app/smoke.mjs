@@ -2527,6 +2527,13 @@ if (new Set(Object.values(integrationSourceTips)).size !== 4) {
 console.log("ok  integration source-tip provenance is explicit");
 
 const integratedViewSource = readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8");
+const communityAnnouncementsSource = integratedViewSource
+  .split("function communityAnnouncements()")[1]?.split("function adminActivities")[0] || "";
+assert.match(
+  communityAnnouncementsSource,
+  /\$\{publishedSection\}[\s\S]*\$\{anniversary\}/,
+  "newer Club news must render before the fixed anniversary story",
+);
 const integratedAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
 const integratedStyleSource = readFileSync(resolve(__dirnameSmoke, "styles.css"), "utf8");
 const manifest = JSON.parse(readFileSync(resolve(__dirnameSmoke, "manifest.webmanifest"), "utf8"));
