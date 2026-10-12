@@ -6341,15 +6341,18 @@ store.signIn("admin@example.test");
     name: "ITC Fitness x Faith 2", dateISO: oneOffDate(2), time: "10:00",
     durationMin: 120, location: "1/F Hall, Island ECC", category: "Other",
     externalPayment: true,
+    externalPrice: 250,
   });
   assert.deepEqual({
     kind: externalEvent.kind,
     externalPayment: externalEvent.externalPayment,
+    externalPrice: externalEvent.externalPrice,
     requiresRsvp: externalEvent.requiresRsvp,
     capacity: externalEvent.capacity,
   }, {
     kind: "external_paid",
     externalPayment: true,
+    externalPrice: 250,
     requiresRsvp: false,
     capacity: null,
   }, "external paid one-offs must be paid but uncapped and outside the booking pipeline");
@@ -6404,6 +6407,7 @@ store.signIn("admin@example.test");
   if (!adminActivitiesHtml.includes("One-off Events")
       || !adminActivitiesHtml.includes("form-one-off-event")
       || !adminActivitiesHtml.includes("Paid externally — open attendance")
+      || !adminActivitiesHtml.includes('name="externalPrice"')
       || !adminActivitiesHtml.includes("HYROX Race Day Send-off"))
     throw new Error("Activities tab should list one-off events and the add form");
   const weeklyStart = adminActivitiesHtml.indexOf(">Weekly Event Controls<");
@@ -6422,6 +6426,10 @@ store.signIn("admin@example.test");
     resolve(__dirnameSmoke, "../supabase/migrations/20261012000002_external_paid_one_off_events.sql"),
     "utf8",
   );
+  const externalPriceMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261012000003_external_event_price.sql"),
+    "utf8",
+  );
   for (const marker of [
     "external_payment",
     "p_external_payment",
@@ -6430,6 +6438,10 @@ store.signIn("admin@example.test");
   ]) {
     assert.ok(externalMigrationSource.includes(marker),
       `external paid one-off migration must include ${marker}`);
+  }
+  for (const marker of ["external_price_hkd", "p_external_price_hkd", "External price must be positive"]) {
+    assert.ok(externalPriceMigrationSource.includes(marker),
+      `external price migration must include ${marker}`);
   }
   // Deletion is refused once a booking exists; cancellation still works and
   // voids the booking (no same-activity follow-up session to defer to).

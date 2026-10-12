@@ -3402,6 +3402,8 @@ export async function createOneOffEvent(fields) {
   const mapsQuery = String(fields.mapsQuery ?? "").trim();
   const category = String(fields.category ?? "").trim() || "Other";
   const externalPayment = fields.externalPayment === true;
+  const externalPrice = externalPayment ? Math.max(0, Number(fields.externalPrice) || 0) : null;
+  if (externalPayment && externalPrice <= 0) throw new Error("Enter the external price.");
   const price = externalPayment ? 0 : Math.max(0, Number(fields.price) || 0);
   const capacity = externalPayment ? null : (price > 0 ? Math.max(1, Number(fields.capacity) || 20) : null);
   if (!name) throw new Error("Enter the event name.");
@@ -3413,6 +3415,7 @@ export async function createOneOffEvent(fields) {
     name, dateISO, time, durationMin, location, mapsQuery, category, price, capacity,
     requiresRsvp: !externalPayment && price === 0,
     externalPayment,
+    externalPrice,
   };
   if (isLive()) {
     return liveOps.liveCreateEvent(payload);
@@ -3426,6 +3429,7 @@ export async function createOneOffEvent(fields) {
     kind: externalPayment ? "external_paid" : price > 0 ? "paid" : "free",
     requiresRsvp: !externalPayment && price === 0,
     externalPayment,
+    externalPrice,
     category,
     weekday: parseISO(dateISO).getDay(),
     time,

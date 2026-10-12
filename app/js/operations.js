@@ -131,6 +131,7 @@ function buildSessionRow(row, templatesById = null) {
           : template?.requires_rsvp ? "rsvp" : "free",
     requiresRsvp: !!template?.requires_rsvp,
     externalPayment: !!row.external_payment,
+    externalPrice: row.external_price_hkd == null ? null : Number(row.external_price_hkd),
     category: template?.category || metadata?.category || (oneOff ? "Other" : "HYROX"),
     weekday: date.getDay(),
     oneOff,
@@ -1237,6 +1238,7 @@ export async function liveCreateEvent(payload) {
     p_capacity: payload.externalPayment ? null : (Number(payload.price ?? 0) === 0 ? null : (payload.capacity ?? 20)),
     p_requires_rsvp: payload.externalPayment ? false : Number(payload.price ?? 0) === 0,
     p_external_payment: !!payload.externalPayment,
+    p_external_price_hkd: payload.externalPrice ?? null,
   });
   return row;
 }

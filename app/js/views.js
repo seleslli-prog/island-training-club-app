@@ -178,7 +178,7 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
     const going = store.attendeeCountFor(s);
     end = `<span class="badge free">RSVP</span><span class="spots">${going} going</span>`;
   } else if (s.kind === "external_paid") {
-    end = `<span class="badge paid">Paid externally</span><span class="spots">Sign up via announcement</span>`;
+    end = `<span class="badge paid">Paid externally</span><span class="spots">${s.externalPrice != null ? fmtMoney(s.externalPrice) : "Sign up via announcement"}</span>`;
   } else if (s.kind === "free") {
     end = `<span class="badge free">Free</span><span class="spots">Just show up</span>`;
   } else {
@@ -839,7 +839,7 @@ export function viewActivity(sessionId, options) {
       <div><small>Price</small><strong>${fmtMoney(s.price)} / session</strong></div>
       <div><small>Places</small><strong>${spots <= 0 ? "Full" : `${spots} of ${s.capacity} left`}</strong></div>`
       : s.kind === "external_paid"
-        ? `<div><small>Payment</small><strong>External sign-up</strong></div><div><small>Attendance</small><strong>Open</strong></div>`
+        ? `<div><small>Price</small><strong>${s.externalPrice != null ? fmtMoney(s.externalPrice) : "External sign-up"}</strong></div><div><small>Attendance</small><strong>Open</strong></div>`
         : "";
 
   const attendees =
@@ -3520,7 +3520,7 @@ function adminOneOffEvents() {
       <div class="card mt16 ${cancelled ? "is-cancelled" : ""}"><div class="card-body">
         <div class="kicker dim" style="margin-top:0">${esc(fmtDate(s.dateISO))} · ${fmtTime(s.time)}</div>
         <h3 class="mt8">${esc(s.name)}</h3>
-        <p class="muted small mt8">${esc(s.location)} · ${s.kind === "paid" ? `${fmtMoney(s.price)} · cap ${s.capacity}` : s.kind === "external_paid" ? "Paid externally · open attendance" : "Free · RSVP optional"}</p>
+        <p class="muted small mt8">${esc(s.location)} · ${s.kind === "paid" ? `${fmtMoney(s.price)} · cap ${s.capacity}` : s.kind === "external_paid" ? `Paid externally${s.externalPrice != null ? ` · ${fmtMoney(s.externalPrice)}` : ""} · open attendance` : "Free · RSVP optional"}</p>
         ${rsvpOccurrence
           ? adminRsvpOccurrenceControls(override, {
             cancelLabel: "Cancel event",
@@ -3575,9 +3575,13 @@ function adminOneOffEvents() {
         </div>
         <div class="paid-only hidden">
           <div class="field-row">
-            <div class="field"><label for="oe-price">Price (HKD)</label><input id="oe-price" name="price" type="number" min="0" value="180"></div>
+            <div class="field"><label for="oe-price">Price (HKD)</label><input id="oe-price" name="price" type="number" min="1" value="180"></div>
             <div class="field"><label for="oe-cap">Capacity</label><input id="oe-cap" name="capacity" type="number" min="1" value="20"></div>
           </div>
+        </div>
+        <div class="external-paid-only hidden">
+          <div class="field"><label for="oe-external-price">External price (HKD) *</label><input id="oe-external-price" name="externalPrice" type="number" min="1" step="1" placeholder="e.g. 250"></div>
+          <p class="muted small">Shown to members only; payment and signup stay in the announcement link.</p>
         </div>
         <button class="btn sm mt8" type="submit">Add event</button>
       </div></form>
