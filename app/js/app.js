@@ -2208,6 +2208,7 @@ document.addEventListener("submit", async (e) => {
             price: kind === "paid" ? Number(fd.get("price")) : 0,
             capacity: fd.get("capacity"),
             externalPayment: kind === "external_paid",
+            externalPrice: kind === "external_paid" ? Number(fd.get("externalPrice")) : null,
           });
           toast("Event added");
           await renderWithFeedback();
@@ -2439,7 +2440,9 @@ function form_kind_toggle(select) {
   const form = select.closest("form");
   if (!form) return;
   const isPaid = select.value === "paid";
+  const isExternalPaid = select.value === "external_paid";
   form.querySelectorAll(".paid-only").forEach((block) => block.classList.toggle("hidden", !isPaid));
+  form.querySelectorAll(".external-paid-only").forEach((block) => block.classList.toggle("hidden", !isExternalPaid));
 }
 
 // --- Boot ---------------------------------------------------------------------------------------
