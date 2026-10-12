@@ -999,7 +999,8 @@ img.detail-photo[src*="itc-hyrox-mood"] {
 }
 
 img.detail-photo[src*="itc-fitness-x-faith-2"] {
-  object-position: center bottom;
+  height: 300px;
+  object-position: center 18%;
 }
 
 .meta-grid {
