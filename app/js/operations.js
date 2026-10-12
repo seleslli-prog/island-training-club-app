@@ -122,12 +122,15 @@ function buildSessionRow(row, templatesById = null) {
     // RSVP capability is separate from presentation: recurring community
     // sessions and free one-offs stay `free`, while Lunch keeps its dedicated
     // RSVP presentation. Paid sessions retain the reserve/pay pipeline.
-    kind: Number(row.price_hkd) > 0
-      ? "paid"
-      : freePresentation
-        ? "free"
-        : template?.requires_rsvp ? "rsvp" : "free",
+    kind: !!row.external_payment
+      ? "external_paid"
+      : Number(row.price_hkd) > 0
+        ? "paid"
+        : freePresentation
+          ? "free"
+          : template?.requires_rsvp ? "rsvp" : "free",
     requiresRsvp: !!template?.requires_rsvp,
+    externalPayment: !!row.external_payment,
     category: template?.category || metadata?.category || (oneOff ? "Other" : "HYROX"),
     weekday: date.getDay(),
     oneOff,
@@ -1231,8 +1234,9 @@ export async function liveCreateEvent(payload) {
     p_maps_query: payload.mapsQuery || null,
     p_category: payload.category || "Other",
     p_price_hkd: payload.price ?? 0,
-    p_capacity: Number(payload.price ?? 0) === 0 ? null : (payload.capacity ?? 20),
-    p_requires_rsvp: Number(payload.price ?? 0) === 0,
+    p_capacity: payload.externalPayment ? null : (Number(payload.price ?? 0) === 0 ? null : (payload.capacity ?? 20)),
+    p_requires_rsvp: payload.externalPayment ? false : Number(payload.price ?? 0) === 0,
+    p_external_payment: !!payload.externalPayment,
   });
   return row;
 }

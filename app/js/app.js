@@ -2207,6 +2207,7 @@ document.addEventListener("submit", async (e) => {
             category: fd.get("category"),
             price: kind === "paid" ? Number(fd.get("price")) : 0,
             capacity: fd.get("capacity"),
+            externalPayment: kind === "external_paid",
           });
           toast("Event added");
           await renderWithFeedback();

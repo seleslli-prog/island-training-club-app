@@ -133,6 +133,7 @@ function memberSinceInputValue(ts) {
 // --- Shared fragments ---------------------------------------------------------
 
 function badgeFor(s, booking = null, reservation = null) {
+  if (s.kind === "external_paid") return `<span class="badge paid">Paid externally</span>`;
   if (s.kind === "free") return `<span class="badge free">Free</span>`;
   if (s.kind === "rsvp") {
     return booking
@@ -176,6 +177,8 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
   } else if (s.kind === "rsvp") {
     const going = store.attendeeCountFor(s);
     end = `<span class="badge free">RSVP</span><span class="spots">${going} going</span>`;
+  } else if (s.kind === "external_paid") {
+    end = `<span class="badge paid">Paid externally</span><span class="spots">Sign up via announcement</span>`;
   } else if (s.kind === "free") {
     end = `<span class="badge free">Free</span><span class="spots">Just show up</span>`;
   } else {
@@ -735,6 +738,16 @@ export function viewActivity(sessionId, options) {
     } else {
       actionBlock = membersOnlyGate();
     }
+  } else if (s.kind === "external_paid") {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">Paid externally</span>
+        <p>No in-app booking or capacity tracking. Use the sign-up link in the announcement.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" type="button" data-action="ics" data-session="${s.id}">Add to calendar</button>
+        ${directionsLink}
+      </div>`;
   } else if (booking) {
     actionBlock = `
       <div class="banner mt16">
@@ -825,7 +838,9 @@ export function viewActivity(sessionId, options) {
       ? `
       <div><small>Price</small><strong>${fmtMoney(s.price)} / session</strong></div>
       <div><small>Places</small><strong>${spots <= 0 ? "Full" : `${spots} of ${s.capacity} left`}</strong></div>`
-      : "";
+      : s.kind === "external_paid"
+        ? `<div><small>Payment</small><strong>External sign-up</strong></div><div><small>Attendance</small><strong>Open</strong></div>`
+        : "";
 
   const attendees =
     (s.kind === "paid" || store.sessionRequiresRsvp(s))
@@ -3492,8 +3507,9 @@ export async function viewAdminCampaign(id) {
 }
 
 // One-off events: single-date admin-created events (race days, socials,
-// pop-ups). Paid events flow through the normal reserve/pay pipeline; free
-// events are show-up. Deletion is only possible before anyone books.
+// pop-ups). In-app paid events flow through reserve/pay; externally paid
+// events show the paid label but remain open attendance. Deletion is only
+// possible before anyone books.
 function adminOneOffEvents() {
   const upcoming = store.upcomingSessions(60).filter((s) => s.oneOff && !sessionStarted(s));
   const cards = upcoming.map((s) => {
@@ -3504,7 +3520,7 @@ function adminOneOffEvents() {
       <div class="card mt16 ${cancelled ? "is-cancelled" : ""}"><div class="card-body">
         <div class="kicker dim" style="margin-top:0">${esc(fmtDate(s.dateISO))} · ${fmtTime(s.time)}</div>
         <h3 class="mt8">${esc(s.name)}</h3>
-        <p class="muted small mt8">${esc(s.location)} · ${s.kind === "paid" ? `${fmtMoney(s.price)} · cap ${s.capacity}` : "Free · RSVP optional"}</p>
+        <p class="muted small mt8">${esc(s.location)} · ${s.kind === "paid" ? `${fmtMoney(s.price)} · cap ${s.capacity}` : s.kind === "external_paid" ? "Paid externally · open attendance" : "Free · RSVP optional"}</p>
         ${rsvpOccurrence
           ? adminRsvpOccurrenceControls(override, {
             cancelLabel: "Cancel event",
@@ -3527,7 +3543,7 @@ function adminOneOffEvents() {
   return `
     <details class="admin-section mt24">
       <summary><h2>One-off Events</h2></summary>
-      <p class="muted small mt8">Single-date events — race days, socials, pop-ups. Free events need no booking; paid events use the normal reserve-and-pay flow. Delete works only before anyone books; afterwards cancel instead.</p>
+      <p class="muted small mt8">Single-date events — race days, socials, pop-ups. Choose external payment when signup happens through an announcement link; no in-app booking or capacity is tracked. Delete works only before anyone books; afterwards cancel instead.</p>
       ${cards || `<div class="empty mt8">No upcoming one-off events.</div>`}
       <form id="form-one-off-event" class="card mt16"><div class="card-body">
         <h3>Add one-off event</h3>
@@ -3553,6 +3569,7 @@ function adminOneOffEvents() {
             <select id="oe-kind" name="kind" data-change="kind-toggle">
               <option value="free" selected>Free — open attendance</option>
               <option value="paid">Paid — book & pay in app</option>
+              <option value="external_paid">Paid externally — open attendance</option>
             </select>
           </div>
         </div>

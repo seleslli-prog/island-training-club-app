@@ -6337,8 +6337,30 @@ store.signIn("admin@example.test");
   const eventHtml = views.viewActivity(paidEvent.id);
   if (!eventHtml.includes("Book & pay") || !eventHtml.includes("HK$250"))
     throw new Error("paid one-off activity page should offer booking");
+  const externalEvent = await store.createOneOffEvent({
+    name: "ITC Fitness x Faith 2", dateISO: oneOffDate(2), time: "10:00",
+    durationMin: 120, location: "1/F Hall, Island ECC", category: "Other",
+    externalPayment: true,
+  });
+  assert.deepEqual({
+    kind: externalEvent.kind,
+    externalPayment: externalEvent.externalPayment,
+    requiresRsvp: externalEvent.requiresRsvp,
+    capacity: externalEvent.capacity,
+  }, {
+    kind: "external_paid",
+    externalPayment: true,
+    requiresRsvp: false,
+    capacity: null,
+  }, "external paid one-offs must be paid but uncapped and outside the booking pipeline");
+  const externalEventHtml = views.viewActivity(externalEvent.id);
+  if (!externalEventHtml.includes("Paid externally")
+      || !externalEventHtml.includes("sign-up link in the announcement")
+      || externalEventHtml.includes("Book & pay")) {
+    throw new Error("external paid one-off must show external signup without in-app checkout");
+  }
   const freeEvent = await store.createOneOffEvent({
-    name: "Community Picnic", dateISO: oneOffDate(2), time: "15:00",
+    name: "Community Picnic", dateISO: oneOffDate(3), time: "15:00",
     durationMin: 120, location: "Tamar Park", category: "Other",
   });
   assert.deepEqual({
@@ -6381,6 +6403,7 @@ store.signIn("admin@example.test");
     "a cancelled future zero-price one-off must expose Reopen event");
   if (!adminActivitiesHtml.includes("One-off Events")
       || !adminActivitiesHtml.includes("form-one-off-event")
+      || !adminActivitiesHtml.includes("Paid externally — open attendance")
       || !adminActivitiesHtml.includes("HYROX Race Day Send-off"))
     throw new Error("Activities tab should list one-off events and the add form");
   const weeklyStart = adminActivitiesHtml.indexOf(">Weekly Event Controls<");
@@ -6394,6 +6417,19 @@ store.signIn("admin@example.test");
       throw new Error(`${event.name} must not receive recurring controls`);
     if (!oneOffRegion.includes(event.name) || !oneOffRegion.includes(event.id))
       throw new Error(`${event.name} must appear only in One-off Events`);
+  }
+  const externalMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261012000002_external_paid_one_off_events.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "external_payment",
+    "p_external_payment",
+    "operational_sessions_one_off_mode_check",
+    "capacity is null",
+  ]) {
+    assert.ok(externalMigrationSource.includes(marker),
+      `external paid one-off migration must include ${marker}`);
   }
   // Deletion is refused once a booking exists; cancellation still works and
   // voids the booking (no same-activity follow-up session to defer to).
