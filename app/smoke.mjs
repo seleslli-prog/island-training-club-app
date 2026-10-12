@@ -8628,6 +8628,11 @@ const freeControlsSource = integratedViewSource
 if (!paidControlsSource.includes('<div class="empty mt8">No upcoming paid sessions.</div>')) {
   throw new Error("Paid Sessions must retain its concise empty-group state");
 }
+if (!paidControlsSource.includes("ADMIN_SESSION_SETUP_DAYS")
+    || !/ADMIN_SESSION_SETUP_DAYS\s*=\s*90/.test(paidControlsSource)
+    || !paidControlsSource.includes("store.upcomingSessions(ADMIN_SESSION_SETUP_DAYS)")) {
+  throw new Error("Paid Sessions must expose future HYROX cancellation controls beyond the member 21-day window");
+}
 if (!freeControlsSource.includes('<div class="empty mt8">No upcoming free or RSVP events.</div>')) {
   throw new Error("Free & RSVP Events must retain its concise empty-group state");
 }

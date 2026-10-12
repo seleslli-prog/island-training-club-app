@@ -3066,9 +3066,11 @@ async function adminReplacementReview() {
 
 // Weekly paid-session setup controls (time, note, venue TBC) live
 // on the Activities tab alongside the recurring defaults and free/RSVP event
-// controls. Booking and payment status belongs on Payments.
+// controls. Booking and payment status belongs on Payments. Admins need a
+// longer horizon than members so future sessions can be cancelled in advance.
 function adminPaidSessionControls() {
-  const upcoming = store.upcomingSessions(21).filter(
+  const ADMIN_SESSION_SETUP_DAYS = 90;
+  const upcoming = store.upcomingSessions(ADMIN_SESSION_SETUP_DAYS).filter(
     (s) => !s.oneOff && s.category === "HYROX" && s.kind === "paid" && !sessionStarted(s)
   );
   const sessionCards = upcoming.map((s) => {
