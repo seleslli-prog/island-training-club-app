@@ -2642,6 +2642,11 @@ for (const retiredAdminHelper of [
 }
 assert.doesNotMatch(integratedViewSource, /function adminHyroxProvisioningInfo/);
 assert.match(integratedViewSource, /function venueDisplayName\(session\)/);
+const operationsSource = readFileSync(resolve(__dirnameSmoke, "js/operations.js"), "utf8");
+assert.match(operationsSource, /external_payment/,
+  "live operational templates and sessions must retain external-payment metadata");
+assert.match(operationsSource, /row\.external_payment[\s\S]*template\?\.external_payment/,
+  "legacy live sessions must inherit external-payment mode from their template");
 assert.match(integratedViewSource, /Mark confirmed with \$\{esc\(venueName\)\}/);
 assert.match(integratedViewSource, /function adminCapacityLine\(count, capacity\)/);
 assert.match(readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8"),
