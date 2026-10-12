@@ -2537,7 +2537,7 @@ assert.match(
 const integratedAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
 const integratedStyleSource = readFileSync(resolve(__dirnameSmoke, "styles.css"), "utf8");
 assert.match(integratedStyleSource,
-  /detail-photo\[src\*="itc-fitness-x-faith-2"\][\s\S]*height:\s*300px[\s\S]*object-position:\s*center 18%/,
+  /detail-photo\[src\*="itc-fitness-x-faith-2"\][\s\S]*height:\s*300px[\s\S]*object-position:\s*center top/,
   "Fitness x Faith portrait poster must use a fitted crop window");
 const manifest = JSON.parse(readFileSync(resolve(__dirnameSmoke, "manifest.webmanifest"), "utf8"));
 assert.equal(manifest.start_url, "/",
