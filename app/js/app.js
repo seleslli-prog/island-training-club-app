@@ -826,6 +826,9 @@ async function render(generation = renderGeneration, options = {}) {
       out = views.viewSchedule();
       break;
     case "activity": {
+      if (isLive()) {
+        await store.hydrateLiveOperations({ force: true });
+      }
       if (store.isRetiredHyroxMemberRoute("activity", arg)) {
         out = views.viewRetiredSession();
         break;

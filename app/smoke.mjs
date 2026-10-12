@@ -2547,6 +2547,9 @@ assert.match(integratedAppSource, /paintOwnAvatarChrome/,
 assert.match(integratedAppSource, /fillActivityRoster/,
   "Activity Details must paint first and fill Who's coming without blocking the route");
 assert.match(integratedAppSource,
+  /case "activity":\s*\{[\s\S]*?await store\.hydrateLiveOperations\(\{ force: true \}\)[\s\S]*?views\.viewActivity\(arg/,
+  "live Activity Details deep links must hydrate operational sessions before resolving the route");
+assert.match(integratedAppSource,
   /paintActivityRoster\([\s\S]*getSessionAvatars/,
   "Who's coming names and count must paint before attendee photo REST");
 assert.match(integratedAppSource, /commitRsvpGoingCount/,
