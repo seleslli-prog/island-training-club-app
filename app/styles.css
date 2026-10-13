@@ -998,6 +998,14 @@ img.detail-photo[src*="itc-hyrox-mood"] {
   object-position: center 42%;
 }
 
+img.detail-photo[src*="itc-fitness-x-faith-2"] {
+  height: auto;
+  aspect-ratio: 1079 / 624;
+  object-fit: contain;
+  object-position: center;
+  background: #030504;
+}
+
 .meta-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1186,15 +1194,33 @@ img.detail-photo[src*="itc-hyrox-mood"] {
 .receipt-lines .line {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
+  column-gap: 24px;
   padding: 12px 2px;
   border-bottom: 1px solid var(--line-soft);
   font-size: 13px;
 }
 
 .receipt-lines .line span { color: var(--muted); }
+.receipt-lines .line strong {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 .receipt-lines .line.total { font-weight: 900; font-size: 15px; }
 .receipt-lines .line.total span { color: var(--ink); }
+
+#form-membership-details .line {
+  display: block;
+  padding: 2px 2px;
+  border: 0;
+  font-size: 13px;
+}
+#form-membership-details .line span { color: var(--muted); }
+#form-membership-details .line strong {
+  margin-left: 4px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
 
 /* ---- Agreements: one quiet card stroke, no nested ghost outlines ------ */
 

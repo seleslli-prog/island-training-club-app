@@ -1,10 +1,16 @@
 # Web Push — live deploy runbook
 
-Browser Web Push for operational booking / payment / venue notifications and shared community announcements. Audit rows are not pushed.
+Browser Web Push mirrors every trusted in-app notification for an opted-in
+member or admin: application events, approvals, role changes, welcome/member
+alerts, operations, reminders, and community announcements. The inbox remains
+the source of truth.
 
 ## Prerequisites
 
-- Migrations applied through `20260930000001_web_push_community_announcement.sql` (and earlier pref + delivery + settings + payload-snapshot migrations).
+- Migrations applied through `20261012000001_repair_notification_delivery.sql`.
+  This idempotent repair also reasserts application/role notification triggers,
+  push subscriptions, the private hook settings table, and all-category push
+  eligibility.
 - App served over **HTTPS** (or localhost). Canonical production root is `/` (not `/app/`); `vercel.json` rewrites `/push-sw.js` → `/app/push-sw.js` so root-scope registration works.
 - Desktop Chrome/Firefox/Edge, or Android Chrome. **iOS** requires Add to Home Screen (installed PWA) on a recent iOS version.
 - If Invocations return `skipped: missing_notification`, the trigger body is still id-only or the Edge Function is stale — apply the snapshot migration and redeploy `send-web-push`.
@@ -59,9 +65,10 @@ supabase functions deploy send-web-push --no-verify-jwt
 ## Member enable path
 
 1. Sign in (live).
-2. Profile → Privacy & Notifications → enable **Web push for bookings, venue & announcements** → Allow in the browser prompt.
-3. Trigger an allowlisted event (venue confirm/update, or publish a community announcement) while the tab is backgrounded.
-4. OS notification should appear; click opens the activity / notifications route.
+2. Profile → Privacy & Notifications → enable **Web push** → Allow in the browser prompt.
+3. Trigger an application, approval, role-change, member, operations, reminder,
+   or community event while the tab is backgrounded or closed.
+4. OS notification should appear; click opens the trusted destination route.
 
 ## Disable
 
@@ -69,6 +76,9 @@ Uncheck the Privacy toggle (unsubscribes and deletes `push_subscriptions` rows) 
 
 ## Smoke / verification
 
-- `node app/smoke.mjs` — migration markers, push-sw has no `caches`, privacy toggle still round-trips.
+- `node app/smoke.mjs` — migration markers, producer triggers, all-category
+  eligibility, push-sw background handling, and privacy round-trips.
 - SQL: `select * from push_subscriptions where profile_id = auth.uid();` after enabling.
+- SQL: verify `applications.session_alerts`, `applications.web_push_ops`,
+  `notifications.destination`, and the `notifications_request_web_push` trigger.
 - Function logs: Supabase Dashboard → Edge Functions → `send-web-push`.

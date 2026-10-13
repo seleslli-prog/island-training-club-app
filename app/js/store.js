@@ -1684,6 +1684,7 @@ export function spotsLeft(session) {
 }
 
 export function sessionRequiresRsvp(session) {
+  if (session?.externalPayment || session?.kind === "external_paid") return false;
   return Boolean(session?.requiresRsvp || session?.kind === "rsvp");
 }
 
@@ -3401,8 +3402,11 @@ export async function createOneOffEvent(fields) {
   const location = String(fields.location ?? "").trim();
   const mapsQuery = String(fields.mapsQuery ?? "").trim();
   const category = String(fields.category ?? "").trim() || "Other";
-  const price = Math.max(0, Number(fields.price) || 0);
-  const capacity = price > 0 ? Math.max(1, Number(fields.capacity) || 20) : null;
+  const externalPayment = fields.externalPayment === true;
+  const externalPrice = externalPayment ? Math.max(0, Number(fields.externalPrice) || 0) : null;
+  if (externalPayment && externalPrice <= 0) throw new Error("Enter the external price.");
+  const price = externalPayment ? 0 : Math.max(0, Number(fields.price) || 0);
+  const capacity = externalPayment ? null : (price > 0 ? Math.max(1, Number(fields.capacity) || 20) : null);
   if (!name) throw new Error("Enter the event name.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) throw new Error("Pick the event date.");
   if (!time) throw new Error("Pick the start time.");
@@ -3410,7 +3414,9 @@ export async function createOneOffEvent(fields) {
   if (!location) throw new Error("Enter the venue.");
   const payload = {
     name, dateISO, time, durationMin, location, mapsQuery, category, price, capacity,
-    requiresRsvp: price === 0,
+    requiresRsvp: !externalPayment && price === 0,
+    externalPayment,
+    externalPrice,
   };
   if (isLive()) {
     return liveOps.liveCreateEvent(payload);
@@ -3421,8 +3427,10 @@ export async function createOneOffEvent(fields) {
     oneOff: true,
     dateISO,
     name,
-    kind: price > 0 ? "paid" : "free",
-    requiresRsvp: price === 0,
+    kind: externalPayment ? "external_paid" : price > 0 ? "paid" : "free",
+    requiresRsvp: !externalPayment && price === 0,
+    externalPayment,
+    externalPrice,
     category,
     weekday: parseISO(dateISO).getDay(),
     time,
@@ -3431,7 +3439,7 @@ export async function createOneOffEvent(fields) {
     mapsQuery: mapsQuery || location,
     photo: "../assets/itc/main.webp",
     price,
-    capacity: price > 0 ? capacity : null,
+    capacity,
     blurb: "",
     memberNote: "",
     published: true,
@@ -4835,6 +4843,23 @@ function localApplication(user) {
   };
 }
 
+function parseFullName(form) {
+  if (!Object.prototype.hasOwnProperty.call(form, "full_name")) return null;
+  const fullName = String(form.full_name || "").trim();
+  if (!fullName) throw new Error("Enter your full name");
+  if (fullName.length > 120) throw new Error("Full name must be 120 characters or fewer");
+  return fullName;
+}
+
+function parseMemberSince(value) {
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("Enter membership since date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new Error("Enter membership since date");
+  const ms = Date.parse(`${raw}T00:00:00+08:00`);
+  if (Number.isNaN(ms)) throw new Error("Enter membership since date");
+  return new Date(ms).toISOString();
+}
+
 function membershipPatch(form) {
   const isMinor = parseAgeOver18(form.age_over_18);
   const guardian = guardianFields(isMinor, form.guardian_name, form.guardian_phone);
@@ -4861,6 +4886,9 @@ function membershipPatch(form) {
     if (donorIdProblem(rawDonorId)) throw new Error("Enter a valid Donor ID");
     patch.donor_id = rawDonorId ? normalizeDonorId(rawDonorId) : null;
   }
+  if (Object.prototype.hasOwnProperty.call(form, "member_since")) {
+    patch.submitted_at = parseMemberSince(form.member_since);
+  }
   if (!patch.mobile) throw new Error("Enter mobile number");
   if (!patch.heard_source) throw new Error("Choose how you heard about ITC");
   return patch;
@@ -4874,6 +4902,32 @@ function privacyPatch(form) {
     hyrox_payment_reminders: !!form.hyrox_payment_reminders,
     web_push_ops: !!form.web_push_ops,
   };
+}
+
+function missingApplicationsColumn(error) {
+  const message = String(error?.message || "");
+  const cache = message.match(/Could not find the '([^']+)' column of 'applications'/i);
+  if (cache) return cache[1];
+  const pg = message.match(/column applications\.([^\s]+) does not exist/i);
+  if (pg) return pg[1];
+  return null;
+}
+
+async function updateLiveApplication(profileId, patch) {
+  let nextPatch = { ...patch };
+  for (;;) {
+    const { data, error } = await supabase
+      .from("applications")
+      .update(nextPatch)
+      .eq("profile_id", profileId)
+      .select()
+      .single();
+    if (!error) return data;
+    const column = missingApplicationsColumn(error);
+    if (!column || !Object.prototype.hasOwnProperty.call(nextPatch, column)) throw error;
+    delete nextPatch[column];
+    if (!Object.keys(nextPatch).length) throw error;
+  }
 }
 
 export async function fetchApplicationForUser(user) {
@@ -4960,6 +5014,7 @@ export async function saveMyApplication(form) {
 
 export async function updateMyMembershipDetails(form) {
   const patch = membershipPatch(form);
+  const fullName = parseFullName(form);
   if (!isLive() || !supabase) {
     const user = currentUser();
     if (!user) throw new Error("Not signed in");
@@ -4974,11 +5029,26 @@ export async function updateMyMembershipDetails(form) {
     user.heardDetail = patch.heard_detail;
     user.preferredName = patch.preferred_name;
     if (Object.prototype.hasOwnProperty.call(patch, "donor_id")) user.donorId = patch.donor_id;
+    if (fullName) user.fullName = fullName;
+    if (patch.submitted_at) user.appliedAt = Date.parse(patch.submitted_at);
     save();
     return localApplication(user);
   }
   const cu = await getCurrentUser();
   if (!cu) throw new Error("Not signed in");
+  if (fullName) {
+    const { data: savedProfile, error: profileError } = await supabase
+      .from("profiles")
+      .update({ full_name: fullName })
+      .eq("id", cu.id)
+      .select("*")
+      .single();
+    if (profileError) throw profileError;
+    if (!savedProfile) throw new Error("Unable to save your full name");
+    liveProfile = savedProfile;
+    liveProfileFetchedAt = Date.now();
+    await getCurrentUser();
+  }
   const { data, error } = await supabase
     .from("applications")
     .update(patch)
@@ -4993,14 +5063,16 @@ export async function updateMyMembershipDetails(form) {
 export async function enableWebPushOpsPreference() {
   const user = currentUser() || await getCurrentUser();
   if (!user) throw new Error("Not signed in");
-  const app = isLive() ? await fetchApplicationForUser(user) : null;
-  return updateMyPrivacyPreferences({
-    session_alerts: app ? app.session_alerts !== false : user.sessionAlerts !== false,
-    email_receipts: app ? !!app.email_receipts : !!user.emailReceipts,
-    community_news: app ? !!app.community_news : !!user.communityNews,
-    hyrox_payment_reminders: app ? app.hyrox_payment_reminders !== false : user.hyroxPaymentReminders !== false,
-    web_push_ops: true,
-  });
+  if (!isLive() || !supabase) {
+    user.webPushOps = true;
+    save();
+    return localApplication(user);
+  }
+  const cu = await getCurrentUser();
+  if (!cu) throw new Error("Not signed in");
+  const data = await updateLiveApplication(cu.id, { web_push_ops: true });
+  rememberLiveApplication(cu.id, data);
+  return data;
 }
 
 export async function updateMyPrivacyPreferences(form) {
@@ -5018,13 +5090,7 @@ export async function updateMyPrivacyPreferences(form) {
   }
   const cu = await getCurrentUser();
   if (!cu) throw new Error("Not signed in");
-  const { data, error } = await supabase
-    .from("applications")
-    .update(patch)
-    .eq("profile_id", cu.id)
-    .select()
-    .single();
-  if (error) throw error;
+  const data = await updateLiveApplication(cu.id, patch);
   rememberLiveApplication(cu.id, data);
   return data;
 }

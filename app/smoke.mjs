@@ -22,6 +22,9 @@ const views = await import("./js/views.js");
 const data = await import("./js/data.js");
 const { buildIndemnityCsv } = await import("./js/exports.js");
 
+const wntSeed = data.SEED_ACTIVITIES.find((activity) => activity.id === "wnt");
+assert.equal(wntSeed?.durationMin, 90, "Wednesday Night Training seed duration must be 90 minutes");
+
 const indemnityExportCsv = buildIndemnityCsv([{
   fullName: 'O"Connor, Ada',
   email: "ada@example.test",
@@ -1233,6 +1236,49 @@ console.log("ok  web push ops preference migration is phase-1 column only");
       `web push community migration missing ${marker}`,
     );
   }
+  const notificationDeliveryRepairMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261012000001_repair_notification_delivery.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "add column if not exists destination",
+    "add column if not exists session_alerts",
+    "create table if not exists public.push_subscriptions",
+    "create table if not exists private.web_push_settings",
+    "create or replace function public.web_push_ops_kind_eligible",
+    "select true",
+    "notification_id",
+    "profile_id",
+    "destination",
+    "notifications_request_web_push",
+    "applications_notify_admins_submitted",
+    "profiles_audit_role_change",
+    "notify_admins_application_submitted",
+    "record_role_change",
+    "net.http_post",
+  ]) {
+    assert.ok(
+      notificationDeliveryRepairMigration.toLowerCase().includes(marker.toLowerCase()),
+      `notification delivery repair migration missing ${marker}`,
+    );
+  }
+  for (const kind of [
+    "admin_application_submitted",
+    "admin_application_approved",
+    "admin_application_declined",
+    "admin_role_promoted",
+    "admin_role_demoted",
+    "admin_membership_revoked",
+    "welcome",
+    "community_announcement_published",
+    "operational_session_reminder_tomorrow",
+    "operational_session_reminder_morning",
+  ]) {
+    assert.ok(
+      notificationDeliveryRepairMigration.includes(kind),
+      `all notification categories must be push-eligible: ${kind}`,
+    );
+  }
   assert.equal(
     webPushCommunityMigration.includes("'community_announcement_audit'"),
     false,
@@ -1294,6 +1340,17 @@ console.log("ok  web push ops preference migration is phase-1 column only");
   const appJs = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
   assert.ok(appJs.includes("restoreInstalledWebPush"), "boot must restore Home Screen web push");
   assert.ok(appJs.includes("enableWebPushOpsPreference"), "Enable alerts must persist web_push_ops");
+  const storeJs = readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8");
+  const enableFn = storeJs.slice(
+    storeJs.indexOf("export async function enableWebPushOpsPreference"),
+    storeJs.indexOf("export async function updateMyPrivacyPreferences"),
+  );
+  assert.ok(enableFn.includes("web_push_ops: true"), "Allow on this phone must persist web_push_ops");
+  assert.equal(
+    enableFn.includes("session_alerts"),
+    false,
+    "Allow on this phone must not write session_alerts",
+  );
 }
 console.log("ok  web push delivery migration and push-only service worker markers");
 for (const marker of [
@@ -2371,9 +2428,11 @@ assert.equal(packageConfig.scripts?.build, undefined,
 assert.equal(packageConfig.scripts?.verify, "node scripts/verify-static.mjs");
 assert.doesNotMatch(appIndexSource, /<base\b/i,
   "hash-only app routes must remain on the canonical root without a document base URL");
+assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
+  "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css"',
+  'href="/app/styles.css?v=fitness-faith-photo-4"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
@@ -2468,8 +2527,18 @@ if (new Set(Object.values(integrationSourceTips)).size !== 4) {
 console.log("ok  integration source-tip provenance is explicit");
 
 const integratedViewSource = readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8");
+const communityAnnouncementsSource = integratedViewSource
+  .split("function communityAnnouncements()")[1]?.split("function adminActivities")[0] || "";
+assert.match(
+  communityAnnouncementsSource,
+  /\$\{publishedSection\}[\s\S]*\$\{anniversary\}/,
+  "newer Club news must render before the fixed anniversary story",
+);
 const integratedAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
 const integratedStyleSource = readFileSync(resolve(__dirnameSmoke, "styles.css"), "utf8");
+assert.match(integratedStyleSource,
+  /detail-photo\[src\*="itc-fitness-x-faith-2"\][\s\S]*aspect-ratio:\s*1079 \/ 624[\s\S]*object-fit:\s*contain/,
+  "Fitness x Faith landscape poster must keep the title fully visible");
 const manifest = JSON.parse(readFileSync(resolve(__dirnameSmoke, "manifest.webmanifest"), "utf8"));
 assert.equal(manifest.start_url, "/",
   "installed app launches must use the canonical root with an empty hash so the last route can restore");
@@ -2487,6 +2556,9 @@ assert.match(integratedAppSource, /paintOwnAvatarChrome/,
   "route chrome must paint cached initials immediately instead of awaiting avatar REST");
 assert.match(integratedAppSource, /fillActivityRoster/,
   "Activity Details must paint first and fill Who's coming without blocking the route");
+assert.match(integratedAppSource,
+  /case "activity":\s*\{[\s\S]*?await store\.hydrateLiveOperations\(\{ force: true \}\)[\s\S]*?views\.viewActivity\(arg/,
+  "live Activity Details deep links must hydrate operational sessions before resolving the route");
 assert.match(integratedAppSource,
   /paintActivityRoster\([\s\S]*getSessionAvatars/,
   "Who's coming names and count must paint before attendee photo REST");
@@ -2520,8 +2592,31 @@ const signedInListenerSource = integratedAppSource.match(
 assert.ok(signedInListenerSource, "live auth SIGNED_IN listener must remain wired");
 assert.doesNotMatch(signedInListenerSource, /location\.hash\s*=\s*"#\/home"/,
   "tab-refocus SIGNED_IN events must not replace the current route with Home");
-assert.match(signedInListenerSource, /await renderWithFeedback\(\);[\s\S]*?await maybeRedirectToApply\(\);/,
-  "SIGNED_IN must refresh the current route before checking pending-applicant routing");
+assert.match(signedInListenerSource, /await renderWithFeedback\(\);[\s\S]*?hydrateSignedInAfterPaint\(user\);/,
+  "SIGNED_IN must refresh the current route before starting post-paint hydration");
+assert.doesNotMatch(signedInListenerSource, /await store\.fetchApplicationForUser\(/,
+  "SIGNED_IN must not block the first route paint on the application query");
+const bootSourceForIdentity = integratedAppSource.slice(
+  integratedAppSource.indexOf("async function boot()"),
+  integratedAppSource.indexOf("function hidePushHomeBanner"),
+);
+const signedInBootSource = bootSourceForIdentity.match(
+  /await store\.getCurrentUser\(\);[\s\S]*?user = store\.currentUser\(\);[\s\S]*?bindLiveAuthState\(\);/
+)?.[0] || "";
+assert.ok(signedInBootSource, "signed-in live boot branch must remain identifiable");
+const fastHomeBootSource = signedInBootSource.match(
+  /if \(user && paintHomeFirst\) \{[\s\S]*?\} else if \(user\)/
+)?.[0] || "";
+assert.doesNotMatch(fastHomeBootSource, /await store\.(fetchApplicationForUser|hydrateLiveOperations)\(/,
+  "signed-in Home boot must not block the first paint on application or operations hydration");
+assert.match(integratedAppSource, /function hydrateSignedInAfterPaint\(user\)/,
+  "signed-in application and operations hydration must have a post-paint path");
+assert.match(integratedAppSource,
+  /hydrateLiveOperations\(\{ ensureWindow: true \}\)\.then\([\s\S]*?parseHash\(\)\[0\] === "home"[\s\S]*?renderWithFeedback\(\)/,
+  "Home must refresh after background operations hydration completes");
+assert.match(integratedViewSource,
+  /export async function viewHome\(\) \{[\s\S]*?store\.peekLiveApplication\(user\.id\)/,
+  "Home must use the profile immediately when the live application is not cached");
 assert.match(integratedViewSource, /data-route-not-found/,
   "not-found output must expose a stable route-commit guard");
 console.log("ok  app launch, route commit and resume are wired to route handoff storage");
@@ -2550,6 +2645,25 @@ for (const retiredAdminHelper of [
 }
 assert.doesNotMatch(integratedViewSource, /function adminHyroxProvisioningInfo/);
 assert.match(integratedViewSource, /function venueDisplayName\(session\)/);
+const eventPhotoMigrationSource = readFileSync(
+  resolve(__dirnameSmoke, "../supabase/migrations/20261012000005_fitness_x_faith_photo.sql"),
+  "utf8",
+);
+assert.match(eventPhotoMigrationSource, /ITC Fitness x Faith 2/,
+  "Fitness x Faith photo migration must target only the requested event");
+assert.match(eventPhotoMigrationSource, /itc-fitness-x-faith-2\.jpeg/,
+  "Fitness x Faith photo migration must reference the checked-in asset");
+const eventOperationsSource = readFileSync(resolve(__dirnameSmoke, "js/operations.js"), "utf8");
+assert.match(eventOperationsSource, /photo_url/,
+  "live event templates must carry their targeted photo URL");
+const operationsSource = readFileSync(resolve(__dirnameSmoke, "js/operations.js"), "utf8");
+assert.match(operationsSource, /external_payment/,
+  "live operational templates and sessions must retain external-payment metadata");
+assert.match(operationsSource, /row\.external_payment[\s\S]*template\?\.external_payment/,
+  "legacy live sessions must inherit external-payment mode from their template");
+const sessionStoreSource = readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8");
+assert.match(sessionStoreSource, /session\?\.externalPayment[\s\S]*external_paid/,
+  "external paid events must never enter the RSVP or waitlist path");
 assert.match(integratedViewSource, /Mark confirmed with \$\{esc\(venueName\)\}/);
 assert.match(integratedViewSource, /function adminCapacityLine\(count, capacity\)/);
 assert.match(readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8"),
@@ -2566,12 +2680,22 @@ assert.doesNotMatch(
 assert.match(integratedAppSource, /form\.id === "form-privacy"[\s\S]*?updateMyPrivacyPreferences\(/,
   "Notifications must persist reminder preferences through the form delegate");
 assert.match(integratedAppSource,
-  /pendingVisitorHydrate = store\.hydrateLiveOperations\(\{ ensureWindow: true \}\)/,
+  /startLiveHydration = \(\) => \{[\s\S]*?await store\.hydrateLiveOperations\(\{ ensureWindow: true \}\)/,
   "signed-out live boot must not await schedule hydrate before the first Home paint");
+assert.doesNotMatch(integratedAppSource, /if \(page === "pay"\) \{\s*void renderWithFeedback/,
+  "payment route must not reload itself from the operations listener");
+assert.match(integratedAppSource, /case "pay":[\s\S]*hydrateLiveOperations\(\{ force: true \}\)[\s\S]*viewPay\(arg\)/,
+  "payment route must fetch collector details once before painting instructions");
 assert.match(integratedAppSource, /peekStoredLiveSession\(\)|returningFromAuthRedirect\(\)/,
   "first-visit guests must not wait on supabase-js before Continue with Google can navigate");
 assert.match(integratedAppSource, /await ensureLiveClient\(\)/,
   "live boot must load supabase-js on demand instead of from a blocking classic script");
+const bootSource = integratedAppSource.slice(
+  integratedAppSource.indexOf("async function boot()"),
+  integratedAppSource.indexOf("function hidePushHomeBanner"),
+);
+assert.match(bootSource, /await renderWithFeedback\(\);\n\s*if \(paintHomeFirst && startLiveHydration\) pendingVisitorHydrate = startLiveHydration\(\);/,
+  "the first Home paint must happen before live client and identity hydration");
 {
   const configSource = readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8");
   assert.match(configSource, /export function isLiveConfigured/,
@@ -3079,6 +3203,16 @@ if (localVisitorHome.includes('data-action="sign-in-google"')) {
   throw new Error("local signed-out Home must not render the live Google action");
 }
 console.log("ok  signed-out Home uses the correct live/local sign-in action");
+localStorage.setItem("itc.supabase.session", JSON.stringify({ access_token: "stored-session" }));
+const restoringHome = await views.viewHome();
+localStorage.removeItem("itc.supabase.session");
+if (restoringHome.includes("Join the club.") || restoringHome.includes('data-action="sign-in-google"') || restoringHome.includes('href="#/account">Sign in or join</a>')) {
+  throw new Error("a stored sign-in must not flash the visitor join card before the profile loads");
+}
+if (!localVisitorHome.includes("Join the club.")) {
+  throw new Error("removing the stored session must leave the visitor join card intact");
+}
+console.log("ok  stored sign-in hides the join card without waiting on the network");
 await check("home (visitor)", () => views.viewHome());
 const scheduleHtml = await check("schedule", () => views.viewSchedule());
 try {
@@ -4366,6 +4500,12 @@ if (!data.webPushOpsKindEligible("operational_payment_marked")
   );
   assert.ok(sessionAlertsPrefMigration.includes("rename column session_reminders to session_alerts"));
   assert.ok(sessionAlertsPrefMigration.includes("a.session_alerts = false"));
+  const ensureSessionAlertsMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261011000001_ensure_session_alerts.sql"),
+    "utf8",
+  );
+  assert.ok(ensureSessionAlertsMigration.includes("add column if not exists session_alerts"));
+  assert.ok(ensureSessionAlertsMigration.toLowerCase().includes("notify pgrst, 'reload schema'"));
 }
 console.log("ok  session reminder / web-push expansion migration markers");
 {
@@ -4405,15 +4545,35 @@ console.log("ok  session reminder / web-push expansion migration markers");
   assert.doesNotMatch(runbook, /[A-Za-z0-9]{16} [A-Za-z0-9]{16}/);
 }
 console.log("ok  email receipt migration, function, and runbook markers");
+assert.match(integratedStyleSource, /\.receipt-lines \.line \{[\s\S]*column-gap:\s*24px;/,
+  "Membership Details rows must keep a visible label/value gap");
+assert.match(integratedStyleSource, /\.receipt-lines \.line strong \{[\s\S]*overflow-wrap:\s*anywhere;/,
+  "Membership Details values must wrap without collapsing the label gap");
+assert.match(integratedStyleSource, /#form-membership-details \.line \{[\s\S]*display:\s*block;/,
+  "Membership Details edit rows must stack as card-header lines");
+assert.match(integratedStyleSource, /#form-membership-details \.line \{[^}]*border:\s*0;/,
+  "Membership Details edit header rows must explicitly have no divider borders");
+assert.match(integratedStyleSource, /#form-membership-details \.line \{[^}]*padding:\s*2px 2px;/,
+  "Membership Details edit header rows must stay compact");
 const membershipDetailsHtml = await views.viewAccount("details");
 const membershipDetailsEditHtml = await views.viewAccount("details", "edit");
+assert.doesNotMatch(membershipDetailsEditHtml, /<span>Full name:/,
+  "Membership Details edit should not keep Full name as a header row");
+assert.match(membershipDetailsEditHtml, /<span>Email: <strong>/,
+  "Membership Details edit should put Email and its value on one line");
+assert.match(membershipDetailsEditHtml, /name="full_name"/,
+  "Membership Details edit should let the member change Full name");
+assert.match(membershipDetailsEditHtml, /name="member_since"/,
+  "Membership Details edit should let the member change Member since");
+assert.match(membershipDetailsEditHtml, /id="md-member_since"[^>]*type="date"|type="date"[^>]*id="md-member_since"/,
+  "Membership Details edit should use a date input for Member since");
 for (const marker of ["Emergency contact relationship", "Donor ID"]) {
   if (!membershipDetailsHtml.includes(marker)) {
     failures++;
     console.error(`FAIL Membership Details summary missing ${marker}`);
   }
 }
-for (const field of ['name="emergency_relationship"', 'name="donorId"']) {
+for (const field of ['name="emergency_relationship"', 'name="donorId"', 'name="full_name"', 'name="member_since"']) {
   if (!membershipDetailsEditHtml.includes(field)) {
     failures++;
     console.error(`FAIL Membership Details edit form missing ${field}`);
@@ -5362,6 +5522,47 @@ if (store.currentUser().donorId !== "CHUI-8879") {
   failures++;
   console.error("FAIL Membership Details save should normalize and persist Donor ID");
 } else console.log("ok  Membership Details save includes Donor ID");
+{
+  const beforeIdentity = store.currentUser();
+  const originalName = beforeIdentity.fullName;
+  const originalSince = new Date(beforeIdentity.appliedAt).toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+  const identityPayload = {
+    mobile: beforeIdentity.phone,
+    age_over_18: beforeIdentity.isMinor ? "no" : "yes",
+    emergency_name: beforeIdentity.emergencyName,
+    emergency_relationship: beforeIdentity.emergencyRelationship,
+    emergency_phone: beforeIdentity.emergencyPhone,
+    heard_source: beforeIdentity.heard,
+    preferred_name: beforeIdentity.preferredName,
+    donorId: beforeIdentity.donorId,
+  };
+  await store.updateMyMembershipDetails({
+    ...identityPayload,
+    full_name: "Seles Li",
+    member_since: "2024-03-15",
+  });
+  const afterIdentity = store.currentUser();
+  assert.equal(afterIdentity.fullName, "Seles Li",
+    "Membership Details save should persist Full name");
+  assert.equal(
+    new Date(afterIdentity.appliedAt).toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" }),
+    "2024-03-15",
+    "Membership Details save should persist Member since",
+  );
+  const identitySummary = await views.viewAccount("details");
+  assert.match(identitySummary, /<span>Full name<\/span><strong>Seles Li<\/strong>/,
+    "Membership Details summary should show the saved Full name");
+  assert.match(identitySummary, /<span>Member since<\/span><strong>15 Mar 2024<\/strong>/,
+    "Membership Details summary should show the saved Member since date");
+  assert.match(await views.viewAccount(), /Member since Mar 2024/,
+    "Profile should show the saved Member since month");
+  await store.updateMyMembershipDetails({
+    ...identityPayload,
+    full_name: originalName,
+    member_since: originalSince,
+  });
+  console.log("ok  Membership Details save updates Full name and Member since");
+}
 
 // The stats and linked pages use the same canonical booking collection, so
 // each stat must equal the number of cards rendered by its destination.
@@ -6185,8 +6386,33 @@ store.signIn("admin@example.test");
   const eventHtml = views.viewActivity(paidEvent.id);
   if (!eventHtml.includes("Book & pay") || !eventHtml.includes("HK$250"))
     throw new Error("paid one-off activity page should offer booking");
+  const externalEvent = await store.createOneOffEvent({
+    name: "ITC Fitness x Faith 2", dateISO: oneOffDate(2), time: "10:00",
+    durationMin: 120, location: "1/F Hall, Island ECC", category: "Other",
+    externalPayment: true,
+    externalPrice: 250,
+  });
+  assert.deepEqual({
+    kind: externalEvent.kind,
+    externalPayment: externalEvent.externalPayment,
+    externalPrice: externalEvent.externalPrice,
+    requiresRsvp: externalEvent.requiresRsvp,
+    capacity: externalEvent.capacity,
+  }, {
+    kind: "external_paid",
+    externalPayment: true,
+    externalPrice: 250,
+    requiresRsvp: false,
+    capacity: null,
+  }, "external paid one-offs must be paid but uncapped and outside the booking pipeline");
+  const externalEventHtml = views.viewActivity(externalEvent.id);
+  if (!externalEventHtml.includes("Paid externally")
+      || !externalEventHtml.includes("sign-up link in the announcement")
+      || externalEventHtml.includes("Book & pay")) {
+    throw new Error("external paid one-off must show external signup without in-app checkout");
+  }
   const freeEvent = await store.createOneOffEvent({
-    name: "Community Picnic", dateISO: oneOffDate(2), time: "15:00",
+    name: "Community Picnic", dateISO: oneOffDate(3), time: "15:00",
     durationMin: 120, location: "Tamar Park", category: "Other",
   });
   assert.deepEqual({
@@ -6229,6 +6455,8 @@ store.signIn("admin@example.test");
     "a cancelled future zero-price one-off must expose Reopen event");
   if (!adminActivitiesHtml.includes("One-off Events")
       || !adminActivitiesHtml.includes("form-one-off-event")
+      || !adminActivitiesHtml.includes("Paid externally — open attendance")
+      || !adminActivitiesHtml.includes('name="externalPrice"')
       || !adminActivitiesHtml.includes("HYROX Race Day Send-off"))
     throw new Error("Activities tab should list one-off events and the add form");
   const weeklyStart = adminActivitiesHtml.indexOf(">Weekly Event Controls<");
@@ -6242,6 +6470,27 @@ store.signIn("admin@example.test");
       throw new Error(`${event.name} must not receive recurring controls`);
     if (!oneOffRegion.includes(event.name) || !oneOffRegion.includes(event.id))
       throw new Error(`${event.name} must appear only in One-off Events`);
+  }
+  const externalMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261012000002_external_paid_one_off_events.sql"),
+    "utf8",
+  );
+  const externalPriceMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261012000003_external_event_price.sql"),
+    "utf8",
+  );
+  for (const marker of [
+    "external_payment",
+    "p_external_payment",
+    "operational_sessions_one_off_mode_check",
+    "capacity is null",
+  ]) {
+    assert.ok(externalMigrationSource.includes(marker),
+      `external paid one-off migration must include ${marker}`);
+  }
+  for (const marker of ["external_price_hkd", "p_external_price_hkd", "External price must be positive"]) {
+    assert.ok(externalPriceMigrationSource.includes(marker),
+      `external price migration must include ${marker}`);
   }
   // Deletion is refused once a booking exists; cancellation still works and
   // voids the booking (no same-activity follow-up session to defer to).
@@ -8476,6 +8725,11 @@ const freeControlsSource = integratedViewSource
 if (!paidControlsSource.includes('<div class="empty mt8">No upcoming paid sessions.</div>')) {
   throw new Error("Paid Sessions must retain its concise empty-group state");
 }
+if (!paidControlsSource.includes("ADMIN_SESSION_SETUP_DAYS")
+    || !/ADMIN_SESSION_SETUP_DAYS\s*=\s*90/.test(paidControlsSource)
+    || !paidControlsSource.includes("store.upcomingSessions(ADMIN_SESSION_SETUP_DAYS)")) {
+  throw new Error("Paid Sessions must expose future HYROX cancellation controls beyond the member 21-day window");
+}
 if (!freeControlsSource.includes('<div class="empty mt8">No upcoming free or RSVP events.</div>')) {
   throw new Error("Free & RSVP Events must retain its concise empty-group state");
 }
@@ -8921,6 +9175,25 @@ assert.doesNotMatch(confirmedInviteHtml, new RegExp(replacementRequest.inviteTok
 store.signOut();
 assert.match(await views.viewReplacementInvite(replacementRequest.inviteToken), /Sign in to view this invite/);
 console.log("ok  replacement route preserves sign-in gate, privacy, and confirmed-member copy");
+
+{
+  installLocalFixtures();
+  if (!store.signIn("member@example.test").ok) {
+    failures++;
+    console.error("FAIL Allow on this phone needs the fixture member");
+  } else {
+    const member = store.currentUser();
+    member.sessionAlerts = false;
+    member.emailReceipts = true;
+    member.webPushOps = false;
+    const enabled = await store.enableWebPushOpsPreference();
+    if (!member.webPushOps || member.sessionAlerts !== false || member.emailReceipts !== true
+      || enabled?.web_push_ops !== true) {
+      failures++;
+      console.error("FAIL Allow on this phone must turn on web push without rewriting other prefs");
+    } else console.log("ok  Allow on this phone turns on web push without rewriting other prefs");
+  }
+}
 
 {
   installLocalFixtures();

@@ -330,10 +330,10 @@ function scheduleOperationalUiRefresh() {
       void fillActivityRoster(sessionId, session, user, renderGeneration);
       return;
     }
-    if (page === "pay") {
-      void renderWithFeedback({ preserveScroll: true });
-      return;
-    }
+    // The payment route already force-hydrates before painting collector
+    // PayMe/FPS details. Refreshing it from that hydration's own notification
+    // starts another render, which hides the loader from the previous one and
+    // loops. Returning from PayMe still refreshes via visibilitychange.
     if (page === "admin" && (!tab || tab === "payments" || tab === "ops")) {
       void renderWithFeedback();
     }
@@ -826,6 +826,9 @@ async function render(generation = renderGeneration, options = {}) {
       out = views.viewSchedule();
       break;
     case "activity": {
+      if (isLive()) {
+        await store.hydrateLiveOperations({ force: true });
+      }
       if (store.isRetiredHyroxMemberRoute("activity", arg)) {
         out = views.viewRetiredSession();
         break;
@@ -2207,6 +2210,8 @@ document.addEventListener("submit", async (e) => {
             category: fd.get("category"),
             price: kind === "paid" ? Number(fd.get("price")) : 0,
             capacity: fd.get("capacity"),
+            externalPayment: kind === "external_paid",
+            externalPrice: kind === "external_paid" ? Number(fd.get("externalPrice")) : null,
           });
           toast("Event added");
           await renderWithFeedback();
@@ -2438,7 +2443,9 @@ function form_kind_toggle(select) {
   const form = select.closest("form");
   if (!form) return;
   const isPaid = select.value === "paid";
+  const isExternalPaid = select.value === "external_paid";
   form.querySelectorAll(".paid-only").forEach((block) => block.classList.toggle("hidden", !isPaid));
+  form.querySelectorAll(".external-paid-only").forEach((block) => block.classList.toggle("hidden", !isExternalPaid));
 }
 
 // --- Boot ---------------------------------------------------------------------------------------
@@ -2477,6 +2484,24 @@ function bindOperationalUiRefresh() {
   bindNotificationUiRefresh();
 }
 
+function hydrateSignedInAfterPaint(user) {
+  if (!user) return;
+  void store.fetchApplicationForUser(user).then(async () => {
+    if (parseHash()[0] === "home") await renderWithFeedback();
+    await maybeRedirectToApply();
+  }).catch((err) => {
+    toast(err.message || "Application read failed", true);
+  });
+  void syncApprovedGoogleAvatar({ ifMissing: true }).catch(() => {});
+  if (user.status === "approved" || parseHash()[0] === "home") {
+    void store.hydrateLiveOperations({ ensureWindow: true }).then(() => {
+      if (parseHash()[0] === "home") void renderWithFeedback();
+    }).catch((err) => {
+      toast(err.message || "Unable to load live sessions", true);
+    });
+  }
+}
+
 function bindLiveAuthState() {
   if (liveAuthBound || !isLive() || !supabase) return;
   liveAuthBound = true;
@@ -2489,11 +2514,13 @@ function bindLiveAuthState() {
     setTimeout(async () => {
       try {
         await store.getCurrentUser();
-        await store.fetchApplicationForUser(store.currentUser());
-        await syncApprovedGoogleAvatar({ ifMissing: true });
+        const user = store.currentUser();
+        const fastHomePaint = user?.status === "approved" && parseHash()[0] === "home";
         await renderWithFeedback();
-        await maybeRedirectToApply();
-        void store.startNotificationRealtime();
+        if (!fastHomePaint) await maybeRedirectToApply();
+        if (fastHomePaint || user?.status === "approved") {
+          hydrateSignedInAfterPaint(user);
+        }
         void restoreInstalledWebPush();
       } catch (err) {
         toast(err.message || "Sign-in failed", true);
@@ -2506,49 +2533,61 @@ async function boot() {
   store.load();
   const authCallbackError = consumeAuthCallbackError();
   let pendingVisitorHydrate = null;
-  // Live mode: hydrate the synchronous view model before the first render
-  // so Home renders with the correct signed-in state. The callback lock
-  // is held by Supabase's own handler, so getCurrentUser() must not run
-  // while it is held. First-visit guests skip supabase-js until after paint
-  // so Continue with Google can navigate immediately.
+  let paintHomeFirst = false;
+  // Live mode hydrates identity after the first paint. This keeps the Home
+  // shell responsive while supabase-js, auth, and the profile query settle.
+  // The callback lock is held by Supabase's own handler, so getCurrentUser()
+  // must not run while it is held. First-visit guests also skip supabase-js
+  // until after paint so Continue with Google can navigate immediately.
+  let startLiveHydration = null;
   if (isLiveConfigured()) {
     const needClientNow = isLive() || peekStoredLiveSession() || returningFromAuthRedirect();
-    if (needClientNow) {
-      let bootError = null;
-      try {
-        await ensureLiveClient();
-        await store.completeGoogleSignInFromRedirect();
-        await store.getCurrentUser();
-        const user = store.currentUser();
-        if (user) {
-          await store.fetchApplicationForUser(user);
-          await syncApprovedGoogleAvatar({ ifMissing: true });
-          await store.hydrateLiveOperations({ ensureWindow: true });
-        } else {
-          // Signed-out Home should paint the join card before schedule RPCs return.
-          pendingVisitorHydrate = store.hydrateLiveOperations({ ensureWindow: true });
-        }
-      } catch (err) {
-        bootError = err;
+    startLiveHydration = () => {
+      if (needClientNow) {
+        if (authCallbackError) toast(authCallbackError, true);
+        return (async () => {
+          let user = null;
+          try {
+            await ensureLiveClient();
+            await store.completeGoogleSignInFromRedirect();
+            await store.getCurrentUser();
+            user = store.currentUser();
+          } catch (err) {
+            toast(err.message || "Application read failed", true);
+          }
+          bindLiveAuthState();
+          if (user && paintHomeFirst) {
+            hydrateSignedInAfterPaint(user);
+          } else if (user) {
+            try {
+              await store.fetchApplicationForUser(user);
+            } catch (err) {
+              toast(err.message || "Application read failed", true);
+            }
+            void syncApprovedGoogleAvatar({ ifMissing: true }).catch(() => {});
+            if (user.status === "approved") {
+              void store.hydrateLiveOperations({ ensureWindow: true }).catch(() => {});
+            }
+          } else if (isLive()) {
+            // Signed-out Home should paint the join card before schedule RPCs return.
+            await store.hydrateLiveOperations({ ensureWindow: true });
+          }
+        })();
       }
-      bindLiveAuthState();
       if (authCallbackError) toast(authCallbackError, true);
-      if (bootError) {
-        toast(bootError.message || "Application read failed", true);
-      }
-    } else {
-      if (authCallbackError) toast(authCallbackError, true);
-      pendingVisitorHydrate = (async () => {
+      return (async () => {
         await ensureLiveClient();
         bindLiveAuthState();
         await store.hydrateLiveOperations({ ensureWindow: true });
       })();
-    }
+    };
   } else if (authCallbackError) {
     toast(authCallbackError, true);
   }
+  paintHomeFirst = !location.hash || location.hash === "#/home";
   const startup = store.startupRoute(location.hash, store.currentUser()?.id);
   if (startup !== location.hash) replaceRoute(startup);
+  if (!paintHomeFirst && startLiveHydration) pendingVisitorHydrate = startLiveHydration();
   window.addEventListener("hashchange", async () => {
     const generation = ++renderGeneration;
     // The Payment/Auth baseline hydrates identity before rendering. Commit
@@ -2612,8 +2651,7 @@ async function boot() {
     }
   });
 
-  await renderWithFeedback();
-  if (pendingVisitorHydrate) {
+  if (!paintHomeFirst && pendingVisitorHydrate) {
     try {
       await pendingVisitorHydrate;
       bindOperationalUiRefresh();
@@ -2622,14 +2660,25 @@ async function boot() {
       toast(err.message || "Unable to load this week's sessions", true);
     }
   } else {
-    bindOperationalUiRefresh();
+    await renderWithFeedback();
+    if (paintHomeFirst && startLiveHydration) pendingVisitorHydrate = startLiveHydration();
+    if (pendingVisitorHydrate) {
+      try {
+        await pendingVisitorHydrate;
+        bindOperationalUiRefresh();
+        await renderWithFeedback();
+      } catch (err) {
+        toast(err.message || "Unable to load this week's sessions", true);
+      }
+    } else {
+      bindOperationalUiRefresh();
+    }
   }
   if (canManageOwnAvatar(store.currentUser())) {
     void store.getOwnAvatar().then((presentation) => {
       commitOwnAvatarPresentation(presentation);
     }).catch(() => {});
   }
-  if (isLive()) await maybeRedirectToApply();
   void restoreInstalledWebPush();
 }
 

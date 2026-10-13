@@ -6,7 +6,7 @@
 // ==========================================================================
 
 import * as store from "./store.js";
-import { isLive, isLiveConfigured } from "./config.js";
+import { isLive, isLiveConfigured, peekStoredLiveSession } from "./config.js";
 import * as liveOps from "./operations.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
@@ -123,9 +123,17 @@ const fmtMonthYear = (ts) =>
     year: "numeric",
   });
 
+function memberSinceInputValue(ts) {
+  if (!ts) return "";
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+}
+
 // --- Shared fragments ---------------------------------------------------------
 
 function badgeFor(s, booking = null, reservation = null) {
+  if (s.kind === "external_paid") return `<span class="badge paid">Paid externally</span>`;
   if (s.kind === "free") return `<span class="badge free">Free</span>`;
   if (s.kind === "rsvp") {
     return booking
@@ -169,6 +177,8 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
   } else if (s.kind === "rsvp") {
     const going = store.attendeeCountFor(s);
     end = `<span class="badge free">RSVP</span><span class="spots">${going} going</span>`;
+  } else if (s.kind === "external_paid") {
+    end = `<span class="badge paid">Paid externally</span><span class="spots">${s.externalPrice != null ? fmtMoney(s.externalPrice) : "Sign up via announcement"}</span>`;
   } else if (s.kind === "free") {
     end = `<span class="badge free">Free</span><span class="spots">Just show up</span>`;
   } else {
@@ -358,7 +368,12 @@ function visitorDraftActions() {
 
 export async function viewHome() {
   const user = store.currentUser();
-  const hydrated = user ? await hydrateLiveUser(user) : null;
+  // Paint from the profile immediately after sign-in. The application row
+  // contains richer greeting/contact data and is refreshed after the first
+  // Home paint when it is not already cached.
+  const hydrated = user && store.peekLiveApplication(user.id) !== undefined
+    ? await hydrateLiveUser(user)
+    : user;
   // Match Schedule's Sunday–Saturday week (sundayOf + 7 days), not Mon–Sun.
   const upcoming = store.upcomingSessions(14);
   const weekStart = sundayOf(todayLocal());
@@ -395,7 +410,7 @@ export async function viewHome() {
     weekHeading = "My Week";
   }
 
-  const guest = !user
+  const guest = !user && !peekStoredLiveSession()
     ? `
     <div class="card mt24"><div class="card-body">
       <span class="kicker">Join ITC</span>
@@ -723,6 +738,16 @@ export function viewActivity(sessionId, options) {
     } else {
       actionBlock = membersOnlyGate();
     }
+  } else if (s.kind === "external_paid") {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">Paid externally</span>
+        <p>No in-app booking or capacity tracking. Use the sign-up link in the announcement.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" type="button" data-action="ics" data-session="${s.id}">Add to calendar</button>
+        ${directionsLink}
+      </div>`;
   } else if (booking) {
     actionBlock = `
       <div class="banner mt16">
@@ -813,7 +838,9 @@ export function viewActivity(sessionId, options) {
       ? `
       <div><small>Price</small><strong>${fmtMoney(s.price)} / session</strong></div>
       <div><small>Places</small><strong>${spots <= 0 ? "Full" : `${spots} of ${s.capacity} left`}</strong></div>`
-      : "";
+      : s.kind === "external_paid"
+        ? `<div><small>Price</small><strong>${s.externalPrice != null ? fmtMoney(s.externalPrice) : "External sign-up"}</strong></div><div><small>Attendance</small><strong>Open</strong></div>`
+        : "";
 
   const attendees =
     (s.kind === "paid" || store.sessionRequiresRsvp(s))
@@ -1385,8 +1412,8 @@ function communityAnnouncements() {
   return `
     <a class="back-link" href="#/community">← Community</a>
     <h1 class="display sm mt16">Announcements</h1>
-    ${anniversary}
     ${publishedSection}
+    ${anniversary}
     ${adminCompose}`;
 }
 
@@ -1749,8 +1776,15 @@ async function accountDetailsEdit(user) {
       title: "Edit Membership Details",
     })}
     <form id="form-membership-details" data-form="membership-details" class="card mt16"><div class="card-body">
-      <div class="line"><span>Full name</span><strong>${esc(user.fullName)}</strong></div>
-      <div class="line"><span>Email</span><strong>${esc(user.email)}</strong></div>
+      <div class="line"><span>Email: <strong>${esc(user.email)}</strong></span></div>
+      <div class="field">
+        <label for="md-full_name">Full name *</label>
+        <input id="md-full_name" name="full_name" value="${esc(user.fullName || "")}" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="md-member_since">Member since *</label>
+        <input id="md-member_since" name="member_since" type="date" value="${esc(memberSinceInputValue(hydrated.appliedAt))}" required>
+      </div>
       <div class="field">
         <label for="md-donorId">Donor ID</label>
         <input id="md-donorId" name="donorId" value="${esc(hydrated.donorId || "")}" placeholder="e.g. CHUI-08879" autocomplete="off">
@@ -3047,9 +3081,11 @@ async function adminReplacementReview() {
 
 // Weekly paid-session setup controls (time, note, venue TBC) live
 // on the Activities tab alongside the recurring defaults and free/RSVP event
-// controls. Booking and payment status belongs on Payments.
+// controls. Booking and payment status belongs on Payments. Admins need a
+// longer horizon than members so future sessions can be cancelled in advance.
 function adminPaidSessionControls() {
-  const upcoming = store.upcomingSessions(21).filter(
+  const ADMIN_SESSION_SETUP_DAYS = 90;
+  const upcoming = store.upcomingSessions(ADMIN_SESSION_SETUP_DAYS).filter(
     (s) => !s.oneOff && s.category === "HYROX" && s.kind === "paid" && !sessionStarted(s)
   );
   const sessionCards = upcoming.map((s) => {
@@ -3471,8 +3507,9 @@ export async function viewAdminCampaign(id) {
 }
 
 // One-off events: single-date admin-created events (race days, socials,
-// pop-ups). Paid events flow through the normal reserve/pay pipeline; free
-// events are show-up. Deletion is only possible before anyone books.
+// pop-ups). In-app paid events flow through reserve/pay; externally paid
+// events show the paid label but remain open attendance. Deletion is only
+// possible before anyone books.
 function adminOneOffEvents() {
   const upcoming = store.upcomingSessions(60).filter((s) => s.oneOff && !sessionStarted(s));
   const cards = upcoming.map((s) => {
@@ -3483,7 +3520,7 @@ function adminOneOffEvents() {
       <div class="card mt16 ${cancelled ? "is-cancelled" : ""}"><div class="card-body">
         <div class="kicker dim" style="margin-top:0">${esc(fmtDate(s.dateISO))} · ${fmtTime(s.time)}</div>
         <h3 class="mt8">${esc(s.name)}</h3>
-        <p class="muted small mt8">${esc(s.location)} · ${s.kind === "paid" ? `${fmtMoney(s.price)} · cap ${s.capacity}` : "Free · RSVP optional"}</p>
+        <p class="muted small mt8">${esc(s.location)} · ${s.kind === "paid" ? `${fmtMoney(s.price)} · cap ${s.capacity}` : s.kind === "external_paid" ? `Paid externally${s.externalPrice != null ? ` · ${fmtMoney(s.externalPrice)}` : ""} · open attendance` : "Free · RSVP optional"}</p>
         ${rsvpOccurrence
           ? adminRsvpOccurrenceControls(override, {
             cancelLabel: "Cancel event",
@@ -3506,7 +3543,7 @@ function adminOneOffEvents() {
   return `
     <details class="admin-section mt24">
       <summary><h2>One-off Events</h2></summary>
-      <p class="muted small mt8">Single-date events — race days, socials, pop-ups. Free events need no booking; paid events use the normal reserve-and-pay flow. Delete works only before anyone books; afterwards cancel instead.</p>
+      <p class="muted small mt8">Single-date events — race days, socials, pop-ups. Choose external payment when signup happens through an announcement link; no in-app booking or capacity is tracked. Delete works only before anyone books; afterwards cancel instead.</p>
       ${cards || `<div class="empty mt8">No upcoming one-off events.</div>`}
       <form id="form-one-off-event" class="card mt16"><div class="card-body">
         <h3>Add one-off event</h3>
@@ -3532,14 +3569,19 @@ function adminOneOffEvents() {
             <select id="oe-kind" name="kind" data-change="kind-toggle">
               <option value="free" selected>Free — open attendance</option>
               <option value="paid">Paid — book & pay in app</option>
+              <option value="external_paid">Paid externally — open attendance</option>
             </select>
           </div>
         </div>
         <div class="paid-only hidden">
           <div class="field-row">
-            <div class="field"><label for="oe-price">Price (HKD)</label><input id="oe-price" name="price" type="number" min="0" value="180"></div>
+            <div class="field"><label for="oe-price">Price (HKD)</label><input id="oe-price" name="price" type="number" min="1" value="180"></div>
             <div class="field"><label for="oe-cap">Capacity</label><input id="oe-cap" name="capacity" type="number" min="1" value="20"></div>
           </div>
+        </div>
+        <div class="external-paid-only hidden">
+          <div class="field"><label for="oe-external-price">Price (HKD) *</label><input id="oe-external-price" name="externalPrice" type="number" min="1" step="1" placeholder="e.g. 250"></div>
+          <p class="muted small">Shown to members only; payment and signup stay in the announcement link.</p>
         </div>
         <button class="btn sm mt8" type="submit">Add event</button>
       </div></form>

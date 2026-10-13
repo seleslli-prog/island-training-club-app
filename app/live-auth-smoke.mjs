@@ -168,6 +168,7 @@ applicationRows.set("pending-submitted", {
   profiles: pendingProfiles[0],
 });
 const applicationUpdates = [];
+const applicationUpdateErrors = [];
 const profileUpdates = [];
 let applicationReadError = null;
 let applicationReadGate = null;
@@ -758,6 +759,16 @@ const fakeSupabase = {
                 throw new Error("Application update did not target the signed-in user");
               }
               applicationUpdates.push(structuredClone(patch));
+              const forced = applicationUpdateErrors.shift();
+              if (forced) {
+                return {
+                  select() {
+                    return {
+                      single: async () => ({ data: null, error: forced }),
+                    };
+                  },
+                };
+              }
               const next = {
                 ...(applicationRows.get(value) || { profile_id: value }),
                 ...patch,
@@ -4434,8 +4445,17 @@ if (!detailsEdit.includes('data-form="membership-details"')) {
 if (!detailsEdit.includes("Save changes")) {
   throw new Error("Live details edit route should render the save action");
 }
-if (!detailsEdit.includes("Riley Runner") || !detailsEdit.includes("runner@example.com")) {
-  throw new Error("Live details edit route should show read-only identity rows");
+if (!detailsEdit.includes('name="full_name"') || !detailsEdit.includes('value="Riley Runner"')) {
+  throw new Error("Live details edit route should prefill Full name for editing");
+}
+if (detailsEdit.includes("<span>Full name:")) {
+  throw new Error("Live details edit route should not keep Full name as a header row");
+}
+if (!detailsEdit.includes("<span>Email: <strong>") || !detailsEdit.includes("runner@example.com")) {
+  throw new Error("Live details edit route should keep Email as a compact header");
+}
+if (!detailsEdit.includes('name="member_since"') || !detailsEdit.includes('type="date"') || !detailsEdit.includes('value="2026-08-05"')) {
+  throw new Error("Live details edit route should prefill Member since as a date input");
 }
 if (!detailsEdit.includes('value="+852 6123 4567"')) {
   throw new Error("Live details edit route should prefill the mobile number");
@@ -4598,6 +4618,40 @@ for (const banned of [
 ]) {
   if (banned in membershipPatch) throw new Error(`membership patch should exclude ${banned}`);
 }
+{
+  const profileUpdatesBeforeIdentity = profileUpdates.length;
+  await store.updateMyMembershipDetails({
+    full_name: "Seles Li",
+    member_since: "2024-03-15",
+    mobile: "+852 9000 0000",
+    age_over_18: "yes",
+    emergency_name: "Alex Runner",
+    emergency_relationship: "Coach",
+    emergency_phone: "+852 9111 1111",
+    heard_source: "friend",
+    heard_detail: "Run club",
+    preferred_name: "Riley",
+  });
+  assert.ok(
+    profileUpdates.slice(profileUpdatesBeforeIdentity).some((update) => update.full_name === "Seles Li"),
+    "membership save should update profiles.full_name",
+  );
+  const identityPatch = applicationUpdates.at(-1);
+  assert.equal(identityPatch?.submitted_at, "2024-03-14T16:00:00.000Z",
+    "membership save should persist Member since as applications.submitted_at");
+  await store.updateMyMembershipDetails({
+    full_name: "Riley Runner",
+    member_since: "2026-08-05",
+    mobile: "+852 9000 0000",
+    age_over_18: "yes",
+    emergency_name: "Alex Runner",
+    emergency_relationship: "Coach",
+    emergency_phone: "+852 9111 1111",
+    heard_source: "friend",
+    heard_detail: "Run club",
+    preferred_name: "Riley",
+  });
+}
 await store.updateMyPrivacyPreferences({
   session_alerts: true,
   hyrox_payment_reminders: false,
@@ -4633,6 +4687,28 @@ for (const banned of [
 ]) {
   if (banned in privacyPatch) throw new Error(`privacy patch should exclude ${banned}`);
 }
+applicationUpdates.length = 0;
+await store.enableWebPushOpsPreference();
+assert.deepEqual(applicationUpdates.at(-1), { web_push_ops: true },
+  "Allow on this phone must only persist web_push_ops");
+applicationUpdates.length = 0;
+applicationUpdateErrors.push({
+  message: "Could not find the 'session_alerts' column of 'applications' in the schema cache",
+});
+await store.updateMyPrivacyPreferences({
+  session_alerts: true,
+  hyrox_payment_reminders: false,
+  email_receipts: false,
+  community_news: false,
+  web_push_ops: true,
+});
+assert.equal(applicationUpdates.length, 2, "privacy save should retry without session_alerts");
+assert.ok("session_alerts" in applicationUpdates[0]);
+assert.equal("session_alerts" in applicationUpdates[1], false);
+assert.deepEqual(
+  Object.keys(applicationUpdates[1]).sort(),
+  ["community_news", "email_receipts", "hyrox_payment_reminders", "web_push_ops"],
+);
 applicationUpdates.length = 0;
 const preservedWaiver = await store.acceptMyIndemnity({
   signature: "Riley Runner",

@@ -93,6 +93,9 @@ function buildTemplateRow(row) {
     category: row.category || null,
     maps_query: row.maps_query || null,
     requires_rsvp: !!row.requires_rsvp,
+    external_payment: !!row.external_payment,
+    external_price_hkd: row.external_price_hkd == null ? null : Number(row.external_price_hkd),
+    photo_url: row.photo_url || null,
   };
 }
 
@@ -104,6 +107,8 @@ function buildSessionRow(row, templatesById = null) {
   const metadata = ACTIVITY_PRESENTATION.get(row.activity_id);
   const template = templatesById?.get(row.activity_id) ?? null;
   const oneOff = String(row.activity_id).startsWith("event-");
+  const externalPayment = !!row.external_payment || !!template?.external_payment;
+  const externalPrice = row.external_price_hkd ?? template?.external_price_hkd ?? null;
   const freePresentation = oneOff || FREE_PRESENTATION_ACTIVITY_IDS.has(row.activity_id);
   const legacyMidtown = row.activity_id === "hyrox-midtown"
     && row.venue === "Midtown 28";
@@ -122,12 +127,16 @@ function buildSessionRow(row, templatesById = null) {
     // RSVP capability is separate from presentation: recurring community
     // sessions and free one-offs stay `free`, while Lunch keeps its dedicated
     // RSVP presentation. Paid sessions retain the reserve/pay pipeline.
-    kind: Number(row.price_hkd) > 0
-      ? "paid"
-      : freePresentation
-        ? "free"
-        : template?.requires_rsvp ? "rsvp" : "free",
+    kind: externalPayment
+      ? "external_paid"
+      : Number(row.price_hkd) > 0
+        ? "paid"
+        : freePresentation
+          ? "free"
+          : template?.requires_rsvp ? "rsvp" : "free",
     requiresRsvp: !!template?.requires_rsvp,
+    externalPayment,
+    externalPrice: externalPrice == null ? null : Number(externalPrice),
     category: template?.category || metadata?.category || (oneOff ? "Other" : "HYROX"),
     weekday: date.getDay(),
     oneOff,
@@ -138,7 +147,7 @@ function buildSessionRow(row, templatesById = null) {
     location: venue,
     mapsQuery,
     venue,
-    photo: metadata?.photo || (oneOff ? "../assets/itc/main.webp" : "../assets/itc/itc-hyrox-mood.webp"),
+    photo: template?.photo_url || metadata?.photo || (oneOff ? "../assets/itc/main.webp" : "../assets/itc/itc-hyrox-mood.webp"),
     blurb: metadata?.blurb || "",
     memberNote: metadata?.memberNote || "",
     capacity: row.capacity,
@@ -1231,8 +1240,10 @@ export async function liveCreateEvent(payload) {
     p_maps_query: payload.mapsQuery || null,
     p_category: payload.category || "Other",
     p_price_hkd: payload.price ?? 0,
-    p_capacity: Number(payload.price ?? 0) === 0 ? null : (payload.capacity ?? 20),
-    p_requires_rsvp: Number(payload.price ?? 0) === 0,
+    p_capacity: payload.externalPayment ? null : (Number(payload.price ?? 0) === 0 ? null : (payload.capacity ?? 20)),
+    p_requires_rsvp: payload.externalPayment ? false : Number(payload.price ?? 0) === 0,
+    p_external_payment: !!payload.externalPayment,
+    p_external_price_hkd: payload.externalPrice ?? null,
   });
   return row;
 }
