@@ -276,12 +276,12 @@ const NAV_ITEMS = [
 ];
 
 export function navHTML(routeKey, user) {
-  const isSignedIn = !!user;
+  const isSignedIn = !!user || peekStoredLiveSession();
   return NAV_ITEMS.filter((i) => !i.roles || (i.roles.includes("signed-in") && isSignedIn))
     .map(
       (i) => `
       <a href="${i.href}" class="${i.key === routeKey ? "active" : ""}" ${i.key === routeKey ? 'aria-current="page"' : ""}>
-        ${ICONS[i.icon]}<span>${i.key === "account" && user ? "Profile" : i.label}</span>
+        ${ICONS[i.icon]}<span>${i.key === "account" && isSignedIn ? "Profile" : i.label}</span>
       </a>`
     )
     .join("");
@@ -384,12 +384,22 @@ export async function viewHome() {
     const t = parseISO(iso).getTime();
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
+  const restoringSession = !user && peekStoredLiveSession();
   const name = hydrated ? esc(greetingName(hydrated)) : null;
+  const headline = name
+    ? `Good to see you, ${name}.`
+    : restoringSession
+      ? "Good to see you."
+      : "Train together.";
 
   let rows;
   let emptyMsg;
   let weekHeading;
-  if (!user) {
+  if (restoringSession) {
+    rows = [];
+    emptyMsg = "Loading this week's sessions…";
+    weekHeading = "My Week";
+  } else if (!user) {
     rows = upcoming.filter((session) => session.kind === "free" && inThisWeek(session));
     emptyMsg = isLiveConfigured() && !liveOps.operationalStateStatus().loaded
       ? "Loading this week's sessions…"
@@ -446,9 +456,9 @@ export async function viewHome() {
 
   return `
     <div class="kicker">${esc(fmtDateLong(todayLocal()))} · Hong Kong</div>
-    <h1 class="display">${name ? `Good to see you, ${name}.` : "Train together."}</h1>
+    <h1 class="display">${headline}</h1>
     ${user && user.status === "pending" ? pendingBanner() : ""}
-    ${user ? encouragement : ""}
+    ${user || restoringSession ? encouragement : ""}
     ${guest}
     <div class="section-head">
       <h2>${weekHeading}</h2>
