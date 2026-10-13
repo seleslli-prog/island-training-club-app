@@ -1369,8 +1369,10 @@ export async function liveSetSessionTime(sessionId, time) {
 }
 
 export async function liveSetSessionTimeTBC(sessionId) {
-  return runOperationalRpc("set_operational_session_time_tbc", {
+  // Use the already-permitted Save time function. A null time means TBC.
+  return runOperationalRpc("set_operational_session_time", {
     p_session_id: sessionId,
+    p_time: null,
   }, {
     applyResult(result) {
       const session = patchLiveSession(result);
