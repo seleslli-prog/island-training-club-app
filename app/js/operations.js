@@ -632,6 +632,12 @@ function operationalProblem(error) {
   if (error.code === "PGRST202" && message.includes("operational_replacement")) {
     return new Error("Replacement setup is temporarily unavailable. Please contact ITC.");
   }
+  if (error.code === "PGRST202" && message.includes("set_operational_session_time_tbc")) {
+    return new Error("Mark time TBC needs the latest database update before it can save.");
+  }
+  if (message.includes("time_tbc")) {
+    return new Error("Mark time TBC needs the latest database update before it can save.");
+  }
   if (message.includes("Session is cancelled")) return new Error("Session is cancelled.");
   if (message.includes("Session is full")) return new Error("Session is full.");
   if (message.includes("Session is not open")) return new Error("Session is not open.");
