@@ -8058,6 +8058,14 @@ store.setSessionTime(paymentGateSession.id, "11:00");
   if (!store.getSession(weekLate.id).timeTBC || !store.getSession(nextWeek.id).timeTBC) {
     throw new Error("saving one Island ECC time must not confirm the other slot or later weeks");
   }
+  store.setSessionTimeTBC(weekEarly.id);
+  const restored = store.getSession(weekEarly.id);
+  if (!restored.timeTBC || restored.time !== "09:15") {
+    throw new Error("an Island ECC week must be able to return to TBC without changing other weeks");
+  }
+  if (!store.getSession(weekLate.id).timeTBC) {
+    throw new Error("returning one slot to TBC must leave the other slot unchanged");
+  }
   console.log("ok  Island ECC admin time change applies to one week only");
 }
 store.setSessionNotice(paymentGateSession.id, "Admin note");
@@ -8817,11 +8825,11 @@ const recurringDefaultsHtml = activitiesHtml.slice(
   weeklyControlsStart === -1 ? undefined : weeklyControlsStart,
 );
 const recurringDayTimes = [...recurringDefaultsHtml.matchAll(
-  /<time>(Sun|Mon|Tue|Wed|Thu|Fri|Sat)<small>(\d{2}:\d{2})<\/small><\/time>/g
+  /<time>(Sun|Mon|Tue|Wed|Thu|Fri|Sat)<small>(\d{2}:\d{2}|TBC)<\/small><\/time>/g
 )].map((match) => `${match[1]} ${match[2]}`);
 assert.deepEqual(
   recurringDayTimes,
-  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 09:15", "Sat 10:30", "Sat 12:00"],
+  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat TBC", "Sat TBC", "Sat 12:00"],
   "Recurring Activity Defaults must sort by weekday, then start time"
 );
 if (!activitiesHtml.includes("Admin Tools") || activitiesHtml.includes("Club Operations")) {

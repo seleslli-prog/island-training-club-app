@@ -3617,6 +3617,24 @@ export function setSessionTime(sessionId, time) {
   return getSession(sessionId);
 }
 
+export function setSessionTimeTBC(sessionId) {
+  assertActiveSessionTarget(sessionId);
+  if (isLive()) return liveOps.liveSetSessionTimeTBC(sessionId);
+  requirePaymentAdminActor();
+  const session = getSession(sessionId);
+  if (!session) throw new Error("Session not found.");
+  if (!islandEccFlexibleTime(session)) {
+    throw new Error("Only Island ECC weeks from 24 Oct can return to TBC.");
+  }
+  const override = state.sessionOverrides[sessionId];
+  if (override) {
+    delete override.time;
+    if (!Object.keys(override).length) delete state.sessionOverrides[sessionId];
+  }
+  save();
+  return getSession(sessionId);
+}
+
 export function setVenueTBC(sessionId, on) {
   assertActiveSessionTarget(sessionId);
   if (isLive()) {

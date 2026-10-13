@@ -2230,6 +2230,18 @@ document.addEventListener("submit", async (e) => {
       break;
     }
 
+    case "session-time-tbc":
+      try {
+        await withBusyControl(el, "Updating…", async () => {
+          await store.setSessionTimeTBC(el.dataset.session);
+          toast("Time marked TBC for this week");
+          await renderWithFeedback();
+        });
+      } catch (err) {
+        toast(err.message || "Unable to mark the time TBC", true);
+      }
+      break;
+
     case "form-session-time": {
       e.preventDefault();
       const time = new FormData(form).get("time");
