@@ -1359,6 +1359,12 @@ export async function liveSetSessionTime(sessionId, time) {
   });
 }
 
+export async function liveSetSessionTimeTBC(sessionId) {
+  return runOperationalRpc("set_operational_session_time_tbc", {
+    p_session_id: sessionId,
+  });
+}
+
 export async function liveSetVenueTBC(sessionId, enabled) {
   return runOperationalRpc("set_operational_venue_tbc", {
     p_session_id: sessionId,
