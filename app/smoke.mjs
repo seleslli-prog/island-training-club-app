@@ -621,6 +621,31 @@ const { createHash } = await import("node:crypto");
 const { resolve, dirname } = await import("node:path");
 const { fileURLToPath } = await import("node:url");
 const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
+{
+  const applyAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
+  const applyViewSource = readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8");
+  assert.match(applyAppSource, /catch \{[\s\S]*?hasApplication = false/,
+    "a failed application read must still open the unfinished form");
+  assert.match(applyAppSource, /else if \(user\) \{[\s\S]*?await maybeRedirectToApply\(\)/,
+    "reopening on a non-Home route must still send an unfinished applicant to the form");
+  assert.match(applyAppSource, /fetchApplicationForUser\(user\)\.then[\s\S]*?catch\(async \(err\)[\s\S]*?maybeRedirectToApply\(\)/,
+    "Home reopen must open the form even when the application read fails");
+  assert.match(applyAppSource, /resumedPage === "home" \|\| resumedPage === "account"[\s\S]*?maybeRedirectToApply\(\)/,
+    "returning to Home or Profile must reopen an unfinished application");
+  assert.doesNotMatch(applyAppSource.slice(
+    applyAppSource.indexOf("async function boot()"),
+    applyAppSource.indexOf("function hidePushHomeBanner"),
+  ).match(/if \(user && paintHomeFirst\) \{[\s\S]*?\} else if \(user\)/)?.[0] || "",
+  /await store\.(fetchApplicationForUser|hydrateLiveOperations|getMyApplication)\(/,
+    "signed-in Home boot must still paint before the application query");
+  assert.match(applyViewSource, /function pendingMembershipNotice\(user\)[\s\S]*?if \(app\) return pendingBanner\(\)/,
+    "Application under review must wait for a submitted application row");
+  assert.match(applyViewSource, /Resumed from your draft saved at/,
+    "the application form must keep restoring the saved draft");
+  assert.match(applyViewSource, /You started the membership form earlier\. Continue to finish it\./,
+    "a saved draft must keep the previous resume prompt");
+  console.log("ok  unfinished Google and email applicants reopen the same draft form");
+}
 const migrationNames = readdirSync(resolve(__dirnameSmoke, "../supabase/migrations"))
   .filter((name) => /^\d+_.+\.sql$/.test(name));
 const migrationVersions = new Map();

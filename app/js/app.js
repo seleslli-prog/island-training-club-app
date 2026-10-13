@@ -700,10 +700,18 @@ export async function maybeRedirectToApply() {
   if (!isLive()) return;
   const cu = await store.getCurrentUser();
   if (!cu || cu.role !== "pending") return;
-  const app = await store.getMyApplication();
+  // A failed application read must not leave an unfinished Google or email
+  // applicant on Home. Opening the form is safe: submit upserts one row, and
+  // a later successful read still shows Awaiting review.
+  let hasApplication = false;
+  try {
+    hasApplication = Boolean(await store.getMyApplication());
+  } catch {
+    hasApplication = false;
+  }
   if (store.shouldRedirectPendingApplicant({
     role: cu.role,
-    hasApplication: Boolean(app),
+    hasApplication,
     route: window.location.hash,
   })) {
     window.location.hash = "#/apply";
@@ -2496,8 +2504,13 @@ function hydrateSignedInAfterPaint(user) {
   void store.fetchApplicationForUser(user).then(async () => {
     if (parseHash()[0] === "home") await renderWithFeedback();
     await maybeRedirectToApply();
-  }).catch((err) => {
+  }).catch(async (err) => {
     toast(err.message || "Application read failed", true);
+    try {
+      await maybeRedirectToApply();
+    } catch (redirectErr) {
+      toast(redirectErr.message || "Unable to open your application", true);
+    }
   });
   void syncApprovedGoogleAvatar({ ifMissing: true }).catch(() => {});
   if (user.status === "approved" || parseHash()[0] === "home") {
@@ -2570,6 +2583,11 @@ async function boot() {
               await store.fetchApplicationForUser(user);
             } catch (err) {
               toast(err.message || "Application read failed", true);
+            }
+            try {
+              await maybeRedirectToApply();
+            } catch (err) {
+              toast(err.message || "Unable to open your application", true);
             }
             void syncApprovedGoogleAvatar({ ifMissing: true }).catch(() => {});
             if (user.status === "approved") {
@@ -2647,6 +2665,10 @@ async function boot() {
     if (document.visibilityState !== "visible") return;
     void restoreInstalledWebPush();
     void refreshNotificationSurfaces();
+    const resumedPage = parseHash()[0];
+    if (isLive() && (!resumedPage || resumedPage === "home" || resumedPage === "account")) {
+      void maybeRedirectToApply();
+    }
     const resumedRoute = store.startupRoute(location.hash, store.currentUser()?.id);
     const recoveredRoute = resumedRoute !== location.hash;
     if (recoveredRoute) replaceRoute(resumedRoute);

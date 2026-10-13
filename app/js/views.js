@@ -244,6 +244,42 @@ function pendingBanner() {
     </div>`;
 }
 
+function unfinishedApplicationPrompt(user) {
+  const draft = store.getApplyDraft({ profileId: user?.id });
+  const title = draft ? "Continue your application" : "Finish your application";
+  const detail = draft
+    ? "You started the membership form earlier. Continue to finish it."
+    : "Your membership form is not submitted yet.";
+  return `
+    <div class="banner mt16" data-apply-resume>
+      <p><strong>${title}</strong><br><span class="muted small">${detail}</span></p>
+      <a class="btn sm mt8" href="#/apply">${title}</a>
+    </div>`;
+}
+
+function pendingMembershipNotice(user) {
+  if (!user || user.status !== "pending") return "";
+  // Local pending profiles are created by submitting the device form.
+  // Live profiles are pending at Google/email sign-in, before Submit.
+  if (!isLive()) return pendingBanner();
+  const app = store.peekLiveApplication(user.id);
+  if (app) return pendingBanner();
+  if (app === undefined) return "";
+  return unfinishedApplicationPrompt(user);
+}
+
+function pendingLockedBanner(user, reviewedHtml) {
+  if (isLive() && user && !store.peekLiveApplication(user.id)) {
+    return `
+      <div class="banner warn mt16" data-apply-resume>
+        <span class="kicker">Application not submitted</span>
+        <p>Finish your membership application before this unlocks.</p>
+        <a class="btn sm mt8" href="#/apply">Finish your application</a>
+      </div>`;
+  }
+  return reviewedHtml;
+}
+
 function memberOnlyNote(text = "Approved members see more here.") {
   return `<div class="locked-note">🔒 ${esc(text)}</div>`;
 }
@@ -457,7 +493,7 @@ export async function viewHome() {
   return `
     <div class="kicker">${esc(fmtDateLong(todayLocal()))} · Hong Kong</div>
     <h1 class="display">${headline}</h1>
-    ${user && user.status === "pending" ? pendingBanner() : ""}
+    ${pendingMembershipNotice(user)}
     ${user || restoringSession ? encouragement : ""}
     ${guest}
     <div class="section-head">
@@ -744,7 +780,7 @@ export function viewActivity(sessionId, options) {
           ${directionsLink}
         </div>`;
     } else if (user && user.status === "pending") {
-      actionBlock = `<div class="banner mt16"><p>Your membership is being reviewed — you can RSVP once you're approved.</p></div>`;
+      actionBlock = pendingLockedBanner(user, `<div class="banner mt16"><p>Your membership is being reviewed — you can RSVP once you're approved.</p></div>`);
     } else {
       actionBlock = membersOnlyGate();
     }
@@ -828,10 +864,11 @@ export function viewActivity(sessionId, options) {
       <p class="muted small mt8 center">Paid per session · receipt issued instantly · manage from your account</p>`;
   } else if (user && user.status === "pending") {
     actionBlock = `
+      ${pendingLockedBanner(user, `
       <div class="banner warn mt16">
         <span class="kicker">Booking locked</span>
         <p>Paid sessions unlock once an ITC leader approves your membership.</p>
-      </div>
+      </div>`)}
       ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
   } else if (user && user.status === "declined") {
     actionBlock = `
@@ -933,17 +970,20 @@ export function resetGivingState() {
 
 function givingLocked(user) {
   const declined = user?.status === "declined";
+  const unfinished = isLive() && user?.status === "pending" && !store.peekLiveApplication(user.id);
   return `
     <div class="kicker">Giving &amp; Fundraising</div>
     <h1 class="display">Giving access.</h1>
     <div class="card mt16"><div class="card-body">
       <div class="locked-note">🔒 Giving is available to approved ITC members.</div>
-      <h3 class="mt16">${declined ? "Speak with a leader" : "Your application is under review"}</h3>
+      <h3 class="mt16">${declined ? "Speak with a leader" : unfinished ? "Finish your application" : "Your application is under review"}</h3>
       <p class="hero-meta">${declined
         ? "Please contact an ITC leader if you would like to discuss your membership decision and Giving access."
-        : "Giving access will unlock after an ITC leader reviews and approves your membership application."}</p>
+        : unfinished
+          ? "Giving unlocks after you submit your membership application and a leader approves it."
+          : "Giving access will unlock after an ITC leader reviews and approves your membership application."}</p>
       <div class="btn-row">
-        <a class="btn" href="#/account">View Profile</a>
+        <a class="btn" href="${unfinished ? "#/apply" : "#/account"}">${unfinished ? "Finish your application" : "View Profile"}</a>
         <a class="btn ghost" href="#/schedule">View Schedule</a>
       </div>
     </div></div>`;
@@ -1662,6 +1702,33 @@ function indemnityState(user) {
 }
 
 async function accountPending(user) {
+  if (isLive()) {
+    let app = store.peekLiveApplication(user.id);
+    if (app === undefined) {
+      try {
+        app = await store.fetchApplicationForUser(user);
+      } catch {
+        app = null;
+      }
+    }
+    if (!app) {
+      const draft = store.getApplyDraft({ profileId: user.id });
+      const title = draft ? "Continue your application" : "Finish your application";
+      const detail = draft
+        ? "You started the membership form earlier. Continue to finish it."
+        : "Your membership form is not submitted yet. A leader can review it only after you submit.";
+      return `
+        <div class="kicker">Profile · ${esc(user.email)}</div>
+        <h1 class="display">${title}.</h1>
+        <div class="banner mt16" data-apply-resume>
+          <p>${detail}</p>
+        </div>
+        <div class="btn-row">
+          <a class="btn" href="#/apply">${title}</a>
+          <a class="btn ghost" href="#/schedule">Browse the schedule</a>
+        </div>`;
+    }
+  }
   const hydrated = await hydrateLiveUser(user);
   const indemnity = indemnityState(hydrated);
   return `
@@ -2168,7 +2235,12 @@ export async function viewApplyLive() {
     store.clearApplyDraft({ profileId: cu.id });
     return `<section class="card"><p class="muted">Your application has already been processed.</p></section>`;
   }
-  const existing = await store.getMyApplication();
+  let existing = null;
+  try {
+    existing = await store.getMyApplication();
+  } catch (err) {
+    console.error("application read failed", err);
+  }
   if (existing) {
     store.clearApplyDraft({ profileId: cu.id });
     return `
