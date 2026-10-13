@@ -6,7 +6,7 @@
 // ==========================================================================
 
 import * as store from "./store.js";
-import { isLive, isLiveConfigured } from "./config.js";
+import { isLive, isLiveConfigured, peekStoredLiveSession } from "./config.js";
 import * as liveOps from "./operations.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
@@ -410,7 +410,7 @@ export async function viewHome() {
     weekHeading = "My Week";
   }
 
-  const guest = !user
+  const guest = !user && !peekStoredLiveSession()
     ? `
     <div class="card mt24"><div class="card-body">
       <span class="kicker">Join ITC</span>
