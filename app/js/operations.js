@@ -635,6 +635,9 @@ function operationalProblem(error) {
   if (error.code === "PGRST202" && message.includes("set_operational_session_time_tbc")) {
     return new Error("Mark time TBC needs the latest database update before it can save.");
   }
+  if (message.includes("permission denied for function set_operational_session_time_tbc")) {
+    return new Error("Mark time TBC is installed, but signed-in admins are not allowed to run it yet.");
+  }
   if (message.includes("time_tbc")) {
     return new Error("Mark time TBC needs the latest database update before it can save.");
   }
@@ -1368,6 +1371,13 @@ export async function liveSetSessionTime(sessionId, time) {
 export async function liveSetSessionTimeTBC(sessionId) {
   return runOperationalRpc("set_operational_session_time_tbc", {
     p_session_id: sessionId,
+  }, {
+    applyResult(result) {
+      const session = patchLiveSession(result);
+      if (!session) return;
+      session.timeTBC = true;
+      liveCache.sessions.set(session.id, session);
+    },
   });
 }
 
