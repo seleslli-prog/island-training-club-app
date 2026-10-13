@@ -3190,8 +3190,8 @@ function adminPaidSessionControls() {
             <div class="field"><label>Change time for this week</label><input type="time" name="time" value="${s.timeTBC ? "" : esc(s.time)}" required></div>
             ${s.timeTBC ? `<p class="muted small">This week is TBC. Saving a time changes only this session.</p>` : ""}
             <button class="btn ghost sm" type="submit">Save time</button>
-            ${islandEccFlexibleTime(s) && !s.timeTBC ? `<button class="btn ghost sm" type="button" data-action="session-time-tbc" data-session="${esc(s.id)}">Mark time TBC</button>` : ""}
           </form>
+          ${islandEccFlexibleTime(s) && !s.timeTBC ? `<button class="btn ghost sm mt8" type="button" data-action="session-time-tbc" data-session="${esc(s.id)}">Mark time TBC</button>` : ""}
           <form id="form-session-notice" data-session="${esc(s.id)}" class="mt8">
             <div class="field"><label>Session note (weather, logistics)</label><input name="notice" value="${esc(override.notice || "")}" placeholder="Shown on Schedule + session page"></div>
             <button class="btn ghost sm" type="submit">Post note</button>

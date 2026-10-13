@@ -47,3 +47,5 @@ revoke all on function public.set_operational_session_time_tbc(text)
   from public, anon, authenticated;
 grant execute on function public.set_operational_session_time_tbc(text)
   to authenticated;
+
+notify pgrst, 'reload schema';
