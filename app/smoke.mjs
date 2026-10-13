@@ -3250,10 +3250,21 @@ if (localVisitorHome.includes('data-action="sign-in-google"')) {
 console.log("ok  signed-out Home uses the correct live/local sign-in action");
 localStorage.setItem("itc.supabase.session", JSON.stringify({ access_token: "stored-session" }));
 const restoringHome = await views.viewHome();
-localStorage.removeItem("itc.supabase.session");
 if (restoringHome.includes("Join the club.") || restoringHome.includes('data-action="sign-in-google"') || restoringHome.includes('href="#/account">Sign in or join</a>')) {
   throw new Error("a stored sign-in must not flash the visitor join card before the profile loads");
 }
+if (restoringHome.includes("Train together.") || restoringHome.includes("This week — open to all")) {
+  throw new Error("a stored sign-in must not flash the visitor Home layout");
+}
+if (!restoringHome.includes("Good to see you.") || !restoringHome.includes(">My Week<") || !restoringHome.includes("Loading this week's sessions…") || !restoringHome.includes("Encouragement of the week")) {
+  throw new Error("a stored sign-in must paint the signed-in Home shell before the profile loads");
+}
+const restoringNav = primaryNavLabels(views.navHTML("home", null));
+if (JSON.stringify(restoringNav) !== JSON.stringify(["Home", "Schedule", "Community", "Giving", "Profile"])) {
+  throw new Error(`stored sign-in navigation was ${JSON.stringify(restoringNav)}`);
+}
+localStorage.removeItem("itc.supabase.session");
+assertPrimaryNav(null, ["Home", "Schedule", "Community"], "visitor after stored sign-in cleared");
 if (!localVisitorHome.includes("Join the club.")) {
   throw new Error("removing the stored session must leave the visitor join card intact");
 }

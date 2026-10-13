@@ -179,9 +179,10 @@ function initialsRosterFromNames(attendeeNames) {
 }
 
 function paintOwnAvatarChrome(user, generation) {
+  const restoringSession = !user && peekStoredLiveSession();
   const cached = canManageOwnAvatar(user) ? store.peekOwnAvatar() : null;
-  avatarEl.classList.toggle("is-empty", !user);
-  avatarEl.setAttribute("aria-label", user ? "Profile" : "Sign in");
+  avatarEl.classList.toggle("is-empty", !user && !restoringSession);
+  avatarEl.setAttribute("aria-label", user || restoringSession ? "Profile" : "Sign in");
   avatarEl.dataset.avatarSource = cached?.source || "initials";
   avatarEl.innerHTML = views.avatarHTML(user, cached);
   revealLoadedAvatars(avatarEl);
@@ -726,16 +727,22 @@ function commitNotificationCount(unreadCount, active) {
 }
 
 function renderNotificationChrome(user, active, generation, rowsPromise = null) {
-  notificationEl.hidden = !user;
+  const restoringSession = !user && peekStoredLiveSession();
+  notificationEl.hidden = !user && !restoringSession;
   // The Notifications page fetches a fresh count. Browse routes reuse the last
   // known badge so Schedule does not flash zero or wait on Kong.
   const cachedRows = user && !active ? store.peekLiveNotifications() : null;
   const cachedUnread = Array.isArray(cachedRows)
     ? cachedRows.filter((row) => !row.read_at).length
     : 0;
-  notificationEl.innerHTML = user
+  notificationEl.innerHTML = user || restoringSession
     ? views.notificationBellHTML(cachedRows ? cachedUnread : 0, active)
     : "";
+  if (!user && restoringSession) {
+    notificationEl.setAttribute("aria-label", "Notifications");
+    notificationEl.removeAttribute("aria-current");
+    return null;
+  }
   if (!user) {
     notificationEl.removeAttribute("aria-label");
     notificationEl.removeAttribute("aria-current");
