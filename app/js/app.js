@@ -2238,7 +2238,20 @@ document.addEventListener("submit", async (e) => {
           await renderWithFeedback();
         });
       } catch (err) {
-        toast(err.message || "Unable to mark the time TBC", true);
+        const message = err.message || "Unable to mark the time TBC";
+        toast(message, true);
+        const host = el.parentElement;
+        if (host) {
+          let note = host.querySelector("[data-time-tbc-error]");
+          if (!note) {
+            note = document.createElement("p");
+            note.className = "form-error";
+            note.dataset.timeTbcError = "1";
+            host.appendChild(note);
+          }
+          note.textContent = message;
+        }
+        el.scrollIntoView({ block: "center" });
       }
       break;
 
