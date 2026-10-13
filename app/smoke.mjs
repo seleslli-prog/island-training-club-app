@@ -340,6 +340,26 @@ assert.deepEqual(
   ],
   "recurring activity templates must sort by weekday, then start time"
 );
+{
+  const oct17Early = store.getSession("hyrox-quarry-bay-early-2026-10-17");
+  const oct17Late = store.getSession("hyrox-quarry-bay-2026-10-17");
+  const oct24Early = store.getSession("hyrox-quarry-bay-early-2026-10-24");
+  const oct24Late = store.getSession("hyrox-quarry-bay-2026-10-24");
+  const oct31Early = store.getSession("hyrox-quarry-bay-early-2026-10-31");
+  assert.equal(oct17Early.time, "09:15");
+  assert.equal(oct17Late.time, "10:30");
+  assert.equal(oct17Early.timeTBC, undefined);
+  assert.equal(oct17Late.timeTBC, undefined);
+  assert.equal(data.sessionTimeLabel(oct17Early), "9:15 AM");
+  assert.equal(data.sessionTimeLabel(oct17Late), "10:30 AM");
+  for (const session of [oct24Early, oct24Late, oct31Early]) {
+    assert.equal(session.timeTBC, true, `${session.id} must stay TBC until that week is set`);
+    assert.equal(data.sessionTimeLabel(session), "TBC");
+  }
+  assert.equal(oct24Early.time, "09:15");
+  assert.equal(oct24Late.time, "10:30");
+  console.log("ok  Island ECC times stay fixed on 17 Oct and TBC from 24 Oct");
+}
 assert.equal(data.fmtMoney(180), "HK$180",
   "consumer-facing Hong Kong prices should use the standard HK$ symbol");
 const historicalBftActivity = {
@@ -8047,6 +8067,20 @@ if (!store.cancelBooking(movedByOwner.id)
   throw new Error("Admin cancellation should cancel and refund a confirmed booking");
 }
 store.setSessionTime(paymentGateSession.id, "11:00");
+{
+  const weekEarly = store.getSession("hyrox-quarry-bay-early-2026-10-24");
+  const weekLate = store.getSession("hyrox-quarry-bay-2026-10-24");
+  const nextWeek = store.getSession("hyrox-quarry-bay-early-2026-10-31");
+  store.setSessionTime(weekEarly.id, "09:15");
+  const saved = store.getSession(weekEarly.id);
+  if (saved.time !== "09:15" || saved.timeTBC) {
+    throw new Error("saving an Island ECC time must confirm only that week's session");
+  }
+  if (!store.getSession(weekLate.id).timeTBC || !store.getSession(nextWeek.id).timeTBC) {
+    throw new Error("saving one Island ECC time must not confirm the other slot or later weeks");
+  }
+  console.log("ok  Island ECC admin time change applies to one week only");
+}
 store.setSessionNotice(paymentGateSession.id, "Admin note");
 store.setVenueTBC(paymentGateSession.id, true);
 store.confirmGymBooking(paymentGateSession.id, "Confirmed by Admin", Date.now());

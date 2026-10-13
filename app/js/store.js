@@ -8,6 +8,7 @@
 import {
   SEED_ACTIVITIES,
   ISLAND_ECC_HYROX_ACTIVITY_IDS,
+  islandEccFlexibleTime,
   compareSessionsByStart,
   sessionsInRange,
   sessionStarted,
@@ -2697,10 +2698,15 @@ const WNT_CANONICAL_NOTES = new Set([
   WNT_CONFIRMED_NOTE,
 ]);
 
+function applyIslandEccFlexibleTime(session, explicitTime) {
+  if (!islandEccFlexibleTime(session)) return session;
+  return { ...session, timeTBC: !explicitTime };
+}
+
 function decorateSession(s) {
   const o = state.sessionOverrides[s.id];
   const out = { ...s };
-  if (!o) return applyWntLeaderNote(out);
+  if (!o) return applyWntLeaderNote(applyIslandEccFlexibleTime(out, false));
   if (o.time) out.time = o.time;
   if (o.cancelled) { out.cancelled = true; out.cancelReason = o.cancelled; }
   if (o.venueTBC) {
@@ -2720,7 +2726,7 @@ function decorateSession(s) {
     if (point) Object.assign(out, { meetingLat: point.lat, meetingLng: point.lng });
   }
   if (hasConfirmedVenue(out.location, out.mapsQuery)) out.venueTBC = false;
-  return applyWntLeaderNote(out);
+  return applyWntLeaderNote(applyIslandEccFlexibleTime(out, !!o.time));
 }
 
 function applyWntLeaderNote(session) {
@@ -3598,7 +3604,7 @@ export function setSessionTime(sessionId, time) {
   const nextTime = String(time || "").trim();
   if (!session) throw new Error("Session not found.");
   if (!nextTime) throw new Error("Pick the start time.");
-  if (session.time === nextTime) return session;
+  if (session.time === nextTime && !session.timeTBC) return session;
   (state.sessionOverrides[sessionId] ||= {}).time = nextTime;
   if (sessionRequiresRsvp(session) && Number(session.price ?? 0) === 0) {
     for (const userId of activeRsvpNotificationRecipients(sessionId)) {
