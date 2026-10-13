@@ -3248,6 +3248,16 @@ if (localVisitorHome.includes('data-action="sign-in-google"')) {
   throw new Error("local signed-out Home must not render the live Google action");
 }
 console.log("ok  signed-out Home uses the correct live/local sign-in action");
+localStorage.setItem("itc.supabase.session", JSON.stringify({ access_token: "stored-session" }));
+const restoringHome = await views.viewHome();
+localStorage.removeItem("itc.supabase.session");
+if (restoringHome.includes("Join the club.") || restoringHome.includes('data-action="sign-in-google"') || restoringHome.includes('href="#/account">Sign in or join</a>')) {
+  throw new Error("a stored sign-in must not flash the visitor join card before the profile loads");
+}
+if (!localVisitorHome.includes("Join the club.")) {
+  throw new Error("removing the stored session must leave the visitor join card intact");
+}
+console.log("ok  stored sign-in hides the join card without waiting on the network");
 await check("home (visitor)", () => views.viewHome());
 const scheduleHtml = await check("schedule", () => views.viewSchedule());
 try {
