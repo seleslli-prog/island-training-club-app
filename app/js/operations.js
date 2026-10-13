@@ -143,6 +143,7 @@ function buildSessionRow(row, templatesById = null) {
     dateISO,
     date,
     time: String(row.start_time || "").slice(0, 5),
+    timeTBC: row.time_tbc === true,
     durationMin: row.duration_minutes,
     location: venue,
     mapsQuery,

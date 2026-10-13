@@ -37,6 +37,7 @@ import {
   fmtDate,
   fmtDateLong,
   fmtTime,
+  sessionTimeLabel,
   fmtMoney,
   weeklyVerse,
   notificationRelativeTime,
@@ -197,7 +198,7 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
   ].filter(Boolean).join(" · ");
   return `
     <a class="session-row${past ? " is-past" : ""}${highlight ? " next" : ""}${s.cancelled ? " is-cancelled" : ""}" href="#/activity/${s.id}">
-      <time>${fmtTime(s.time)}</time>
+      <time>${esc(sessionTimeLabel(s))}</time>
       <div>
         <h3>${esc(s.name)}</h3>
         <p>${sub}</p>
@@ -902,7 +903,7 @@ export function viewActivity(sessionId, options) {
     <div class="mt16">${badgeFor(s, booking, reservation)}</div>
     <h1 class="display sm">${esc(s.name)}</h1>
     <div class="meta-grid">
-      <div><small>When</small><strong>${esc(fmtDate(s.date))}<br>${fmtTime(s.time)}</strong></div>
+      <div><small>When</small><strong>${esc(fmtDate(s.date))}<br>${esc(sessionTimeLabel(s))}</strong></div>
       <div><small>Where</small><strong>${esc(s.location)}</strong></div>
       <div><small>Duration</small><strong>${s.durationMin} min</strong></div>
       ${metaPaid}
@@ -3164,7 +3165,7 @@ function adminPaidSessionControls() {
     const override = store.getSession(s.id);
     return `
       <div class="card mt16 ${override.cancelled ? "is-cancelled" : ""}"><div class="card-body">
-        <div class="kicker dim" style="margin-top:0">${esc(fmtDate(s.dateISO))} · ${fmtTime(s.time)}</div>
+        <div class="kicker dim" style="margin-top:0">${esc(fmtDate(s.dateISO))} · ${esc(sessionTimeLabel(s))}</div>
         <h3 class="mt8">${esc(s.location)}</h3>
         ${override.cancelled ? `<p class="badge danger">${esc(sessionCancellationCopy(override))}</p>` : ""}
         <p class="muted small mt8">Session setup only. Booking and payment status is shown under Admin → Payments.</p>
@@ -3175,7 +3176,8 @@ function adminPaidSessionControls() {
             <button class="btn ghost sm" type="button" data-action="venue-tbc-toggle" data-session="${esc(s.id)}" data-on="${override.venueTBC ? "0" : "1"}">${override.venueTBC ? "Venue confirmed" : "Mark venue TBC"}</button>
           </div>
           <form id="form-session-time" data-session="${esc(s.id)}" class="mt8">
-            <div class="field"><label>Change time</label><input type="time" name="time" value="${esc(s.time)}"></div>
+            <div class="field"><label>Change time for this week</label><input type="time" name="time" value="${s.timeTBC ? "" : esc(s.time)}" required></div>
+            ${s.timeTBC ? `<p class="muted small">This week is TBC. Saving a time changes only this session.</p>` : ""}
             <button class="btn ghost sm" type="submit">Save time</button>
           </form>
           <form id="form-session-notice" data-session="${esc(s.id)}" class="mt8">

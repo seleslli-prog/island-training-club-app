@@ -11,6 +11,23 @@ export const ISLAND_ECC_HYROX_ACTIVITY_IDS = new Set([
   "hyrox-quarry-bay",
 ]);
 
+// 17 Oct 2026 keeps the fixed 9:15 and 10:30 slots. From 24 Oct, both Island
+// ECC times stay TBC until an admin sets that week's time.
+export const ISLAND_ECC_FLEXIBLE_TIME_FROM = "2026-10-24";
+
+export function islandEccFlexibleTime(session) {
+  const activityId = session?.activityId;
+  const dateISO = session?.dateISO;
+  return ISLAND_ECC_HYROX_ACTIVITY_IDS.has(activityId)
+    && typeof dateISO === "string"
+    && dateISO >= ISLAND_ECC_FLEXIBLE_TIME_FROM;
+}
+
+export function sessionTimeLabel(session) {
+  if (session?.timeTBC) return "TBC";
+  return session?.time ? fmtTime(session.time) : "";
+}
+
 // --- Activity templates ----------------------------------------------------
 // kind: "free"  -> no booking required; optional RSVP; no capacity or checkout
 // kind: "paid"  -> members book + pay per session at a fixed price
