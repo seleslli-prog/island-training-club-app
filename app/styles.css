@@ -340,6 +340,23 @@ h1.kicker {
 
 .admin-section[open] > summary::after { transform: rotate(-135deg); }
 
+input[type="time"].time-blank::-webkit-datetime-edit,
+input[type="time"].time-blank::-webkit-datetime-edit-fields-wrapper,
+input[type="time"].time-blank::-webkit-datetime-edit-text,
+input[type="time"].time-blank::-webkit-datetime-edit-hour-field,
+input[type="time"].time-blank::-webkit-datetime-edit-minute-field,
+input[type="time"].time-blank::-webkit-datetime-edit-ampm-field {
+  color: transparent;
+}
+input[type="time"].time-blank:focus::-webkit-datetime-edit,
+input[type="time"].time-blank:focus::-webkit-datetime-edit-fields-wrapper,
+input[type="time"].time-blank:focus::-webkit-datetime-edit-text,
+input[type="time"].time-blank:focus::-webkit-datetime-edit-hour-field,
+input[type="time"].time-blank:focus::-webkit-datetime-edit-minute-field,
+input[type="time"].time-blank:focus::-webkit-datetime-edit-ampm-field {
+  color: inherit;
+}
+
 .admin-payment-group > summary,
 .admin-attendance-session > summary {
   cursor: pointer;

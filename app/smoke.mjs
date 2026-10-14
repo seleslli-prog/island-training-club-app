@@ -2477,9 +2477,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=fitness-faith-photo-4"',
+  'href="/app/styles.css?v=hyrox-week-time-tbc"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js"',
+  'src="/app/js/app.js?v=hyrox-week-time-tbc"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',

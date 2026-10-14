@@ -1368,19 +1368,34 @@ export async function liveSetSessionTime(sessionId, time) {
   });
 }
 
+function rememberLiveTimeTBC(sessionId, result) {
+  const session = patchLiveSession(result) || liveCache.sessions.get(sessionId);
+  if (!session) return null;
+  session.timeTBC = true;
+  liveCache.sessions.set(session.id || sessionId, session);
+  return session;
+}
+
 export async function liveSetSessionTimeTBC(sessionId) {
-  // Use the already-permitted Save time function. A null time means TBC.
+  const options = {
+    applyResult(result) {
+      rememberLiveTimeTBC(sessionId, result);
+    },
+  };
+  try {
+    return await runOperationalRpc("set_operational_session_time_tbc", {
+      p_session_id: sessionId,
+    }, options);
+  } catch (err) {
+    const message = String(err?.message || err);
+    if (!/permission denied|not allowed to run it|Could not find the function|PGRST202/i.test(message)) {
+      throw err;
+    }
+  }
   return runOperationalRpc("set_operational_session_time", {
     p_session_id: sessionId,
     p_time: null,
-  }, {
-    applyResult(result) {
-      const session = patchLiveSession(result);
-      if (!session) return;
-      session.timeTBC = true;
-      liveCache.sessions.set(session.id, session);
-    },
-  });
+  }, options);
 }
 
 export async function liveSetVenueTBC(sessionId, enabled) {

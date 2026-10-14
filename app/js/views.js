@@ -3177,8 +3177,8 @@ function adminPaidSessionControls() {
             <button class="btn ghost sm" type="button" data-action="venue-tbc-toggle" data-session="${esc(s.id)}" data-on="${override.venueTBC ? "0" : "1"}">${override.venueTBC ? "Venue confirmed" : "Mark venue TBC"}</button>
           </div>
           <form id="form-session-time" data-session="${esc(s.id)}" class="mt8">
-            <div class="field"><label>Change time for this week</label><input type="time" name="time" value="" required></div>
-            <p class="muted small">Current: ${esc(sessionTimeLabel(s))}. The box stays empty so it is not mistaken for the time being saved.</p>
+            <div class="field"><label>Change time for this week</label><input type="time" name="time" value="${s.timeTBC ? "" : esc(s.time)}" ${s.timeTBC ? "class=\"time-blank\"" : ""} required></div>
+            <p class="muted small">${s.timeTBC ? "No time set for this week." : `Saved time: ${esc(sessionTimeLabel(s))}.`}</p>
             <button class="btn ghost sm" type="submit">Save time</button>
           </form>
           ${islandEccFlexibleTime(s) && !s.timeTBC ? `<button class="btn ghost sm mt8" type="button" data-action="session-time-tbc" data-session="${esc(s.id)}">Mark time TBC</button>` : ""}
