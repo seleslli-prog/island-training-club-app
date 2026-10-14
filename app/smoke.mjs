@@ -2479,7 +2479,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=hyrox-week-time-tbc"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=hyrox-week-time-tbc"',
+  'src="/app/js/app.js?v=hyrox-week-time-tbc-2"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',

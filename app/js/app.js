@@ -1763,6 +1763,30 @@ document.addEventListener("click", async (e) => {
       } catch (err) { toast(err.message || "Unable to update the venue status", true); }
       break;
 
+    case "session-time-tbc":
+      try {
+        await withBusyControl(el, "Updating…", async () => {
+          await store.setSessionTimeTBC(el.dataset.session);
+          toast("Time marked TBC for this week");
+          await renderWithFeedback();
+        });
+      } catch (err) {
+        const message = err.message || "Unable to mark the time TBC";
+        toast(message, true);
+        const host = el.parentElement;
+        if (host) {
+          let note = host.querySelector("[data-time-tbc-error]");
+          if (!note) {
+            note = document.createElement("p");
+            note.className = "form-error";
+            note.dataset.timeTbcError = "1";
+            host.appendChild(note);
+          }
+          note.textContent = message;
+        }
+      }
+      break;
+
     case "delete-event": {
       if (!confirm("Delete this event? Only possible before anyone books — afterwards cancel it instead.")) return;
       withBusyControl(el, "Deleting…", async () => {
@@ -2229,31 +2253,6 @@ document.addEventListener("submit", async (e) => {
       }, { busyKey: form });
       break;
     }
-
-    case "session-time-tbc":
-      try {
-        await withBusyControl(el, "Updating…", async () => {
-          await store.setSessionTimeTBC(el.dataset.session);
-          toast("Time marked TBC for this week");
-          await renderWithFeedback();
-        });
-      } catch (err) {
-        const message = err.message || "Unable to mark the time TBC";
-        toast(message, true);
-        const host = el.parentElement;
-        if (host) {
-          let note = host.querySelector("[data-time-tbc-error]");
-          if (!note) {
-            note = document.createElement("p");
-            note.className = "form-error";
-            note.dataset.timeTbcError = "1";
-            host.appendChild(note);
-          }
-          note.textContent = message;
-        }
-        el.scrollIntoView({ block: "center" });
-      }
-      break;
 
     case "form-session-time": {
       e.preventDefault();
