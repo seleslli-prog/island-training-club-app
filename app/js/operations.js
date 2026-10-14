@@ -153,6 +153,7 @@ function buildSessionRow(row, templatesById = null) {
     memberNote: metadata?.memberNote || "",
     capacity: row.capacity,
     price: row.price_hkd,
+    heldCount: Number.isFinite(Number(row.held_count)) ? Number(row.held_count) : null,
     isOpen: row.is_open,
     venueTBC: !!row.venue_tbc,
     notice: row.notice || null,

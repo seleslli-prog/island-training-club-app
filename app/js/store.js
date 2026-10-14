@@ -1679,6 +1679,9 @@ export function spotsLeft(session) {
   if (session.kind === "free") return null;
   if (session.capacity == null) return null; // uncapped (e.g. the RSVP lunch)
   if (isLive()) {
+    if (Number.isFinite(session.heldCount)) {
+      return Math.max(0, session.capacity - session.heldCount);
+    }
     return Math.max(0, session.capacity - liveOps.liveHeldBookingsForSession(session.id).length);
   }
   return Math.max(0, session.capacity - heldBookingsForSession(session.id).length);

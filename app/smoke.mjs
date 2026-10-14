@@ -653,6 +653,19 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(timePushMigration, /is now TBC/,
     "returning a HYROX week to TBC must alert booked members");
   console.log("ok  Island ECC time changes request session-alert web push");
+{
+  const heldCountMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261014000002_shared_session_held_count.sql"),
+    "utf8",
+  );
+  assert.match(heldCountMigration, /held_count/,
+    "paid spots left must use one session count every viewer can read");
+  assert.match(heldCountMigration, /status in \('reserved', 'confirmed', 'attended'\)/,
+    "the shared spots count must include every held booking, not only the viewer's own");
+  assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"), /session\.heldCount/,
+    "live spots left must prefer the shared held count");
+  console.log("ok  paid spots left use one shared live count");
+}
 }
 {
   const applyAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
