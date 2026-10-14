@@ -3594,6 +3594,23 @@ export function cancelSessionWeek(sessionId, reason, now = Date.now()) {
   save();
 }
 
+function notifyIslandEccTimeChange(session, body) {
+  if (!ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session?.activityId)) return;
+  const recipients = [...new Set(state.bookings
+    .filter((booking) => booking.sessionId === session.id && ["reserved", "confirmed"].includes(booking.status))
+    .map((booking) => booking.userId)
+    .filter(Boolean))];
+  for (const userId of recipients) {
+    notify(
+      userId,
+      "operational_session_time_updated",
+      body,
+      `#/activity/${session.id}`,
+      "HYROX time updated",
+    );
+  }
+}
+
 export function setSessionTime(sessionId, time) {
   assertActiveSessionTarget(sessionId);
   if (isLive()) {
@@ -3606,6 +3623,7 @@ export function setSessionTime(sessionId, time) {
   if (!nextTime) throw new Error("Pick the start time.");
   if (session.time === nextTime && !session.timeTBC) return session;
   (state.sessionOverrides[sessionId] ||= {}).time = nextTime;
+  notifyIslandEccTimeChange(session, `${session.name} on ${fmtDate(session.dateISO)} now starts at ${fmtTime(nextTime)}.`);
   if (sessionRequiresRsvp(session) && Number(session.price ?? 0) === 0) {
     for (const userId of activeRsvpNotificationRecipients(sessionId)) {
       notify(userId, "operational_session_time_updated",
@@ -3626,11 +3644,13 @@ export function setSessionTimeTBC(sessionId) {
   if (!islandEccFlexibleTime(session)) {
     throw new Error("Only Island ECC weeks from 24 Oct can return to TBC.");
   }
+  if (session.timeTBC) return session;
   const override = state.sessionOverrides[sessionId];
   if (override) {
     delete override.time;
     if (!Object.keys(override).length) delete state.sessionOverrides[sessionId];
   }
+  notifyIslandEccTimeChange(session, `${session.name} on ${fmtDate(session.dateISO)} is now TBC.`);
   save();
   return getSession(sessionId);
 }
