@@ -318,7 +318,8 @@ h1.kicker {
 
 .admin-section > summary::-webkit-details-marker { display: none; }
 
-.admin-section > summary h2 {
+.admin-section > summary h2,
+.admin-section > summary h3 {
   margin: 0;
   font-family: var(--font-display);
   font-size: 20px;

@@ -3204,9 +3204,11 @@ function adminPaidSessionControls() {
       </div></div>`;
   }).join("");
   return `
-    <h3 id="paid-sessions-title">Paid Sessions</h3>
+    <details class="admin-section">
+      <summary><h3 id="paid-sessions-title">Paid Sessions</h3></summary>
     <p class="muted small mt8">Change the time, venue status or note for one dated HYROX session — or cancel that week.</p>
-    ${sessionCards || `<div class="empty mt8">No upcoming paid sessions.</div>`}`;
+    ${sessionCards || `<div class="empty mt8">No upcoming paid sessions.</div>`}
+    </details>`;
 }
 
 // Money-side per-session work stays on the Payments tab: confirming paid
@@ -3305,7 +3307,8 @@ function adminFreeEventControls() {
   const upcoming = store.upcomingSessions(21)
     .filter((s) => !s.oneOff && s.kind !== "paid" && !sessionStarted(s));
   return `
-    <h3 id="free-rsvp-events-title">Free &amp; RSVP Events</h3>
+    <details class="admin-section">
+      <summary><h3 id="free-rsvp-events-title">Free &amp; RSVP Events</h3></summary>
     <p class="muted small mt8">Set a venue for one dated free or RSVP event. Later weeks keep the recurring default.</p>
     ${upcoming.length ? upcoming.map((s) => {
       const override = store.weekVenueOverride(s.id);
@@ -3350,7 +3353,8 @@ function adminFreeEventControls() {
           </form>
           ${adminRsvpOccurrenceControls(s)}
         </div></div>`;
-    }).join("") : `<div class="empty mt8">No upcoming free or RSVP events.</div>`}`;
+    }).join("") : `<div class="empty mt8">No upcoming free or RSVP events.</div>`}
+    </details>`;
 }
 
 function adminWeeklyEventControls() {
