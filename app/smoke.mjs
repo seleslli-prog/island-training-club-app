@@ -642,6 +642,19 @@ const { resolve, dirname } = await import("node:path");
 const { fileURLToPath } = await import("node:url");
 const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
 {
+  const timePushMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261014000001_hyrox_time_change_web_push.sql"),
+    "utf8",
+  );
+  assert.match(timePushMigration, /operational_session_time_updated/,
+    "Island ECC time changes must insert the session-alert kind that web push already delivers");
+  assert.match(timePushMigration, /hyrox-quarry-bay-early/,
+    "HYROX time web push must cover both Island ECC slots");
+  assert.match(timePushMigration, /is now TBC/,
+    "returning a HYROX week to TBC must alert booked members");
+  console.log("ok  Island ECC time changes request session-alert web push");
+}
+{
   const applyAppSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
   const applyViewSource = readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8");
   assert.match(applyAppSource, /catch \{[\s\S]*?hasApplication = false/,
