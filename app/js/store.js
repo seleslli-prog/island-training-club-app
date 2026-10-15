@@ -1708,6 +1708,17 @@ export function attendeeCountFor(session) {
   return bookingCount;
 }
 
+function rosterDisplayName(user) {
+  const preferred = String(user?.preferredName || "").trim();
+  const full = String(user?.fullName || "").trim();
+  const parts = full.split(/\s+/).filter(Boolean);
+  const lastInitial = parts.length > 1
+    ? String(parts[parts.length - 1][0] || "").toUpperCase()
+    : "";
+  if (preferred) return lastInitial ? `${preferred} ${lastInitial}.` : preferred;
+  return full || "Member";
+}
+
 export function attendeesFor(session) {
   if (!session?.id || (session.kind !== "paid" && !sessionRequiresRsvp(session))) return [];
   const names = [];
@@ -1715,7 +1726,7 @@ export function attendeesFor(session) {
     const u = isLive()
       ? paymentUserById(effectiveAttendeeId(b))
       : state.users.find((x) => x.id === effectiveAttendeeId(b));
-    if (u) names.push(`${u.preferredName || u.fullName} ${u.fullName.split(" ").pop()[0]}.`);
+    if (u) names.push(rosterDisplayName(u));
   }
   return names;
 }
