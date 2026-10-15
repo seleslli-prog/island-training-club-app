@@ -1766,11 +1766,19 @@ assert.match(rsvpAttendeeNamesMigrationSource, /requires_rsvp/);
     "Who's coming must take the first letter of the last name word");
   assert.doesNotMatch(lastInitialMigration, /upper\(right\(trim\(p\.full_name\), 1\)\)/,
     "Who's coming must not use the last character of the full name");
+  const privacyMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261015000004_attendee_roster_given_last_initial.sql"),
+    "utf8",
+  );
+  assert.match(privacyMigration, /split_part\(/,
+    "Who's coming must use only the given/first name before the last initial");
+  assert.match(privacyMigration, /coalesce\(nullif\(trim\(p\.full_name\), ''\), a\.preferred_name/,
+    "Who's coming must still find a last-name initial when preferred already includes a surname");
   assert.match(
     readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
-    /rosterDisplayName|parts\[parts\.length - 1\]\[0\]/,
-    "local Who's coming must use the first letter of the last name word");
-  console.log("ok  Who's coming uses the first letter of the last name");
+    /given name \+ last-name initial|labelSource\.split/,
+    "local Who's coming must keep the privacy given-name + last-initial format");
+  console.log("ok  Who's coming uses given name plus last-name initial for privacy");
 }
 const replacementMigrationPath = resolve(
   __dirnameSmoke, "../supabase/migrations/20260910000001_operational_replacement_requests.sql"

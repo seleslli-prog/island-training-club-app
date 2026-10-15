@@ -1709,14 +1709,18 @@ export function attendeeCountFor(session) {
 }
 
 function rosterDisplayName(user) {
+  // Privacy: given name + last-name initial only. Preferred may already be
+  // "Jeff Li"; never append another "L." onto a multi-word preferred name.
   const preferred = String(user?.preferredName || "").trim();
   const full = String(user?.fullName || "").trim();
-  const parts = full.split(/\s+/).filter(Boolean);
+  const labelSource = preferred || full || "Member";
+  const initialSource = full || preferred;
+  const given = labelSource.split(/\s+/).filter(Boolean)[0] || "Member";
+  const parts = initialSource.split(/\s+/).filter(Boolean);
   const lastInitial = parts.length > 1
     ? String(parts[parts.length - 1][0] || "").toUpperCase()
     : "";
-  if (preferred) return lastInitial ? `${preferred} ${lastInitial}.` : preferred;
-  return full || "Member";
+  return lastInitial ? `${given} ${lastInitial}.` : given;
 }
 
 export function attendeesFor(session) {
