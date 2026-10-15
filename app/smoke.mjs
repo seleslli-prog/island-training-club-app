@@ -1757,6 +1757,21 @@ assert.ok(existsSync(rsvpAttendeeNamesMigrationPath), "RSVP attendee-name migrat
 const rsvpAttendeeNamesMigrationSource = readFileSync(rsvpAttendeeNamesMigrationPath, "utf8");
 assert.match(rsvpAttendeeNamesMigrationSource, /get_operational_attendee_names/);
 assert.match(rsvpAttendeeNamesMigrationSource, /requires_rsvp/);
+{
+  const lastInitialMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261015000003_attendee_last_name_initial.sql"),
+    "utf8",
+  );
+  assert.match(lastInitialMigration, /regexp_replace\(trim\(p\.full_name\), '\^\.\*\[\[:space:\]\]\+', ''\)/,
+    "Who's coming must take the first letter of the last name word");
+  assert.doesNotMatch(lastInitialMigration, /upper\(right\(trim\(p\.full_name\), 1\)\)/,
+    "Who's coming must not use the last character of the full name");
+  assert.match(
+    readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
+    /rosterDisplayName|parts\[parts\.length - 1\]\[0\]/,
+    "local Who's coming must use the first letter of the last name word");
+  console.log("ok  Who's coming uses the first letter of the last name");
+}
 const replacementMigrationPath = resolve(
   __dirnameSmoke, "../supabase/migrations/20260910000001_operational_replacement_requests.sql"
 );
