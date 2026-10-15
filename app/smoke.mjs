@@ -665,6 +665,17 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"), /session\.heldCount/,
     "live spots left must prefer the shared held count");
   console.log("ok  paid spots left use one shared live count");
+  const collectorAlertMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261015000001_collector_reserve_alert_and_self_confirm.sql"),
+    "utf8",
+  );
+  assert.match(collectorAlertMigration, /operational_collector_spot_reserved/,
+    "paid reserves must notify the assigned collector");
+  assert.match(collectorAlertMigration, /confirm_own_collector_booking/,
+    "on-duty collectors must be able to confirm their own booking in one step");
+  assert.match(collectorAlertMigration, /COLLECTOR-SELF/,
+    "collector self-confirm must mark payment without a member PayMe/FPS transfer");
+  console.log("ok  collector reserve alert and self-confirm migration");
 }
 }
 {
@@ -2755,8 +2766,18 @@ assert.match(integratedAppSource,
   "signed-out live boot must not await schedule hydrate before the first Home paint");
 assert.doesNotMatch(integratedAppSource, /if \(page === "pay"\) \{\s*void renderWithFeedback/,
   "payment route must not reload itself from the operations listener");
-assert.match(integratedAppSource, /case "pay":[\s\S]*hydrateLiveOperations\(\{ force: true \}\)[\s\S]*viewPay\(arg\)/,
-  "payment route must fetch collector details once before painting instructions");
+assert.doesNotMatch(
+  integratedAppSource,
+  /BLOCKING_LIVE_IDENTITY_PAGES = new Set\(\[[^\]]*["']pay["']/,
+  "payment route must not block on identity refresh before paint");
+assert.match(
+  integratedAppSource,
+  /case "pay":[\s\S]*operationalStateStatus\(\)\.loaded[\s\S]*viewPay\(arg\)/,
+  "payment route must paint from the ops cache when already loaded");
+assert.match(
+  integratedAppSource,
+  /confirm-own-collector-payment[\s\S]*confirmOwnCollectorBooking/,
+  "assigned collectors must be able to confirm their own booking without PayMe-to-self");
 assert.match(integratedAppSource, /peekStoredLiveSession\(\)|returningFromAuthRedirect\(\)/,
   "first-visit guests must not wait on supabase-js before Continue with Google can navigate");
 assert.match(integratedAppSource, /await ensureLiveClient\(\)/,
@@ -5105,6 +5126,15 @@ assert.match(islandEccPayHtml, /10\/F, Island ECC, Quarry Bay/,
   "Island ECC direct payment must retain its venue wording");
 assert.match(islandEccPayHtml, /I’ve paid/,
   "Island ECC direct payment must retain the mark-paid control");
+{
+  const dutyCollector = store.collectorFor(islandEccSession.id);
+  assert.ok(dutyCollector, "expected an on-duty collector for Island ECC payment tests");
+  assert.ok(
+    store.notificationsFor(dutyCollector.id)
+      .some((note) => note.kind === "operational_collector_spot_reserved"),
+    "assigned collector must be notified when a member reserves a paid spot",
+  );
+}
 console.log(`ok  reservation holds a spot ${before} -> ${after}`);
 const unpaidHistoryHtml = await views.viewAccount("history");
 if (!unpaidHistoryHtml.includes("HK$180 to be paid") || unpaidHistoryHtml.includes("paid HK$180")) {
@@ -5318,6 +5348,34 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     if (previousUser) store.signIn(previousUser);
   }
   console.log("ok  Island ECC Monday lock and exclusive-slot copy");
+}
+{
+  const previousEmail = store.currentUser()?.email;
+  try {
+    store.signIn("admin@example.test");
+    const selfSession = store.upcomingSessions(60).find((session) =>
+      session.activityId === "hyrox-quarry-bay"
+      && !data.sessionStarted(session)
+      && !store.userBookingFor(store.currentUser().id, session.id)
+      && !store.userReservationFor(store.currentUser().id, session.id)
+      && session.dateISO !== islandEccSession.dateISO);
+    assert.ok(selfSession, "expected another Island ECC Saturday for collector self-confirm");
+    store.setDuty(store.currentUser().id, selfSession.dateISO);
+    const openAt = data.islandEccSignupOpensAt(selfSession.dateISO);
+    const ownHold = store.reserveSession(store.currentUser().id, selfSession, openAt);
+    assert.equal(store.canConfirmOwnCollectorBooking(ownHold.id), true);
+    assert.match(views.viewBooking(ownHold.id), /Confirm my payment/,
+      "booking page must offer collector self-confirm");
+    assert.match(views.viewPay(ownHold.id), /Confirm my payment/,
+      "pay page must offer collector self-confirm instead of PayMe-to-self");
+    assert.doesNotMatch(views.viewPay(ownHold.id), /I’ve paid/,
+      "collector self-confirm must skip the member I’ve paid form");
+    store.confirmOwnCollectorBooking(ownHold.id, openAt);
+    assert.equal(store.getBooking(ownHold.id).status, "confirmed");
+    console.log("ok  on-duty collector can confirm their own booking without PayMe-to-self");
+  } finally {
+    if (previousEmail) store.signIn(previousEmail);
+  }
 }
 store.markBookingPaid(r1.id, "PayMe", "REF123");
 if (!store.getBooking(r1.id).paymentMarkedAt) throw new Error("payment not marked");

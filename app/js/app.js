@@ -539,7 +539,10 @@ const NAV_FOR = {
 // identity. Awaiting getSession/profiles/applications REST (each one a Kong
 // OPTIONS preflight) is what made Home → Schedule feel stuck on "Loading…".
 const BLOCKING_LIVE_IDENTITY_PAGES = new Set([
-  "account", "apply", "pay", "checkout", "booking", "receipt",
+  // Pay paints from the signed-in cache already used on booking/checkout.
+  // Blocking getCurrentUser + application here made collector Pay stick on
+  // Loading… over the booking page.
+  "account", "apply", "checkout", "booking", "receipt",
   "replacement",
 ]);
 
@@ -887,8 +890,17 @@ async function render(generation = renderGeneration, options = {}) {
         out = views.viewRetiredSession();
         break;
       }
+      // Paint immediately when ops are already loaded (normal after Reserve).
+      // A forced full hydrate on every Pay tap stalls admins/collectors on
+      // Loading… while booking rows reload. Refresh in the background instead.
       if (isLive() && routeUser?.status === "approved") {
-        await store.hydrateLiveOperations({ force: true });
+        if (!store.operationalStateStatus().loaded) {
+          await store.hydrateLiveOperations({ force: true });
+        } else {
+          void store.hydrateLiveOperations({ force: true }).catch((err) => {
+            console.warn("payment details refresh failed", err);
+          });
+        }
       }
       out = views.viewPay(arg);
       break;
@@ -1735,6 +1747,17 @@ document.addEventListener("click", async (e) => {
           await renderWithFeedback();
         });
       } catch (err) { toast(err.message || "Unable to confirm payment", true); }
+      break;
+    }
+
+    case "confirm-own-collector-payment": {
+      try {
+        await withBusyControl(el, "Confirming…", async () => {
+          const res = await store.confirmOwnCollectorBooking(el.dataset.booking);
+          toast(res ? "Your spot is confirmed" : "Nothing to confirm", !res);
+          location.hash = `#/booking/${el.dataset.booking}`;
+        });
+      } catch (err) { toast(err.message || "Unable to confirm your booking", true); }
       break;
     }
 

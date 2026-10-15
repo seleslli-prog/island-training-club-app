@@ -2506,6 +2506,7 @@ export function viewPay(bookingId) {
     return { redirect: `#/booking/${b.id}` };
   const s = b.snapshot;
   const collector = store.collectorFor(b.sessionId);
+  const selfCollector = store.canConfirmOwnCollectorBooking(b.id);
   const cname = collector ? esc(collector.preferredName || collector.fullName) : "the on-duty collector";
   const payouts = collector ? store.collectorPayoutsFor(collector.id) : null;
   const payme = payouts?.paymeLink || collector?.paymeLink || "";
@@ -2513,7 +2514,27 @@ export function viewPay(bookingId) {
   const paymentReference = bookingPaymentReference(b);
   const memberName = user.fullName || user.preferredName || "ITC Member";
   const paymentNote = `${s.name} · ${fmtDate(s.dateISO)} · ${s.location || "Venue TBC"} · ${memberName}`;
-  const paymentHeading = `${fmtMoney(s.price)} to ${cname}.`;
+  const paymentHeading = selfCollector
+    ? "You’re the collector this week."
+    : `${fmtMoney(s.price)} to ${cname}.`;
+
+  if (selfCollector) {
+    return `
+    <a class="back-link" href="#/activity/${b.sessionId}">← ${esc(s.name)}</a>
+    <div class="kicker mt16">Confirm your own spot</div>
+    <h1 class="display sm">${paymentHeading}</h1>
+    <p class="subcopy mt8">You don’t need to PayMe or FPS yourself. Confirm below to mark ${fmtMoney(s.price)} received and lock your spot.</p>
+    <div class="card mt16"><div class="card-body">
+      <div class="receipt-lines" style="margin-top:0;border-top:0">
+        <div class="line"><span>Session</span><strong>${esc(s.name)}</strong></div>
+        <div class="line"><span>When</span><strong>${esc(fmtDate(s.dateISO))} · ${fmtTime(s.time)}</strong></div>
+        <div class="line"><span>Where</span><strong>${esc(s.location || "Venue TBC")}</strong></div>
+        <div class="line total"><span>Amount</span><strong>${fmtMoney(s.price)}</strong></div>
+      </div>
+    </div></div>
+    <button class="btn mt16" type="button" data-action="confirm-own-collector-payment" data-booking="${b.id}">Confirm my payment</button>
+    <button class="btn ghost mt8" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>`;
+  }
 
   return `
     <a class="back-link" href="#/activity/${b.sessionId}">← ${esc(s.name)}</a>
@@ -2680,12 +2701,18 @@ export function viewBooking(bookingId) {
   let head = "";
   let actions = "";
   if (b.status === "reserved" && !b.paymentMarkedAt) {
+    const selfCollector = mine && store.canConfirmOwnCollectorBooking(b.id);
     head = `
       <h1 class="display sm mt16">Spot held.</h1>
-      <p class="subcopy mt8">Pay ${fmtMoney(s.price)} by <strong>${fmtDeadline(b.payDeadlineAt)}</strong> or the spot goes to the waitlist.</p>`;
-    actions = mine ? `
+      <p class="subcopy mt8">${selfCollector
+        ? `You’re the collector this week — confirm your ${fmtMoney(s.price)} spot without paying yourself.`
+        : `Pay ${fmtMoney(s.price)} by <strong>${fmtDeadline(b.payDeadlineAt)}</strong> or the spot goes to the waitlist.`}</p>`;
+    actions = mine ? (selfCollector ? `
+      <button class="btn" type="button" data-action="confirm-own-collector-payment" data-booking="${b.id}">Confirm my payment</button>
+      <a class="btn ghost" href="#/pay/${b.id}">Payment details</a>
+      <button class="btn ghost" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>` : `
       <a class="btn" href="#/pay/${b.id}">Pay ${fmtMoney(s.price)}</a>
-      <button class="btn ghost" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>` : "";
+      <button class="btn ghost" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>`) : "";
   } else if (b.status === "reserved" && b.paymentMarkedAt) {
     const collector = store.collectorFor(b.sessionId);
     const cname = collector ? esc(collector.preferredName || collector.fullName) : "the collector";
