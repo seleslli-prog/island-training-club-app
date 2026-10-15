@@ -676,6 +676,21 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(collectorAlertMigration, /COLLECTOR-SELF/,
     "collector self-confirm must mark payment without a member PayMe/FPS transfer");
   console.log("ok  collector reserve alert and self-confirm migration");
+  const oneTapMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261015000002_collector_one_tap_session_confirm.sql"),
+    "utf8",
+  );
+  assert.match(oneTapMigration, /confirm_own_collector_session/,
+    "on-duty collectors must confirm their own spot in one reserve+confirm step");
+  assert.match(
+    readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
+    /confirmOwnCollectorSession/,
+    "local mode must expose the collector one-tap confirm seam");
+  assert.match(
+    readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8"),
+    /confirm-own-collector-session/,
+    "Activity must offer Confirm my spot for the on-duty collector");
+  console.log("ok  collector one-tap session confirm");
 }
 }
 {
@@ -5334,7 +5349,8 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   const realNow = Date.now;
   const previousUser = store.currentUser()?.email;
   try {
-    store.signIn("admin@example.test");
+    // Member checkout copy — not the on-duty collector, who skips Reserve → Pay.
+    store.signIn("member@example.test");
     Date.now = () => data.islandEccSignupOpensAt("2026-12-05");
     const thursdayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
     assert.equal(typeof thursdayCheckout, "string");
@@ -5351,6 +5367,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
 }
 {
   const previousEmail = store.currentUser()?.email;
+  const realNow = Date.now;
   try {
     store.signIn("admin@example.test");
     const selfSession = store.upcomingSessions(60).find((session) =>
@@ -5359,21 +5376,28 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
       && !store.userBookingFor(store.currentUser().id, session.id)
       && !store.userReservationFor(store.currentUser().id, session.id)
       && session.dateISO !== islandEccSession.dateISO);
-    assert.ok(selfSession, "expected another Island ECC Saturday for collector self-confirm");
+    assert.ok(selfSession, "expected another Island ECC Saturday for collector one-tap confirm");
     store.setDuty(store.currentUser().id, selfSession.dateISO);
     const openAt = data.islandEccSignupOpensAt(selfSession.dateISO);
-    const ownHold = store.reserveSession(store.currentUser().id, selfSession, openAt);
-    assert.equal(store.canConfirmOwnCollectorBooking(ownHold.id), true);
-    assert.match(views.viewBooking(ownHold.id), /Confirm my payment/,
-      "booking page must offer collector self-confirm");
-    assert.match(views.viewPay(ownHold.id), /Confirm my payment/,
-      "pay page must offer collector self-confirm instead of PayMe-to-self");
-    assert.doesNotMatch(views.viewPay(ownHold.id), /I’ve paid/,
-      "collector self-confirm must skip the member I’ve paid form");
-    store.confirmOwnCollectorBooking(ownHold.id, openAt);
-    assert.equal(store.getBooking(ownHold.id).status, "confirmed");
-    console.log("ok  on-duty collector can confirm their own booking without PayMe-to-self");
+    Date.now = () => openAt;
+    assert.equal(store.canConfirmOwnCollectorSession(selfSession.id), true);
+    assert.match(views.viewActivity(selfSession.id), /Confirm my spot/,
+      "Activity must offer one-tap Confirm my spot for the on-duty collector");
+    assert.doesNotMatch(views.viewActivity(selfSession.id), /Book &amp; pay|Book & pay/,
+      "on-duty collector must not be sent through the member Book & pay path");
+    const checkout = views.viewCheckout(selfSession.id);
+    assert.equal(typeof checkout, "string");
+    assert.match(checkout, /Confirm my spot/,
+      "Checkout must offer one-tap confirm for the on-duty collector");
+    assert.doesNotMatch(checkout, /Reserve spot/,
+      "on-duty collector must skip Reserve spot · pay later");
+    const confirmed = store.confirmOwnCollectorSession(selfSession.id, openAt);
+    const bookingId = confirmed?.booking?.id || confirmed?.id;
+    assert.ok(bookingId, "one-tap confirm must return the confirmed booking");
+    assert.equal(store.getBooking(bookingId).status, "confirmed");
+    console.log("ok  on-duty collector confirms their own spot in one tap");
   } finally {
+    Date.now = realNow;
     if (previousEmail) store.signIn(previousEmail);
   }
 }

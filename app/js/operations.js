@@ -1343,6 +1343,27 @@ export async function liveConfirmOwnCollectorBooking(bookingId) {
   return row;
 }
 
+export async function liveConfirmOwnCollectorSession(sessionId) {
+  const row = await runOperationalRpc("confirm_own_collector_session", {
+    p_session_id: sessionId,
+  }, {
+    skipRefresh: true,
+    applyResult(result) {
+      const bookingId = rpcRecord(result)?.id;
+      if (bookingId) confirmLiveBookingLocally(bookingId, result);
+    },
+  });
+  const bookingId = rpcRecord(row)?.id;
+  if (bookingId) {
+    const confirmed = liveCache.bookings.find((item) => item.id === bookingId);
+    if (confirmed?.status !== "confirmed") confirmLiveBookingLocally(bookingId, row);
+  }
+  void refreshOperationalState().catch((err) => {
+    console.warn("operations refresh after collector one-tap confirm failed", err);
+  });
+  return row;
+}
+
 export async function liveDeferBooking(bookingId, targetSessionId) {
   return runOperationalRpc("defer_operational_booking", {
     p_booking_id: bookingId,
