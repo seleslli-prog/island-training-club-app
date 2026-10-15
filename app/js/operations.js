@@ -1326,6 +1326,23 @@ export async function liveApproveBookingPayment(bookingId) {
   return row;
 }
 
+export async function liveMarkPaidAndConfirmBooking(bookingId) {
+  const row = await runOperationalRpc("admin_mark_and_confirm_operational_payment", {
+    p_booking_id: bookingId,
+  }, {
+    skipRefresh: true,
+    applyResult(result) {
+      confirmLiveBookingLocally(bookingId, result);
+    },
+  });
+  const confirmed = liveCache.bookings.find((item) => item.id === bookingId);
+  if (confirmed?.status !== "confirmed") confirmLiveBookingLocally(bookingId, row);
+  void refreshOperationalState().catch((err) => {
+    console.warn("operations refresh after mark-paid-and-confirm failed", err);
+  });
+  return row;
+}
+
 export async function liveConfirmOwnCollectorBooking(bookingId) {
   const row = await runOperationalRpc("confirm_own_collector_booking", {
     p_booking_id: bookingId,

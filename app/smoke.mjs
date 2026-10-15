@@ -1779,6 +1779,19 @@ assert.match(rsvpAttendeeNamesMigrationSource, /requires_rsvp/);
     /given name \+ last-name initial|labelSource\.split/,
     "local Who's coming must keep the privacy given-name + last-initial format");
   console.log("ok  Who's coming uses given name plus last-name initial for privacy");
+  const markPaidConfirmMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261015000005_admin_mark_and_confirm_payment.sql"),
+    "utf8",
+  );
+  assert.match(markPaidConfirmMigration, /admin_mark_and_confirm_operational_payment/,
+    "Admin Payments must be able to mark and confirm unpaid reserved bookings");
+  assert.match(markPaidConfirmMigration, /COLLECTOR-MARKED/,
+    "collector mark-paid-and-confirm must record a clear payment reference");
+  assert.match(
+    readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8"),
+    /mark-paid-and-confirm[\s\S]*Mark paid/,
+    "Payment due roster rows must offer Mark paid & confirm");
+  console.log("ok  Admin Payment due offers Mark paid & confirm");
 }
 const replacementMigrationPath = resolve(
   __dirnameSmoke, "../supabase/migrations/20260910000001_operational_replacement_requests.sql"
@@ -7633,7 +7646,21 @@ console.log("ok  reset");
     'data-payment-state="payment_due"',
     'data-payment-state="awaiting_confirmation"',
     'data-payment-state="paid"',
+    'data-action="mark-paid-and-confirm"',
+    "Mark paid &amp; confirm",
+    'data-action="confirm-payment"',
+    "Confirm received",
   ]) assert.ok(rosterHtml.includes(marker), `Admin payment roster missing ${marker}`);
+  assert.match(
+    rosterHtml,
+    /data-action="mark-paid-and-confirm"[^>]*data-booking="roster-due-booking"/,
+    "Payment due rows must offer Mark paid & confirm instead of only a badge",
+  );
+  assert.doesNotMatch(
+    rosterHtml.split('data-payment-state="payment_due"')[1]?.split("</details>")[0] || "",
+    /class="badge warn">Payment due</,
+    "Payment due member rows must replace the Payment due badge with Mark paid & confirm",
+  );
   for (const secret of [
     "due-private@example.test", "claim-private@example.test", "paid-private@example.test",
     "expected-private@example.test", "+852 6111 1001", "+852 6222 2002",
@@ -7683,6 +7710,13 @@ console.log("ok  reset");
     .filter((booking) => [dueBooking.id, awaitingBooking.id, paidBooking.id].includes(booking.id))
     .map((booking) => store.paymentStateForBooking(booking));
   assert.deepEqual(rosterStates, ["payment_due", "awaiting_confirmation", "paid"]);
+  {
+    store.signIn("admin@example.test");
+    const confirmed = store.markPaidAndConfirmBooking("roster-due-booking");
+    assert.equal(confirmed?.booking?.status || store.getBooking("roster-due-booking").status, "confirmed");
+    assert.equal(store.getBooking("roster-due-booking").paymentRef, "COLLECTOR-MARKED");
+    console.log("ok  Admin Mark paid & confirm confirms a Payment due booking");
+  }
   assert.deepEqual(
     store.attendanceBookingsForSession(paidSessions[2].id).map((booking) => booking.status),
     ["confirmed"],

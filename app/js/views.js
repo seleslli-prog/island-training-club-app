@@ -3069,7 +3069,13 @@ function adminPaymentRoster({ id, label, dateISO, venue, bookings, memberUsers, 
       const rows = grouped.get(state);
       return `<details class="admin-payment-group" name="roster-${esc(id)}" data-payment-state="${state}"${state === "awaiting_confirmation" && rows.length ? " open" : ""}>
         <summary><span>${esc(text)}</span><span class="badge ${badgeClass}">${rows.length}</span></summary>
-        ${rows.length ? rows.map((booking) => `<div class="admin-roster-row"><strong>${esc(displayName(booking))}</strong>${state === "awaiting_confirmation" ? `<button class="btn sm" type="button" data-action="confirm-payment" data-booking="${esc(booking.id)}">Confirm received</button>` : `<span class="badge ${badgeClass}">${esc(text)}</span>`}</div>`).join("") : `<p class="muted small">No members in this state.</p>`}
+        ${rows.length ? rows.map((booking) => `<div class="admin-roster-row"><strong>${esc(displayName(booking))}</strong>${
+          state === "awaiting_confirmation"
+            ? `<button class="btn sm" type="button" data-action="confirm-payment" data-booking="${esc(booking.id)}">Confirm received</button>`
+            : state === "payment_due"
+              ? `<button class="btn sm" type="button" data-action="mark-paid-and-confirm" data-booking="${esc(booking.id)}">Mark paid &amp; confirm</button>`
+              : `<span class="badge ${badgeClass}">${esc(text)}</span>`
+        }</div>`).join("") : `<p class="muted small">No members in this state.</p>`}
       </details>`;
     }).join("")}
     ${queue}

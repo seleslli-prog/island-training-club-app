@@ -2468,6 +2468,26 @@ export function confirmOwnCollectorSession(sessionId, now = Date.now()) {
   return confirmOwnCollectorBooking(booking.id, now);
 }
 
+// Admin/collector: money already received, member never tapped I've paid.
+export function markPaidAndConfirmBooking(bookingId, now = Date.now()) {
+  assertActiveBookingTarget(bookingId);
+  if (isLive()) {
+    return liveOps.liveMarkPaidAndConfirmBooking(bookingId);
+  }
+  requirePaymentAdminActor();
+  const booking = getBooking(bookingId);
+  if (!booking || booking.status !== "reserved") {
+    throw new Error("Booking is not awaiting payment.");
+  }
+  if (!booking.paymentMarkedAt) {
+    booking.paymentMarkedAt = now;
+    booking.paidMethod = "FPS";
+    booking.paymentRef = "COLLECTOR-MARKED";
+    save();
+  }
+  return confirmBookingPayment(bookingId, now);
+}
+
 // Collector confirms the direct-session payment, preserving payer ownership
 // while issuing the receipt and enabling the remaining booking lifecycle.
 export function confirmBookingPayment(bookingId, now = Date.now()) {

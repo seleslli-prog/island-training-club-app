@@ -1750,6 +1750,17 @@ document.addEventListener("click", async (e) => {
       break;
     }
 
+    case "mark-paid-and-confirm": {
+      try {
+        await withBusyControl(el, "Confirming…", async () => {
+          const res = await store.markPaidAndConfirmBooking(el.dataset.booking);
+          toast(res ? "Marked paid and confirmed — member notified" : "Nothing to confirm", !res);
+          await renderWithFeedback();
+        });
+      } catch (err) { toast(err.message || "Unable to mark paid and confirm", true); }
+      break;
+    }
+
     case "confirm-own-collector-payment": {
       try {
         await withBusyControl(el, "Confirming…", async () => {
