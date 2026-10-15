@@ -400,6 +400,10 @@ export function subscribeOperationalState(onChange) {
   return liveOps.subscribeOperationalState(onChange);
 }
 
+export function operationalStateStatus() {
+  return liveOps.operationalStateStatus();
+}
+
 function normalizeReceiptCounter() {
   if (Number.isInteger(state.receiptCounter) && state.receiptCounter >= 0) return;
   const highestIssued = state.receipts.reduce((highest, receipt) => {
@@ -2338,6 +2342,17 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
     snapshot: snapshotFor(session),
   };
   state.bookings.push(booking);
+  const collector = collectorFor(session.id);
+  if (collector && collector.id !== userId) {
+    const who = state.users.find((u) => u.id === userId);
+    notify(
+      collector.id,
+      "operational_collector_spot_reserved",
+      `${who?.preferredName || who?.fullName || "A member"} reserved ${session.name} — ${fmtDate(session.dateISO)}. Awaiting payment.`,
+      "#/admin/payments",
+      "Spot reserved — awaiting payment",
+    );
+  }
   save();
   return booking;
 }
@@ -2368,6 +2383,35 @@ export function markBookingPaid(bookingId, method, ref, now = Date.now()) {
   }
   save();
   return b;
+}
+
+export function canConfirmOwnCollectorBooking(bookingId) {
+  const booking = getBooking(bookingId);
+  const actor = currentUser();
+  if (!booking || !actor || actor.status !== "approved") return false;
+  if (booking.userId !== actor.id || booking.status !== "reserved") return false;
+  if (!PAYMENT_ADMIN_ROLES.has(actor.role)) return false;
+  const collector = collectorFor(booking.sessionId);
+  return !!collector && collector.id === actor.id;
+}
+
+// On-duty collector confirming their own reserved spot — skip PayMe-to-self.
+export function confirmOwnCollectorBooking(bookingId, now = Date.now()) {
+  assertActiveBookingTarget(bookingId);
+  if (isLive()) {
+    return liveOps.liveConfirmOwnCollectorBooking(bookingId);
+  }
+  if (!canConfirmOwnCollectorBooking(bookingId)) {
+    throw new Error("Only the assigned collector can confirm their own booking.");
+  }
+  const booking = getBooking(bookingId);
+  if (!booking.paymentMarkedAt) {
+    booking.paymentMarkedAt = now;
+    booking.paidMethod = "FPS";
+    booking.paymentRef = "COLLECTOR-SELF";
+  }
+  save();
+  return confirmBookingPayment(bookingId, now);
 }
 
 // Collector confirms the direct-session payment, preserving payer ownership
