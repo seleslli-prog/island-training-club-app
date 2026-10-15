@@ -2385,14 +2385,37 @@ export function markBookingPaid(bookingId, method, ref, now = Date.now()) {
   return b;
 }
 
+function isAssignedCollectorActor(sessionId, actor = currentUser()) {
+  if (!actor || actor.status !== "approved" || !PAYMENT_ADMIN_ROLES.has(actor.role)) {
+    return false;
+  }
+  // Only an explicit weekly duty claim counts — collectorFor() also falls back
+  // to the first admin when no duty is set, which must not unlock self-confirm.
+  const duty = dutyFor(sessionId);
+  return !!duty?.userId && duty.userId === actor.id;
+}
+
 export function canConfirmOwnCollectorBooking(bookingId) {
   const booking = getBooking(bookingId);
   const actor = currentUser();
-  if (!booking || !actor || actor.status !== "approved") return false;
-  if (booking.userId !== actor.id || booking.status !== "reserved") return false;
-  if (!PAYMENT_ADMIN_ROLES.has(actor.role)) return false;
-  const collector = collectorFor(booking.sessionId);
-  return !!collector && collector.id === actor.id;
+  if (!booking || !actor || booking.userId !== actor.id || booking.status !== "reserved") {
+    return false;
+  }
+  return isAssignedCollectorActor(booking.sessionId, actor);
+}
+
+export function canConfirmOwnCollectorSession(sessionId) {
+  const session = getSession(sessionId);
+  const actor = currentUser();
+  if (!session || !actor || session.kind !== "paid" || session.cancelled) return false;
+  if (!isAssignedCollectorActor(session.id, actor)) return false;
+  if (userBookingFor(actor.id, session.id)) return false;
+  const held = userReservationFor(actor.id, session.id);
+  if (held) return canConfirmOwnCollectorBooking(held.id);
+  if (sessionStarted(session)) return false;
+  if (spotsLeft(session) != null && spotsLeft(session) <= 0) return false;
+  if (islandEccSignupLocked(session) || islandEccOtherSlotTaken(session)) return false;
+  return true;
 }
 
 // On-duty collector confirming their own reserved spot — skip PayMe-to-self.
@@ -2412,6 +2435,22 @@ export function confirmOwnCollectorBooking(bookingId, now = Date.now()) {
   }
   save();
   return confirmBookingPayment(bookingId, now);
+}
+
+// One tap from Activity/Checkout: reserve + confirm for the on-duty collector.
+export function confirmOwnCollectorSession(sessionId, now = Date.now()) {
+  assertActiveSessionTarget(sessionId);
+  if (isLive()) {
+    return liveOps.liveConfirmOwnCollectorSession(sessionId);
+  }
+  if (!canConfirmOwnCollectorSession(sessionId)) {
+    throw new Error("Only the assigned collector can confirm their own spot.");
+  }
+  const actor = currentUser();
+  const held = userReservationFor(actor.id, sessionId);
+  if (held) return confirmOwnCollectorBooking(held.id, now);
+  const booking = reserveSession(actor.id, sessionId, now);
+  return confirmOwnCollectorBooking(booking.id, now);
 }
 
 // Collector confirms the direct-session payment, preserving payer ownership

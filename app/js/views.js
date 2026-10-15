@@ -807,7 +807,16 @@ export function viewActivity(sessionId, options) {
         ${directionsLink}
       </div>`;
   } else if (reservation) {
-    actionBlock = `
+    const selfCollectorHold = store.canConfirmOwnCollectorBooking(reservation.id);
+    actionBlock = selfCollectorHold ? `
+      <div class="banner mt16">
+        <span class="kicker">Confirm your spot</span>
+        <p>You’re the collector this week — confirm without PayMe or FPS to yourself.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn" type="button" data-action="confirm-own-collector-payment" data-booking="${reservation.id}">Confirm my payment</button>
+        ${directionsLink}
+      </div>` : `
       <div class="banner mt16">
         <span class="kicker">Pay by ${fmtDeadline(reservation.payDeadlineAt)}</span>
         <p>Your spot is held. Pay before the checkpoint or it goes to the waitlist.</p>
@@ -855,6 +864,16 @@ export function viewActivity(sessionId, options) {
     actionBlock = `
       <div class="btn-row">
         <button class="btn" disabled>Session full</button>
+        ${directionsLink}
+      </div>`;
+  } else if (isMember && store.canConfirmOwnCollectorSession(s.id)) {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">You’re on duty</span>
+        <p>Confirm your own ${fmtMoney(s.price)} spot in one step — no PayMe or FPS to yourself.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn" type="button" data-action="confirm-own-collector-session" data-session="${s.id}">Confirm my spot · ${fmtMoney(s.price)}</button>
         ${directionsLink}
       </div>`;
   } else if (isMember) {
@@ -2455,11 +2474,33 @@ export function viewCheckout(sessionId) {
     return { redirect: `#/booking/${confirmed.id}` };
   }
   const existingRes = store.userReservationFor(user.id, s.id);
-  if (existingRes) return { redirect: `#/pay/${existingRes.id}` };
+  if (existingRes) {
+    return {
+      redirect: store.canConfirmOwnCollectorBooking(existingRes.id)
+        ? `#/booking/${existingRes.id}`
+        : `#/pay/${existingRes.id}`,
+    };
+  }
   if (sessionStarted(s) || s.cancelled || store.spotsLeft(s) <= 0)
     return { redirect: `#/activity/${sessionId}` };
   if (store.islandEccSignupLocked(s) || store.islandEccOtherSlotTaken(s)) {
     return { redirect: `#/activity/${sessionId}` };
+  }
+  if (store.canConfirmOwnCollectorSession(s.id)) {
+    return `
+    <a class="back-link" href="#/activity/${s.id}">← ${esc(s.name)}</a>
+    <div class="kicker mt16">Confirm your own spot</div>
+    <h1 class="display sm">You’re the collector this week.</h1>
+    <p class="subcopy mt8">Confirm below to lock your ${fmtMoney(s.price)} spot — no PayMe or FPS to yourself.</p>
+    <div class="card mt16"><div class="card-body">
+      <div class="receipt-lines" style="margin-top:0;border-top:0">
+        <div class="line"><span>Session</span><strong>${esc(s.name)}</strong></div>
+        <div class="line"><span>When</span><strong>${esc(fmtDate(s.dateISO))} · ${fmtTime(s.time)}</strong></div>
+        <div class="line"><span>Where</span><strong>${esc(s.location)}</strong></div>
+        <div class="line total"><span>Amount</span><strong>${fmtMoney(s.price)}</strong></div>
+      </div>
+    </div></div>
+    <button class="btn mt16" type="button" data-action="confirm-own-collector-session" data-session="${s.id}">Confirm my spot · ${fmtMoney(s.price)}</button>`;
   }
   const islandEccPayBy = ISLAND_ECC_HYROX_ACTIVITY_IDS.has(s.activityId)
     && Date.now() >= islandEccPaymentDeadlineAt(s.dateISO)

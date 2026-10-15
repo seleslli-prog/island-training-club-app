@@ -1761,6 +1761,21 @@ document.addEventListener("click", async (e) => {
       break;
     }
 
+    case "confirm-own-collector-session": {
+      try {
+        await withBusyControl(el, "Confirming…", async () => {
+          const row = await store.confirmOwnCollectorSession(el.dataset.session);
+          const bookingId = row?.booking?.id || row?.id || store.userBookingFor(
+            store.currentUser()?.id,
+            el.dataset.session,
+          )?.id;
+          toast(bookingId ? "Your spot is confirmed" : "Nothing to confirm", !bookingId);
+          location.hash = bookingId ? `#/booking/${bookingId}` : `#/activity/${el.dataset.session}`;
+        });
+      } catch (err) { toast(err.message || "Unable to confirm your spot", true); }
+      break;
+    }
+
     case "attendance-toggle": {
       const bookingId = String(el.dataset.booking || "");
       if (!bookingId || !["0", "1"].includes(el.dataset.arrived)) break;
