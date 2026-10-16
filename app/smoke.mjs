@@ -2873,6 +2873,10 @@ assert.match(integratedAppSource, /dataset\.form === "photo-consent"[\s\S]*?upda
   "Agreements must persist required photo consent through the form delegate");
 assert.match(integratedAppSource, /applyOwnAvatarToRoster/,
   "Activity Who's coming must overlay the viewer's own profile photo onto their roster row");
+assert.match(integratedAppSource, /row\.profileId === viewer\.id/,
+  "Who's coming must attach the viewer's photo only to their own booking profile");
+assert.doesNotMatch(integratedAppSource, /label === `\$\{preferred\} \$\{last\[0\]\}\.`/,
+  "Who's coming must not treat a shared short name as the viewer's booking");
 assert.equal(typeof store.attendeeCountFor, "function",
   "store must export attendeeCountFor for identity-independent RSVP counts");
 assert.equal((integratedViewSource.match(/store\.attendeeCountFor\([^)]*\)/g) || []).length, 4,

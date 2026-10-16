@@ -95,20 +95,10 @@ const canManageOwnAvatar = (user) => user?.status === "approved"
   && ["member", "admin", "superadmin", "super_admin"].includes(user.role);
 
 function rosterRowMatchesViewer(row, viewer) {
-  if (!row || !viewer) return false;
-  if (row.profileId && row.profileId === viewer.id) return true;
-  const label = String(row.displayName || "").trim().toLowerCase();
-  if (!label) return false;
-  const full = String(viewer.fullName || "").trim().toLowerCase();
-  const preferred = String(viewer.preferredName || "").trim().toLowerCase();
-  if (full && label === full) return true;
-  if (preferred && label === preferred) return true;
-  if (preferred && full) {
-    const parts = full.split(/\s+/).filter(Boolean);
-    const last = parts[parts.length - 1] || "";
-    if (last && label === `${preferred} ${last[0]}.`) return true;
-  }
-  return false;
+  // Match the confirmed booking's profile only. "Kelvin L." is shared by
+  // more than one member, so a short-name match paints the viewer's photo
+  // onto someone else's spot.
+  return !!row?.profileId && !!viewer?.id && row.profileId === viewer.id;
 }
 
 function applyOwnAvatarToRoster(rows, viewer) {
@@ -119,7 +109,6 @@ function applyOwnAvatarToRoster(rows, viewer) {
     if (!rosterRowMatchesViewer(row, viewer)) return row;
     return {
       ...row,
-      profileId: row.profileId || viewer.id,
       url: own.url,
       source: own.source,
       state: own.state || "active",
