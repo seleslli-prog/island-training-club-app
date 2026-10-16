@@ -839,7 +839,7 @@ export function viewActivity(sessionId, options) {
     actionBlock = `
       <div class="banner mt16">
         <span class="kicker">Sign-up closed</span>
-        <p>Reserve and pay by Thursday at 6 PM HKT. Unpaid spots go to the waitlist.</p>
+        <p>New spots close Thursday at 6 PM HKT. If you already reserved, tap I've paid.</p>
       </div>
       ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
   } else if (isMember && store.islandEccOtherSlotTaken(s)) {

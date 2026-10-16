@@ -306,7 +306,6 @@ export function islandEccSignupClosed(sessionDateISO, now = Date.now()) {
 
 export const ISLAND_ECC_SIGNUP_LOCKED_ERROR = "HYROX sign-up opens Monday at 6 PM HKT.";
 export const ISLAND_ECC_SIGNUP_CLOSED_ERROR = "HYROX sign-up closes Thursday at 6 PM HKT.";
-export const ISLAND_ECC_PAYMENT_CLOSED_ERROR = "Payment marking is closed for this booking.";
 
 export function todayLocal() {
   const d = new Date();

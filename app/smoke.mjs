@@ -1527,6 +1527,12 @@ console.log("ok  dual Island ECC migration retimes, provisions and guards both s
   );
   assert.match(hardThursdayMigrationSource, /2026-10-24/);
   assert.match(hardThursdayMigrationSource, /HYROX sign-up closes Thursday at 6 PM HKT/);
+  const thursdayReminderMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261016000002_island_ecc_thursday_pay_reminder.sql"),
+    "utf8",
+  );
+  assert.match(thursdayReminderMigrationSource, /Tap I''ve paid for ITC HYROX/);
+  assert.match(thursdayReminderMigrationSource, /session_date >= date '2026-10-24'/);
   console.log("ok  Island ECC hard Thursday deadline starts 24 Oct");
 }
 assert.equal((hyroxActivityMigrationSource.match(
@@ -5278,9 +5284,22 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     store.signIn(signIn.user.email);
     const afterThursday = data.islandEccPaymentDeadlineAt(lockedSaturday) + 1;
     store.sweepCheckpoints(afterThursday);
-    assert.equal(store.getBooking(lockedHold.id).status, "expired");
-    assert.ok(store.waitlistPosition(lockedHold.userId, lockedLate.id),
-      "an unpaid hold must move to the waitlist after the hard Thursday deadline");
+    assert.equal(store.getBooking(lockedHold.id).status, "reserved",
+      "missing I've paid must keep the spot after the hard Thursday deadline");
+    assert.equal(store.waitlistPosition(lockedHold.userId, lockedLate.id), null,
+      "missing I've paid must not move the hold onto the waitlist");
+    assert.equal(
+      store.notificationsFor(lockedHold.userId)
+        .filter((n) => n.kind === "operational_island_ecc_payment_reminder").length,
+      1,
+      "missing I've paid must get one Thursday 6 PM reminder",
+    );
+    store.signIn("admin@example.test");
+    store.markBookingPaid(lockedHold.id, "PayMe", "AFTER-THURSDAY");
+    assert.ok(store.getBooking(lockedHold.id).paymentMarkedAt,
+      "I've paid must still be available after the Thursday reminder");
+    store.getBooking(lockedHold.id).paymentMarkedAt = null;
+    store.signIn(signIn.user.email);
     promoted = store.userReservationFor("fixture-member", lockedLate.id);
     assert.throws(
       () => store.reserveSession(signIn.user.id, lockedEarly, afterThursday),
