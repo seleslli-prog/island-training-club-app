@@ -2725,6 +2725,13 @@ async function boot() {
   // details whenever the member returns from PayMe.
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") return;
+    if (!viewEl.innerHTML.trim()) {
+      try {
+        await renderWithFeedback();
+      } catch (err) {
+        toast(err.message || "Unable to load this page", true);
+      }
+    }
     void restoreInstalledWebPush();
     void refreshNotificationSurfaces();
     const resumedPage = parseHash()[0];
@@ -2743,6 +2750,9 @@ async function boot() {
   });
 
   if (!paintHomeFirst && pendingVisitorHydrate) {
+    // A saved route used to wait on sign-in before any paint. A stalled
+    // session read then left the header up and the page blank.
+    await renderWithFeedback();
     try {
       await pendingVisitorHydrate;
       bindOperationalUiRefresh();

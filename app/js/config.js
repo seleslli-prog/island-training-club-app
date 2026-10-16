@@ -10,12 +10,24 @@ export const LIVE_SESSION_STORAGE_KEY = "itc.supabase.session";
 export const SUPABASE_VENDOR_SRC = "/app/vendor/supabase-js.2.117.2.umd.js";
 export const SUPABASE_VENDOR_INTEGRITY = "sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok";
 
+// iOS can resume an installed app with navigator.locks.request stuck forever.
+// Supabase then never finishes getSession, and boot never draws the page.
+// A tab-local queue keeps token refresh ordered without that browser lock.
+let authLockChain = Promise.resolve();
+
+export function acquireAuthLock(_name, _acquireTimeout, fn) {
+  const run = authLockChain.then(() => fn(), () => fn());
+  authLockChain = run.then(() => {}, () => {});
+  return run;
+}
+
 const AUTH_OPTIONS = {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: LIVE_SESSION_STORAGE_KEY,
+    lock: acquireAuthLock,
   },
 };
 
@@ -79,12 +91,23 @@ function loadVendorScript() {
   if (vendorLoad) return vendorLoad;
   vendorLoad = new Promise((resolve, reject) => {
     const script = document.createElement("script");
+    const timer = setTimeout(() => {
+      vendorLoad = null;
+      reject(new Error("Unable to load sign-in"));
+    }, 8000);
+    const finish = (fn, value) => {
+      clearTimeout(timer);
+      fn(value);
+    };
     script.src = SUPABASE_VENDOR_SRC;
     script.async = true;
     script.crossOrigin = "anonymous";
     script.integrity = SUPABASE_VENDOR_INTEGRITY;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Unable to load sign-in"));
+    script.onload = () => finish(resolve);
+    script.onerror = () => {
+      vendorLoad = null;
+      finish(reject, new Error("Unable to load sign-in"));
+    };
     document.head.appendChild(script);
   });
   return vendorLoad;

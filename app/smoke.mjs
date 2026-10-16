@@ -2839,6 +2839,10 @@ const bootSource = integratedAppSource.slice(
 );
 assert.match(bootSource, /await renderWithFeedback\(\);\n\s*if \(paintHomeFirst && startLiveHydration\) pendingVisitorHydrate = startLiveHydration\(\);/,
   "the first Home paint must happen before live client and identity hydration");
+assert.match(bootSource, /if \(!paintHomeFirst && pendingVisitorHydrate\) \{[\s\S]*?await renderWithFeedback\(\);[\s\S]*?await pendingVisitorHydrate/,
+  "reopening on a saved route must paint before live identity hydration");
+assert.match(readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8"), /lock: acquireAuthLock/,
+  "sign-in must not wait on the browser lock that sticks after an iOS reopen");
 {
   const configSource = readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8");
   assert.match(configSource, /export function isLiveConfigured/,
