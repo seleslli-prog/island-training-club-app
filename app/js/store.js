@@ -30,7 +30,7 @@ import {
   islandEccCollectorFinalizeNudgeAt,
   ISLAND_ECC_SIGNUP_LOCKED_ERROR,
   ISLAND_ECC_SIGNUP_CLOSED_ERROR,
-  ISLAND_ECC_PAYMENT_CLOSED_ERROR,
+  islandEccPaymentDeadlineAt,
   sessionReminderTomorrowAt,
   sessionReminderMorningAt,
   isSessionReminderNotification,
@@ -2394,11 +2394,6 @@ export function markBookingPaid(bookingId, method, ref, now = Date.now()) {
   const b = getBooking(bookingId);
   if (!b || b.status !== "reserved" || b.paymentMarkedAt) return null;
   requireAuthorizedPaymentOwner(b.userId);
-  const paidSession = getSession(b.sessionId);
-  if (paidSession && islandEccHardThursday(paidSession.dateISO)
-      && b.payDeadlineAt && now >= b.payDeadlineAt) {
-    throw new Error(ISLAND_ECC_PAYMENT_CLOSED_ERROR);
-  }
   b.paymentMarkedAt = now;
   b.paidMethod = method === "FPS" ? "FPS" : "PayMe";
   b.paymentRef = String(ref ?? "").trim() || null;
@@ -2612,16 +2607,13 @@ export function sweepCheckpoints(now = Date.now()) {
     // not the clock — the collector confirms or releases at the checkpoint.
     const session = getSession(b.sessionId);
     const islandEcc = isIslandEccHyroxSession(session);
-    if (!b.paymentMarkedAt && b.payDeadlineAt && now > b.payDeadlineAt) {
+    if (!b.paymentMarkedAt && b.payDeadlineAt && now > b.payDeadlineAt
+        && !(islandEcc && islandEccHardThursday(session?.dateISO))) {
       b.status = "expired";
       notify(b.userId, "reservation-expired",
         `Your unpaid spot for ${b.snapshot.name} · ${fmtDate(b.snapshot.dateISO)} expired at the payment deadline — it went to the waitlist.`,
         `#/activity/${b.sessionId}`);
-      if (islandEcc && islandEccHardThursday(session?.dateISO)) {
-        enqueueExpiredWaitlist(b.userId, b.sessionId, now);
-      } else {
-        cascadeSession(b.sessionId, now);
-      }
+      cascadeSession(b.sessionId, now);
       dirty = true;
       continue;
     }
@@ -2642,13 +2634,18 @@ export function sweepCheckpoints(now = Date.now()) {
       && !b.paymentMarkedAt
       && !b.reminderSentAt
       && session.dateISO >= todayHktISO(now)
-      && now >= islandEccMemberReminderAt(session.dateISO)
+      && now >= (islandEccHardThursday(session.dateISO)
+        ? islandEccPaymentDeadlineAt(session.dateISO)
+        : islandEccMemberReminderAt(session.dateISO))
     ) {
       b.reminderSentAt = now;
       const holder = paymentUserById(b.userId);
       if (holder?.hyroxPaymentReminders !== false) {
+        const when = fmtDate(session.dateISO);
         notify(b.userId, "operational_island_ecc_payment_reminder",
-          `Pay for ITC HYROX on ${fmtDate(session.dateISO)} by the deadline or the spot goes to the waitlist.`,
+          islandEccHardThursday(session.dateISO)
+            ? `Tap I've paid for ITC HYROX on ${when}. Reserve and payment were due Thursday at 6 PM.`
+            : `Pay for ITC HYROX on ${when} by the deadline or the spot goes to the waitlist.`,
           `#/pay/${b.id}`);
       }
       dirty = true;
@@ -2733,13 +2730,6 @@ function islandEccDatesFromState() {
   for (const sessionId of Object.keys(state.queues || {})) consider(sessionId);
   for (const sessionId of Object.keys(state.sessionOverrides || {})) consider(sessionId);
   return dates;
-}
-
-function enqueueExpiredWaitlist(userId, sessionId, now) {
-  const queue = paymentQueueFor(sessionId);
-  const listed = [...(queue.waitlist || []), ...(queue.interest || [])]
-    .some((entry) => entry.userId === userId);
-  if (!listed) queue.waitlist.push({ userId, joinedAt: now });
 }
 
 function cascadeSession(sessionId, now = Date.now()) {
