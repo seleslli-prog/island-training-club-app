@@ -283,12 +283,30 @@ export function islandEccSignupOpen(sessionDateISO, now = Date.now()) {
   return now >= islandEccSignupOpensAt(sessionDateISO);
 }
 
+// 17 Oct 2026 keeps the soft-launch leftover window. From 24 Oct, Thursday
+// 6:00 PM HKT is the last moment to reserve and pay. There is no Friday 9 PM
+// sign-up after that.
+export const ISLAND_ECC_HARD_THURSDAY_FROM = "2026-10-24";
+
+export function islandEccHardThursday(sessionDateISO) {
+  return typeof sessionDateISO === "string"
+    && sessionDateISO >= ISLAND_ECC_HARD_THURSDAY_FROM;
+}
+
 export function islandEccNextPayDeadline(sessionDateISO, now = Date.now()) {
   const thursday = islandEccPaymentDeadlineAt(sessionDateISO);
+  if (islandEccHardThursday(sessionDateISO)) return thursday;
   return now < thursday ? thursday : islandEccLeftoverPayByAt(sessionDateISO);
 }
 
+export function islandEccSignupClosed(sessionDateISO, now = Date.now()) {
+  return islandEccHardThursday(sessionDateISO)
+    && now >= islandEccPaymentDeadlineAt(sessionDateISO);
+}
+
 export const ISLAND_ECC_SIGNUP_LOCKED_ERROR = "HYROX sign-up opens Monday at 6 PM HKT.";
+export const ISLAND_ECC_SIGNUP_CLOSED_ERROR = "HYROX sign-up closes Thursday at 6 PM HKT.";
+export const ISLAND_ECC_PAYMENT_CLOSED_ERROR = "Payment marking is closed for this booking.";
 
 export function todayLocal() {
   const d = new Date();

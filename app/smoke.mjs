@@ -259,6 +259,20 @@ assert.ok(quarryBayEarlySeed, "the early Island ECC HYROX slot must be seeded");
     data.islandEccNextPayDeadline(saturday, Date.parse("2026-10-08T18:00:00+08:00")),
     Date.parse("2026-10-09T21:00:00+08:00"),
   );
+  assert.equal(data.islandEccHardThursday("2026-10-17"), false);
+  assert.equal(
+    data.islandEccNextPayDeadline("2026-10-17", Date.parse("2026-10-15T18:00:00+08:00")),
+    data.islandEccLeftoverPayByAt("2026-10-17"),
+  );
+  assert.equal(data.islandEccHardThursday("2026-10-24"), true);
+  assert.equal(
+    data.islandEccNextPayDeadline("2026-10-24", Date.parse("2026-10-22T18:00:00+08:00")),
+    data.islandEccPaymentDeadlineAt("2026-10-24"),
+  );
+  assert.equal(
+    data.islandEccSignupClosed("2026-10-24", Date.parse("2026-10-22T18:00:00+08:00")),
+    true,
+  );
   assert.equal(typeof data.finalCheckpointFor, "function");
   assert.equal(data.LAST_MINUTE_WINDOW_MS, 2 * 60 * 60 * 1000);
   assert.equal(
@@ -1507,6 +1521,13 @@ console.log("ok  dual Island ECC migration retimes, provisions and guards both s
     );
   }
   console.log("ok  Island ECC signup-window migration markers");
+  const hardThursdayMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261016000001_island_ecc_hard_thursday_deadline.sql"),
+    "utf8",
+  );
+  assert.match(hardThursdayMigrationSource, /2026-10-24/);
+  assert.match(hardThursdayMigrationSource, /HYROX sign-up closes Thursday at 6 PM HKT/);
+  console.log("ok  Island ECC hard Thursday deadline starts 24 Oct");
 }
 assert.equal((hyroxActivityMigrationSource.match(
   /drop constraint operational_activity_templates_activity_id_check/g
@@ -5255,21 +5276,27 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     store.signIn("member@example.test");
     store.joinWaitlist("fixture-member", lockedLate.id, openAt);
     store.signIn(signIn.user.email);
-    store.sweepCheckpoints(data.islandEccPaymentDeadlineAt(lockedSaturday) + 1);
+    const afterThursday = data.islandEccPaymentDeadlineAt(lockedSaturday) + 1;
+    store.sweepCheckpoints(afterThursday);
     assert.equal(store.getBooking(lockedHold.id).status, "expired");
+    assert.ok(store.waitlistPosition(lockedHold.userId, lockedLate.id),
+      "an unpaid hold must move to the waitlist after the hard Thursday deadline");
     promoted = store.userReservationFor("fixture-member", lockedLate.id);
+    assert.throws(
+      () => store.reserveSession(signIn.user.id, lockedEarly, afterThursday),
+      /HYROX sign-up closes Thursday at 6 PM HKT/,
+    );
   } finally {
     lateActivity.capacity = previousLateCapacity;
   }
-  assert.ok(promoted, "waitlist member should be promoted into a reserved booking");
-  assert.equal(promoted.payDeadlineAt, data.islandEccLeftoverPayByAt(lockedSaturday));
+  assert.equal(promoted, null, "a hard-deadline week must not promote a new pay-later booking");
 
   const friday18 = data.islandEccMemberReminderAt(lockedSaturday);
   store.sweepCheckpoints(friday18);
   assert.equal(
     store.notificationsFor("fixture-member")
       .filter((n) => n.kind === "operational_island_ecc_payment_reminder").length,
-    1,
+    0,
   );
   const collector = store.collectorFor(lockedLate.id);
   assert.ok(collector, "expected an on-duty collector");
@@ -5282,11 +5309,8 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   assert.equal(
     store.notificationsFor("fixture-member")
       .filter((n) => n.kind === "operational_island_ecc_payment_reminder").length,
-    1,
+    0,
   );
-  store.sweepCheckpoints(data.islandEccLeftoverPayByAt(lockedSaturday) + 1);
-  assert.equal(store.getBooking(promoted.id).status, "expired");
-
   const markedSaturday = "2026-10-31";
   const markedSession = store.getSession(`hyrox-quarry-bay-${markedSaturday}`);
   const markedHold = store.reserveSession(signIn.user.id, markedSession, data.islandEccSignupOpensAt(markedSaturday));
@@ -5401,8 +5425,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     assert.match(thursdayCheckout, /Thursday 6 PM/);
     Date.now = () => data.islandEccPaymentDeadlineAt("2026-12-05");
     const fridayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
-    assert.equal(typeof fridayCheckout, "string");
-    assert.match(fridayCheckout, /Friday 9 PM/);
+    assert.equal(fridayCheckout.redirect, "#/activity/hyrox-quarry-bay-2026-12-05");
   } finally {
     Date.now = realNow;
     if (previousUser) store.signIn(previousUser);

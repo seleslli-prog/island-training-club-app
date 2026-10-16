@@ -23,10 +23,14 @@ import {
   fmtTime,
   nextPayDeadline,
   islandEccSignupOpen,
+  islandEccSignupClosed,
+  islandEccHardThursday,
   islandEccNextPayDeadline,
   islandEccMemberReminderAt,
   islandEccCollectorFinalizeNudgeAt,
   ISLAND_ECC_SIGNUP_LOCKED_ERROR,
+  ISLAND_ECC_SIGNUP_CLOSED_ERROR,
+  ISLAND_ECC_PAYMENT_CLOSED_ERROR,
   sessionReminderTomorrowAt,
   sessionReminderMorningAt,
   isSessionReminderNotification,
@@ -2292,6 +2296,10 @@ export function islandEccSignupLocked(session, now = Date.now()) {
   return isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now);
 }
 
+export function islandEccSignupClosedFor(session, now = Date.now()) {
+  return isIslandEccHyroxSession(session) && islandEccSignupClosed(session.dateISO, now);
+}
+
 export function islandEccOtherSlotTaken(session, userId = currentUser()?.id) {
   if (!userId || !isIslandEccHyroxSession(session)) return false;
   if (userBookingFor(userId, session.id) || userReservationFor(userId, session.id)) return false;
@@ -2324,6 +2332,9 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
   if (spotsLeft(session) <= 0) throw new Error("Session is full");
   if (isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now)) {
     throw new Error(ISLAND_ECC_SIGNUP_LOCKED_ERROR);
+  }
+  if (islandEccSignupClosedFor(session, now)) {
+    throw new Error(ISLAND_ECC_SIGNUP_CLOSED_ERROR);
   }
   if (
     userBookingFor(userId, session.id) || userReservationFor(userId, session.id)
@@ -2383,6 +2394,11 @@ export function markBookingPaid(bookingId, method, ref, now = Date.now()) {
   const b = getBooking(bookingId);
   if (!b || b.status !== "reserved" || b.paymentMarkedAt) return null;
   requireAuthorizedPaymentOwner(b.userId);
+  const paidSession = getSession(b.sessionId);
+  if (paidSession && islandEccHardThursday(paidSession.dateISO)
+      && b.payDeadlineAt && now >= b.payDeadlineAt) {
+    throw new Error(ISLAND_ECC_PAYMENT_CLOSED_ERROR);
+  }
   b.paymentMarkedAt = now;
   b.paidMethod = method === "FPS" ? "FPS" : "PayMe";
   b.paymentRef = String(ref ?? "").trim() || null;
@@ -2429,7 +2445,8 @@ export function canConfirmOwnCollectorSession(sessionId) {
   if (held) return canConfirmOwnCollectorBooking(held.id);
   if (sessionStarted(session)) return false;
   if (spotsLeft(session) != null && spotsLeft(session) <= 0) return false;
-  if (islandEccSignupLocked(session) || islandEccOtherSlotTaken(session)) return false;
+  if (islandEccSignupLocked(session) || islandEccSignupClosedFor(session)
+      || islandEccOtherSlotTaken(session)) return false;
   return true;
 }
 
@@ -2600,7 +2617,11 @@ export function sweepCheckpoints(now = Date.now()) {
       notify(b.userId, "reservation-expired",
         `Your unpaid spot for ${b.snapshot.name} · ${fmtDate(b.snapshot.dateISO)} expired at the payment deadline — it went to the waitlist.`,
         `#/activity/${b.sessionId}`);
-      cascadeSession(b.sessionId, now);
+      if (islandEcc && islandEccHardThursday(session?.dateISO)) {
+        enqueueExpiredWaitlist(b.userId, b.sessionId, now);
+      } else {
+        cascadeSession(b.sessionId, now);
+      }
       dirty = true;
       continue;
     }
@@ -2712,6 +2733,13 @@ function islandEccDatesFromState() {
   for (const sessionId of Object.keys(state.queues || {})) consider(sessionId);
   for (const sessionId of Object.keys(state.sessionOverrides || {})) consider(sessionId);
   return dates;
+}
+
+function enqueueExpiredWaitlist(userId, sessionId, now) {
+  const queue = paymentQueueFor(sessionId);
+  const listed = [...(queue.waitlist || []), ...(queue.interest || [])]
+    .some((entry) => entry.userId === userId);
+  if (!listed) queue.waitlist.push({ userId, joinedAt: now });
 }
 
 function cascadeSession(sessionId, now = Date.now()) {

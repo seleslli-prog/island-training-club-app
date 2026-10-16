@@ -46,6 +46,7 @@ import {
   notificationDestination,
   notificationCategory,
   islandEccPaymentDeadlineAt,
+  islandEccHardThursday,
 } from "./data.js";
 
 // Auth roles are normalized: live Supabase returns "super_admin"; the
@@ -176,6 +177,8 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
     end = `<span class="badge warn">Pay by ${fmtDeadline(reserved.payDeadlineAt)}</span>`;
   } else if (store.islandEccSignupLocked(s)) {
     end = `<span class="badge neutral">Opens Monday at 6 PM</span>`;
+  } else if (store.islandEccSignupClosedFor(s)) {
+    end = `<span class="badge neutral">Closed Thursday 6 PM</span>`;
   } else if (s.kind === "rsvp") {
     const going = store.attendeeCountFor(s);
     end = `<span class="badge free">RSVP</span><span class="spots">${going} going</span>`;
@@ -830,6 +833,13 @@ export function viewActivity(sessionId, options) {
       <div class="banner mt16">
         <span class="kicker">Opens Monday at 6 PM</span>
         <p>Island ECC HYROX sign-up for this Saturday opens Monday at 6 PM HKT. Both time slots open together.</p>
+      </div>
+      ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
+  } else if (isMember && store.islandEccSignupClosedFor(s)) {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">Sign-up closed</span>
+        <p>Reserve and pay by Thursday at 6 PM HKT. Unpaid spots go to the waitlist.</p>
       </div>
       ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
   } else if (isMember && store.islandEccOtherSlotTaken(s)) {
@@ -2483,7 +2493,7 @@ export function viewCheckout(sessionId) {
   }
   if (sessionStarted(s) || s.cancelled || store.spotsLeft(s) <= 0)
     return { redirect: `#/activity/${sessionId}` };
-  if (store.islandEccSignupLocked(s) || store.islandEccOtherSlotTaken(s)) {
+  if (store.islandEccSignupLocked(s) || store.islandEccSignupClosedFor(s) || store.islandEccOtherSlotTaken(s)) {
     return { redirect: `#/activity/${sessionId}` };
   }
   if (store.canConfirmOwnCollectorSession(s.id)) {
@@ -2503,6 +2513,7 @@ export function viewCheckout(sessionId) {
     <button class="btn mt16" type="button" data-action="confirm-own-collector-session" data-session="${s.id}">Confirm my spot · ${fmtMoney(s.price)}</button>`;
   }
   const islandEccPayBy = ISLAND_ECC_HYROX_ACTIVITY_IDS.has(s.activityId)
+    && !islandEccHardThursday(s.dateISO)
     && Date.now() >= islandEccPaymentDeadlineAt(s.dateISO)
     ? "Friday 9 PM"
     : "Thursday 6 PM";
