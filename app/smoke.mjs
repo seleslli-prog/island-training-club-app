@@ -1806,6 +1806,15 @@ assert.match(rsvpAttendeeNamesMigrationSource, /requires_rsvp/);
     /given name \+ last-name initial|labelSource\.split/,
     "local Who's coming must keep the privacy given-name + last-initial format");
   console.log("ok  Who's coming uses given name plus last-name initial for privacy");
+  const attendedRosterMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261017000001_attendee_names_include_attended.sql"),
+    "utf8",
+  );
+  assert.match(attendedRosterMigration, /b\.status in \('confirmed', 'attended'\)/,
+    "Who's coming must keep members after attendance is marked");
+  assert.doesNotMatch(attendedRosterMigration, /b\.status = 'confirmed'/,
+    "Who's coming must not drop arrived members");
+  console.log("ok  Who's coming keeps arrived members on both HYROX sessions");
   const markPaidConfirmMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261015000005_admin_mark_and_confirm_payment.sql"),
     "utf8",
@@ -5272,6 +5281,11 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     () => store.reserveSession(store.currentUser().id, lockedEarly, openAt),
     /Choose one Island ECC HYROX slot per Saturday/,
   );
+  store.signIn("admin@example.test");
+  const priorMemberHold = store.userBookingFor("fixture-member", lockedLate.id)
+    || store.userReservationFor("fixture-member", lockedLate.id);
+  if (priorMemberHold?.status === "confirmed") store.cancelBooking(priorMemberHold.id);
+  else if (priorMemberHold?.status === "reserved") store.releaseReservation(priorMemberHold.id, openAt);
   store.signIn(signIn.user.email);
   const lateActivity = store.getActivity("hyrox-quarry-bay");
   const previousLateCapacity = lateActivity.capacity;
@@ -8303,6 +8317,7 @@ store.setSessionTime(paymentGateSession.id, "11:00");
     throw new Error("returning one slot to TBC must leave the other slot unchanged");
   }
   console.log("ok  Island ECC admin time change applies to one week only");
+  if (paymentGateSession.id === weekEarly.id) store.setSessionTime(paymentGateSession.id, "11:00");
 }
 store.setSessionNotice(paymentGateSession.id, "Admin note");
 store.setVenueTBC(paymentGateSession.id, true);
