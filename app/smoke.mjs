@@ -8295,7 +8295,6 @@ if (!store.cancelBooking(movedByOwner.id)
     || store.receiptForBooking(movedByOwner.id)?.status !== "refunded") {
   throw new Error("Admin cancellation should cancel and refund a confirmed booking");
 }
-store.setSessionTime(paymentGateSession.id, "11:00");
 {
   const weekEarly = store.getSession("hyrox-quarry-bay-early-2026-10-24");
   const weekLate = store.getSession("hyrox-quarry-bay-2026-10-24");
@@ -8317,8 +8316,8 @@ store.setSessionTime(paymentGateSession.id, "11:00");
     throw new Error("returning one slot to TBC must leave the other slot unchanged");
   }
   console.log("ok  Island ECC admin time change applies to one week only");
-  if (paymentGateSession.id === weekEarly.id) store.setSessionTime(paymentGateSession.id, "11:00");
 }
+store.setSessionTime(paymentGateSession.id, "11:00");
 store.setSessionNotice(paymentGateSession.id, "Admin note");
 store.setVenueTBC(paymentGateSession.id, true);
 store.confirmGymBooking(paymentGateSession.id, "Confirmed by Admin", Date.now());
