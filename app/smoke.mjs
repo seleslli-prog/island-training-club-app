@@ -217,7 +217,7 @@ function assertPrimaryNav(user, expected, label) {
 }
 
 const freshV27State = store.load();
-assert.equal(freshV27State.version, 30, "fresh local state must use the v30 schema");
+assert.equal(freshV27State.version, 31, "fresh local state must use the v31 schema");
 assert.equal(data.SEED_ACTIVITIES.some(
   (activity) => ["hyrox-bft", "hyrox-midtown"].includes(activity.id)
 ), false, "fresh activity seeds must not contain the retired BFT/Midtown pool");
@@ -423,7 +423,7 @@ localStorage.setItem("itc.prototype.v1", JSON.stringify({
   duty: {},
 }));
 const renamedState = store.load();
-assert.equal(renamedState.version, 30, "legacy state must advance through the current migrations");
+assert.equal(renamedState.version, 31, "legacy state must advance through the current migrations");
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").hyroxPaymentReminders, true);
 assert.equal(renamedState.users.find((user) => user.id === "legacy-member").webPushOps, false);
 assert.equal(renamedState.hyroxCycles["legacy-cycle"]?.collectorPaymentReminderSentAt ?? null, null);
@@ -577,7 +577,7 @@ store.resetLocalData();
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v23PoolFixture));
   const migrated = store.load();
 
-  assert.equal(migrated.version, 30);
+  assert.equal(migrated.version, 31);
   assert.deepEqual(store.notificationsFor("review-admin"), [expectedEccReview],
     "generic local review notices must retain only proven active ECC provenance");
   assert.equal(store.notificationsFor("review-admin").filter((row) => !row.read).length, 1,
@@ -649,7 +649,7 @@ for (const booking of v19ReplacementFixture.bookings) {
 delete v19ReplacementFixture.replacementRequests;
 localStorage.setItem("itc.prototype.v1", JSON.stringify(v19ReplacementFixture));
 const migratedReplacement = store.load();
-assert.equal(migratedReplacement.version, 30, "replacement migration must preserve data through the current v27 state version");
+assert.equal(migratedReplacement.version, 31, "replacement migration must preserve data through the current v27 state version");
 assert.ok(Array.isArray(migratedReplacement.replacementRequests));
 assert.ok(Array.isArray(migratedReplacement.replacementAudit));
 assert.ok(migratedReplacement.bookings.every((booking) =>
@@ -2630,7 +2630,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=hyrox-week-time-tbc"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=island-ecc-oct24-times"',
+  'src="/app/js/app.js?v=lunch-default-noon"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -6006,7 +6006,7 @@ v22PrayerSnapshot.prayers = [
 ];
 mem.set("itc.prototype.v1", JSON.stringify(v22PrayerSnapshot));
 const migratedPrayerState = store.load();
-assert.equal(migratedPrayerState.version, 30);
+assert.equal(migratedPrayerState.version, 31);
 assert.deepEqual(migratedPrayerState.prayers.map((row) => row.id), [
   "legacy-prayer-a",
   "legacy-prayer-b",
@@ -6430,7 +6430,7 @@ for (let version = 9; version <= 23; version++) {
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(fixture));
   const migrated = store.load();
-  assert.equal(migrated.version, 30, `v${version} fixture must reach v27`);
+  assert.equal(migrated.version, 31, `v${version} fixture must reach v27`);
   assert.equal(migrated.bookings.some((row) => row.id === `retired-${version}`), false);
   assert.ok(migrated.bookings.some((row) => row.id === `ecc-${version}`));
   assert.ok(migrated.bookings.some((row) => row.id === `unrelated-${version}`));
@@ -6452,7 +6452,7 @@ console.log("ok  every v9-v23 fixture reaches v27 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(historicalSwimmingV13));
   const repaired = store.load();
-  assert.equal(repaired.version, 30, "the historical Swimming fixture must reach v27");
+  assert.equal(repaired.version, 31, "the historical Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -6478,7 +6478,7 @@ console.log("ok  every v9-v23 fixture reaches v27 with Island ECC and unrelated 
   });
   localStorage.setItem("itc.prototype.v1", JSON.stringify(customizedSwimmingV13));
   const preserved = store.load();
-  assert.equal(preserved.version, 30, "the customized Swimming fixture must reach v27");
+  assert.equal(preserved.version, 31, "the customized Swimming fixture must reach v27");
   assert.deepEqual(
     Object.fromEntries(["location", "mapsQuery", "photo"].map((field) => [
       field,
@@ -7265,6 +7265,17 @@ installLocalFixtures();
 }
 
 // --- RSVP events (local): the recurring post-training lunch ---
+{
+  const saved = JSON.parse(localStorage.getItem("itc.prototype.v1"));
+  const storedLunch = saved.activities.find((activity) => activity.id === "lunch");
+  storedLunch.time = "12:45";
+  saved.version = 30;
+  localStorage.setItem("itc.prototype.v1", JSON.stringify(saved));
+  store.load();
+  assert.equal(store.getActivity("lunch").time, "12:00",
+    "a saved 12:45 lunch default must align to 12:00");
+  store.resetLocalData();
+}
 store.resetLocalData();
 installLocalFixtures();
 {
@@ -7621,7 +7632,7 @@ console.log("ok  reset");
     failures++;
     console.error("FAIL v10 migration must clear session tied to a removed demo user");
   } else console.log("ok  v10 migration clears removed session");
-  if (migrated.version !== 30) {
+  if (migrated.version !== 31) {
     failures++;
     console.error(`FAIL integrated migration must advance version to 25, got ${migrated.version}`);
   } else console.log("ok  integrated migration advances genuine v9 state to v27");
@@ -7643,7 +7654,7 @@ console.log("ok  reset");
   store.load();
   const v14 = JSON.parse(mem.get("itc.prototype.v1"));
   const migratedUser = v14.users.find((user) => user.id === "real-v13-member");
-  if (v14.version !== 30 || !migratedUser) throw new Error("v27 migration lost the genuine member");
+  if (v14.version !== 31 || !migratedUser) throw new Error("v27 migration lost the genuine member");
   for (const field of ["indemnitySignature", "indemnitySignedAt", "indemnityFormVersion", "emergencyRelationship"]) {
     if (!(field in migratedUser) || migratedUser[field] !== null) {
       throw new Error(`v14 migration should initialize ${field} to null`);
@@ -7672,7 +7683,7 @@ console.log("ok  reset");
   v21.bookings = [structuredClone(preservedBooking)];
   localStorage.setItem("itc.prototype.v1", JSON.stringify(v21));
   const migrated = store.load();
-  assert.equal(migrated.version, 30);
+  assert.equal(migrated.version, 31);
   assert.equal(migrated.bookings.some((booking) => booking.id === preservedBooking.id), false,
     "v22 attendance compatibility must run before v24 removes the pooled booking");
   console.log("ok  v21 pooled booking reaches and is retired by v27");
@@ -8483,7 +8494,7 @@ for (const fixture of sourceSnapshots) {
     && !Array.isArray(migrated.paymentPayouts);
   const suppliedPayoutsPreserved = fixture.version !== 12
     || migrated.paymentPayouts["real-admin"]?.fpsPhone === "+852 6000 0000";
-  if (migrated.version !== 30 || suppliedIds.some((id) => !serialized.includes(id))
+  if (migrated.version !== 31 || suppliedIds.some((id) => !serialized.includes(id))
       || !payoutMapValid || !suppliedPayoutsPreserved) {
     failures++;
     console.error(`FAIL genuine v${fixture.version} fixture must reach v27 intact`);
