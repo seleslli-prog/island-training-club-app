@@ -67,7 +67,7 @@ const APPLY_DRAFT_VERSION = 2;
 const UNCLAIMED_DRAFT_OWNER = "__unclaimed__";
 const LAST_ROUTE_KEY = "itc.last-route.v1";
 const LAST_ROUTE_VERSION = 1;
-const STATE_VERSION = 30;
+const STATE_VERSION = 31;
 
 const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
@@ -639,6 +639,10 @@ function migrate() {
         user.sessionAlerts = user.sessionReminders !== false;
       }
     }
+  }
+  if (v < 31) {
+    const lunch = state.activities?.find((activity) => activity.id === "lunch");
+    if (lunch?.time === "12:45") lunch.time = "12:00";
   }
   if (v < 27) {
     // v27: Island ECC offers two independently capacitated Saturday slots.
