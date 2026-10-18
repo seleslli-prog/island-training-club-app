@@ -685,6 +685,15 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(oct24ScheduleMigration, /session_date >= date '2026-10-24'/);
   assert.match(oct24ScheduleMigration, /time_tbc = false/);
   console.log("ok  Island ECC Oct 24 schedule migration sets 9:00 and 10:15 at capacity 20");
+  const lunchNoonMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261018000002_lunch_noon.sql"),
+    "utf8",
+  );
+  assert.match(lunchNoonMigration, /activity_id = 'lunch'/);
+  assert.match(lunchNoonMigration, /start_time = time '12:00'/);
+  assert.match(lunchNoonMigration, /start_time = time '12:45'/);
+  assert.match(lunchNoonMigration, /session_date >= date '2026-10-18'/);
+  console.log("ok  Post-Training Lunch recurring default is 12:00");
 {
   const heldCountMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261014000002_shared_session_held_count.sql"),
