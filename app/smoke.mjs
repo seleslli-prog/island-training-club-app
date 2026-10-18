@@ -366,13 +366,21 @@ assert.deepEqual(
   assert.equal(oct17Late.timeTBC, undefined);
   assert.equal(data.sessionTimeLabel(oct17Early), "9:15 AM");
   assert.equal(data.sessionTimeLabel(oct17Late), "10:30 AM");
+  assert.equal(oct24Early.time, "09:00");
+  assert.equal(oct24Late.time, "10:15");
+  assert.equal(oct24Early.capacity, 20);
+  assert.equal(oct24Late.capacity, 20);
+  assert.equal(oct31Early.time, "09:00");
+  assert.equal(oct31Early.capacity, 20);
+  assert.equal(oct17Early.capacity, 30);
+  assert.equal(oct17Late.capacity, 30);
   for (const session of [oct24Early, oct24Late, oct31Early]) {
-    assert.equal(session.timeTBC, true, `${session.id} must stay TBC until that week is set`);
-    assert.equal(data.sessionTimeLabel(session), "TBC");
+    assert.equal(session.timeTBC, undefined, `${session.id} uses its scheduled time`);
+    assert.notEqual(data.sessionTimeLabel(session), "TBC");
   }
-  assert.equal(oct24Early.time, "09:15");
-  assert.equal(oct24Late.time, "10:30");
-  console.log("ok  Island ECC times stay fixed on 17 Oct and TBC from 24 Oct");
+  assert.equal(data.sessionTimeLabel(oct24Early), "9 AM");
+  assert.equal(data.sessionTimeLabel(oct24Late), "10:15 AM");
+  console.log("ok  Island ECC times stay fixed on 17 Oct and use 9:00 and 10:15 from 24 Oct");
 }
 assert.equal(data.fmtMoney(180), "HK$180",
   "consumer-facing Hong Kong prices should use the standard HK$ symbol");
@@ -667,6 +675,16 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(timePushMigration, /is now TBC/,
     "returning a HYROX week to TBC must alert booked members");
   console.log("ok  Island ECC time changes request session-alert web push");
+  const oct24ScheduleMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261018000001_island_ecc_oct24_times.sql"),
+    "utf8",
+  );
+  assert.match(oct24ScheduleMigration, /start_time = time '09:00'/);
+  assert.match(oct24ScheduleMigration, /start_time = time '10:15'/);
+  assert.match(oct24ScheduleMigration, /capacity = 20/);
+  assert.match(oct24ScheduleMigration, /session_date >= date '2026-10-24'/);
+  assert.match(oct24ScheduleMigration, /time_tbc = false/);
+  console.log("ok  Island ECC Oct 24 schedule migration sets 9:00 and 10:15 at capacity 20");
 {
   const heldCountMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261014000002_shared_session_held_count.sql"),
@@ -2603,7 +2621,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=hyrox-week-time-tbc"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=hyrox-week-time-tbc-2"',
+  'src="/app/js/app.js?v=island-ecc-oct24-times"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -3061,16 +3079,13 @@ console.log("ok  latest Notification domain markers coexist");
   // Live deployments: recurring activity defaults are seed/SQL-administered,
   // so the Admin activity editor must render read-only with an honest note
   // instead of silently writing device-local state behind a success toast.
-  if (!/export function viewAdminActivity[\s\S]*?isLive\(\)/.test(integratedViewSource)) {
-    throw new Error("viewAdminActivity must gate the recurring editor on isLive()");
+  if (!/export function viewAdminActivity[\s\S]*?isLive\(\)\) return \{ redirect: "#\/admin\/activities" \}/.test(integratedViewSource)) {
+    throw new Error("live recurring editor must redirect away from the edit page");
   }
-  if (!integratedViewSource.includes("form-fieldset")) {
-    throw new Error("live activity editor must disable the form via a fieldset");
+  if (integratedViewSource.includes("recurring defaults are bundled with the app build")) {
+    throw new Error("live recurring editor must not offer a read-only edit page");
   }
-  if (!integratedViewSource.includes("recurring defaults are bundled with the app build")) {
-    throw new Error("live activity editor must explain that recurring defaults are bundled");
-  }
-  console.log("ok  live deployments render the recurring activity editor read-only");
+  console.log("ok  live deployments omit the recurring activity editor");
 }
 
 const anniversary = data.ANNOUNCEMENTS[0];
@@ -8304,15 +8319,16 @@ if (!store.cancelBooking(movedByOwner.id)
   if (saved.time !== "09:15" || saved.timeTBC) {
     throw new Error("saving an Island ECC time must confirm only that week's session");
   }
-  if (!store.getSession(weekLate.id).timeTBC || !store.getSession(nextWeek.id).timeTBC) {
-    throw new Error("saving one Island ECC time must not confirm the other slot or later weeks");
+  if (store.getSession(weekLate.id).time !== "10:15" || store.getSession(weekLate.id).timeTBC
+      || store.getSession(nextWeek.id).time !== "09:00" || store.getSession(nextWeek.id).timeTBC) {
+    throw new Error("saving one Island ECC time must not change the other slot or later weeks");
   }
   store.setSessionTimeTBC(weekEarly.id);
   const restored = store.getSession(weekEarly.id);
-  if (!restored.timeTBC || restored.time !== "09:15") {
+  if (!restored.timeTBC || restored.time !== "09:00") {
     throw new Error("an Island ECC week must be able to return to TBC without changing other weeks");
   }
-  if (!store.getSession(weekLate.id).timeTBC) {
+  if (store.getSession(weekLate.id).timeTBC || store.getSession(weekLate.id).time !== "10:15") {
     throw new Error("returning one slot to TBC must leave the other slot unchanged");
   }
   console.log("ok  Island ECC admin time change applies to one week only");
@@ -9079,7 +9095,7 @@ const recurringDayTimes = [...recurringDefaultsHtml.matchAll(
 )].map((match) => `${match[1]} ${match[2]}`);
 assert.deepEqual(
   recurringDayTimes,
-  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat TBC", "Sat TBC", "Sat 12:00"],
+  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 09:00", "Sat 10:15", "Sat 12:00"],
   "Recurring Activity Defaults must sort by weekday, then start time"
 );
 if (!activitiesHtml.includes("Admin Tools") || activitiesHtml.includes("Club Operations")) {

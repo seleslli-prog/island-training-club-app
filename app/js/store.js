@@ -9,6 +9,7 @@ import {
   SEED_ACTIVITIES,
   ISLAND_ECC_HYROX_ACTIVITY_IDS,
   islandEccFlexibleTime,
+  islandEccWeekSchedule,
   compareSessionsByStart,
   sessionsInRange,
   sessionStarted,
@@ -2837,15 +2838,22 @@ const WNT_CANONICAL_NOTES = new Set([
   WNT_CONFIRMED_NOTE,
 ]);
 
-function applyIslandEccFlexibleTime(session, explicitTime) {
+function applyIslandEccFlexibleTime(session, override) {
   if (!islandEccFlexibleTime(session)) return session;
-  return { ...session, timeTBC: !explicitTime };
+  const scheduled = islandEccWeekSchedule(session.activityId, session.dateISO);
+  const next = { ...session };
+  if (scheduled) {
+    if (!override?.time) next.time = scheduled.time;
+    if (next.capacity == null || next.capacity === 30) next.capacity = scheduled.capacity;
+  }
+  if (override?.timeTBC) next.timeTBC = true;
+  return next;
 }
 
 function decorateSession(s) {
   const o = state.sessionOverrides[s.id];
   const out = { ...s };
-  if (!o) return applyWntLeaderNote(applyIslandEccFlexibleTime(out, false));
+  if (!o) return applyWntLeaderNote(applyIslandEccFlexibleTime(out, null));
   if (o.time) out.time = o.time;
   if (o.cancelled) { out.cancelled = true; out.cancelReason = o.cancelled; }
   if (o.venueTBC) {
@@ -2865,7 +2873,7 @@ function decorateSession(s) {
     if (point) Object.assign(out, { meetingLat: point.lat, meetingLng: point.lng });
   }
   if (hasConfirmedVenue(out.location, out.mapsQuery)) out.venueTBC = false;
-  return applyWntLeaderNote(applyIslandEccFlexibleTime(out, !!o.time));
+  return applyWntLeaderNote(applyIslandEccFlexibleTime(out, o));
 }
 
 function applyWntLeaderNote(session) {
@@ -3761,7 +3769,9 @@ export function setSessionTime(sessionId, time) {
   if (!session) throw new Error("Session not found.");
   if (!nextTime) throw new Error("Pick the start time.");
   if (session.time === nextTime && !session.timeTBC) return session;
-  (state.sessionOverrides[sessionId] ||= {}).time = nextTime;
+  const override = (state.sessionOverrides[sessionId] ||= {});
+  override.time = nextTime;
+  delete override.timeTBC;
   notifyIslandEccTimeChange(session, `${session.name} on ${fmtDate(session.dateISO)} now starts at ${fmtTime(nextTime)}.`);
   if (sessionRequiresRsvp(session) && Number(session.price ?? 0) === 0) {
     for (const userId of activeRsvpNotificationRecipients(sessionId)) {
@@ -3784,11 +3794,9 @@ export function setSessionTimeTBC(sessionId) {
     throw new Error("Only Island ECC weeks from 24 Oct can return to TBC.");
   }
   if (session.timeTBC) return session;
-  const override = state.sessionOverrides[sessionId];
-  if (override) {
-    delete override.time;
-    if (!Object.keys(override).length) delete state.sessionOverrides[sessionId];
-  }
+  const override = (state.sessionOverrides[sessionId] ||= {});
+  delete override.time;
+  override.timeTBC = true;
   notifyIslandEccTimeChange(session, `${session.name} on ${fmtDate(session.dateISO)} is now TBC.`);
   save();
   return getSession(sessionId);
