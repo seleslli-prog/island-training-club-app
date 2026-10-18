@@ -23,6 +23,7 @@ import {
   ANNOUNCEMENTS,
   ISLAND_ECC_HYROX_ACTIVITY_IDS,
   islandEccFlexibleTime,
+  islandEccWeekSchedule,
   compareActivitiesByWeekday,
   compareSessionsByStart,
   findSession,
@@ -3766,27 +3767,27 @@ function adminOneOffEvents() {
 function adminActivities() {
   const acts = store.activities().slice().sort(compareActivitiesByWeekday);
   const activityRows = acts
-    .map(
-      (a) => `
-        <a class="session-row" href="#/admin/activity/${a.id}">
-          <time>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][a.weekday]}<small>${ISLAND_ECC_HYROX_ACTIVITY_IDS.has(a.id) ? "TBC" : esc(a.time)}</small></time>
+    .map((a) => {
+      const scheduled = islandEccWeekSchedule(a.id);
+      const body = `
+          <time>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][a.weekday]}<small>${esc(scheduled?.time || a.time)}</small></time>
           <div>
             <h3>${esc(a.name)}</h3>
-            <p>${esc(a.location)}${a.kind === "paid" ? ` · ${fmtMoney(a.price)} · cap ${a.capacity}` : " · open attendance"}</p>
+            <p>${esc(a.location)}${a.kind === "paid" ? ` · ${fmtMoney(a.price)} · cap ${scheduled?.capacity ?? a.capacity}` : " · open attendance"}</p>
           </div>
           <div class="row-end">
             ${a.kind === "free" ? '<span class="badge free">Free</span>' : a.kind === "rsvp" ? '<span class="badge free">RSVP</span>' : '<span class="badge paid">Paid</span>'}
             ${a.published ? "" : '<span class="badge neutral">Hidden</span>'}
-          </div>
-        </a>`
-    )
+          </div>`;
+      return isLive()
+        ? `<div class="session-row">${body}</div>`
+        : `<a class="session-row" href="#/admin/activity/${a.id}">${body}</a>`;
+    })
     .join("");
   return `
     <details class="admin-section">
       <summary><h2>Recurring Activity Defaults</h2></summary>
-    <p class="muted small mt8">${isLive()
-      ? "Live deployment — recurring defaults are bundled with the app build and read-only. Set a venue for one week with Weekly Event Controls &gt; Free &amp; RSVP Events below."
-      : "Changes here affect all future weeks unless a dated override is set below."}</p>
+    ${isLive() ? "" : `<p class="muted small mt8">Changes here affect all future weeks unless a dated override is set below.</p>`}
     <div class="session-list">${activityRows}</div>
     ${isLive() ? "" : `<a class="btn ghost mt16" href="#/admin/activity/new">+ New activity</a>`}
     </details>
@@ -3955,6 +3956,7 @@ export function viewAdminActivity(id) {
   if (!user || !isAdminRole(user.role)) {
     return { redirect: "#/account" };
   }
+  if (isLive()) return { redirect: "#/admin/activities" };
   const isNew = id === "new";
   const a = isNew
     ? {
@@ -3977,22 +3979,13 @@ export function viewAdminActivity(id) {
     : store.getActivity(id);
   if (!a) return viewNotFound("Activity not found.");
 
-  // Live deployments: recurring defaults are seed/SQL-administered. Editing
-  // them here would write device-local state behind a success toast while the
-  // shared schedule never changes — so the editor is read-only on live.
-  const liveReadOnly = isLive();
-
   const paidOnly = (inner) => `<div class="paid-only ${a.kind === "paid" ? "" : "hidden"}">${inner}</div>`;
 
   return `
     <a class="back-link" href="#/admin/activities">← Activities</a>
     <div class="kicker mt16">Admin · Activity</div>
     <h1 class="display sm">${isNew ? "New activity." : "Edit activity."}</h1>
-    ${liveReadOnly ? `
-      <p class="badge neutral mt16">Live deployment — recurring defaults are bundled with the app build.</p>
-      <p class="muted small mt8">To change the venue for one week, use Weekly Event Controls &gt; Free &amp; RSVP Events on the Activities tab. Paid venues are administered in Supabase. This form is read-only here.</p>` : ""}
     <form id="form-activity" class="mt16" data-activity="${esc(a.id)}" novalidate>
-      ${liveReadOnly ? `<fieldset class="form-fieldset" disabled>` : ""}
       <div class="field"><label for="ac-name">Name *</label><input id="ac-name" name="name" value="${esc(a.name)}" required></div>
       <div class="field-row">
         <div class="field">
@@ -4034,8 +4027,7 @@ export function viewAdminActivity(id) {
       <div class="field"><label for="ac-note">Leader note (members only)</label><textarea id="ac-note" name="memberNote" rows="2">${esc(a.memberNote || "")}</textarea></div>
       <label class="check"><input type="checkbox" name="published" ${a.published ? "checked" : ""}>
         <span>Published — visible on the schedule</span></label>
-      <button class="btn mt24" type="submit" ${liveReadOnly ? "hidden" : ""}>${isNew ? "Create activity" : "Save changes"}</button>
-      ${liveReadOnly ? `</fieldset>` : ""}
+      <button class="btn mt24" type="submit">${isNew ? "Create activity" : "Save changes"}</button>
     </form>`;
 }
 

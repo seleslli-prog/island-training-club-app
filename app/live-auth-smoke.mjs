@@ -3290,9 +3290,9 @@ for (const contract of [
 for (const contract of ['case "hyrox-plan-retry"', 'case "midtown-toggle"']) {
   assert.equal(appSource.includes(contract), false, `retired Admin pool handler remains: ${contract}`);
 }
-const liveActivityEditorHtml = views.viewAdminActivity("wnt");
-assert.match(liveActivityEditorHtml, /Weekly Event Controls &gt; Free &amp; RSVP Events/);
-console.log("ok  live Admin Activities groups dated controls without changing form contracts");
+assert.deepEqual(views.viewAdminActivity("wnt"), { redirect: "#/admin/activities" });
+assert.doesNotMatch(liveActivitiesHtml, /#\/admin\/activity\//);
+console.log("ok  live Admin Activities groups dated controls without a recurring editor");
 
 const membersHtml = await views.viewAdmin("members");
 assert.doesNotMatch(membersHtml, /member-summary|Member status counts|data-change="member-(?:status|role)-filter"/);
