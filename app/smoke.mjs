@@ -694,6 +694,15 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(lunchNoonMigration, /start_time = time '12:45'/);
   assert.match(lunchNoonMigration, /session_date >= date '2026-10-18'/);
   console.log("ok  Post-Training Lunch recurring default is 12:00");
+  const jiffriyMove = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261019000001_move_jiffriy_oct24_hyrox.sql"),
+    "utf8",
+  );
+  assert.match(jiffriyMove, /jiffriy chandra/);
+  assert.match(jiffriyMove, /hyrox-quarry-bay-early-2026-10-24/);
+  assert.match(jiffriyMove, /hyrox-quarry-bay-2026-10-24/);
+  assert.equal((jiffriyMove.match(/update public\.operational_bookings/g) || []).length, 1);
+  console.log("ok  Jiffriy Chandra moves from Sat 24 Oct 9:00 to 10:15");
 {
   const heldCountMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261014000002_shared_session_held_count.sql"),
