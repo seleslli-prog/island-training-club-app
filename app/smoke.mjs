@@ -699,6 +699,8 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
     "utf8",
   );
   assert.match(jiffriyMove, /jiffriy chandra/);
+  assert.match(jiffriyMove, /a\.preferred_name/);
+  assert.doesNotMatch(jiffriyMove, /a\.full_name/);
   assert.match(jiffriyMove, /hyrox-quarry-bay-early-2026-10-24/);
   assert.match(jiffriyMove, /hyrox-quarry-bay-2026-10-24/);
   assert.equal((jiffriyMove.match(/update public\.operational_bookings/g) || []).length, 1);
