@@ -14,7 +14,7 @@ begin
     from public.profiles p
     left join public.applications a on a.profile_id = p.id
    where lower(btrim(p.full_name)) = 'jiffriy chandra'
-      or lower(btrim(coalesce(a.full_name, ''))) = 'jiffriy chandra';
+      or lower(btrim(coalesce(a.preferred_name, ''))) = 'jiffriy chandra';
 
   if v_profile_count <> 1 then
     raise exception 'Expected one Jiffriy Chandra profile, found %.', v_profile_count;
@@ -24,7 +24,7 @@ begin
     from public.profiles p
     left join public.applications a on a.profile_id = p.id
    where lower(btrim(p.full_name)) = 'jiffriy chandra'
-      or lower(btrim(coalesce(a.full_name, ''))) = 'jiffriy chandra';
+      or lower(btrim(coalesce(a.preferred_name, ''))) = 'jiffriy chandra';
 
   if exists (
     select 1
