@@ -2641,7 +2641,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=notifications-clear-all"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=keep-resume-scroll"',
+  'src="/app/js/app.js?v=reopen-home"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -2748,11 +2748,11 @@ assert.match(integratedStyleSource,
   "Fitness x Faith landscape poster must keep the title fully visible");
 const manifest = JSON.parse(readFileSync(resolve(__dirnameSmoke, "manifest.webmanifest"), "utf8"));
 assert.equal(manifest.start_url, "/",
-  "installed app launches must use the canonical root with an empty hash so the last route can restore");
+  "installed app launches must use the canonical root with an empty hash");
 assert.equal(manifest.scope, "/", "the installed app must stay within the canonical root scope");
 assert.match(integratedAppSource,
-  /store\.startupRoute\(location\.hash, store\.currentUser\(\)\?\.id\)/,
-  "boot must resolve an empty launch against the current user's last route");
+  /const startup = location\.hash[\s\S]*?store\.startupRoute\(location\.hash, store\.currentUser\(\)\?\.id\)[\s\S]*?: "#\/home"/,
+  "a full relaunch with an empty hash must open Home");
 assert.match(integratedAppSource,
   /store\.rememberLastRoute\(location\.hash, user\?\.id\)/,
   "successful route commits must persist the exact internal hash for the current identity");

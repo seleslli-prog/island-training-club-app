@@ -2718,7 +2718,11 @@ async function boot() {
     toast(authCallbackError, true);
   }
   paintHomeFirst = !location.hash || location.hash === "#/home";
-  const startup = store.startupRoute(location.hash, store.currentUser()?.id);
+  // A full relaunch has an empty hash. Open Home. Switching away and back
+  // keeps the live page; that return path still restores a dropped hash.
+  const startup = location.hash
+    ? store.startupRoute(location.hash, store.currentUser()?.id)
+    : "#/home";
   if (startup !== location.hash) replaceRoute(startup);
   if (!paintHomeFirst && startLiveHydration) pendingVisitorHydrate = startLiveHydration();
   window.addEventListener("hashchange", async () => {
