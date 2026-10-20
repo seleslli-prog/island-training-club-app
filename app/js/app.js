@@ -1349,6 +1349,22 @@ document.addEventListener("click", async (e) => {
       location.hash = destination;
       break;
     }
+    case "notifications-clear-all": {
+      if (controlBusy.has(el)) break;
+      try {
+        await withBusyControl(el, "Clearing…", () => store.markAllNotificationsRead());
+      } catch (err) {
+        toast(err.message || "Could not clear notifications", true);
+        break;
+      }
+      notificationRouteRows = [];
+      if (parseHash()[0] === "notifications") {
+        ++renderGeneration;
+        viewEl.innerHTML = await views.viewNotifications(new Date(), []);
+      }
+      commitNotificationCount(0, parseHash()[0] === "notifications");
+      break;
+    }
     case "revoke-member": {
       const viewer = store.currentUser();
       if (!viewer || !["superadmin", "super_admin"].includes(viewer.role) || viewer.id === el.dataset.user) break;

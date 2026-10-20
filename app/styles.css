@@ -1573,7 +1573,14 @@ img.detail-photo[src*="itc-fitness-x-faith-2"] {
 
 /* ---- Notifications ---------------------------------------------------- */
 
-.notification-header { margin-top: 16px; }
+.notification-header {
+  margin-top: 16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.notification-header .btn { flex: none; }
 
 .notification-filter-scroll {
   margin: 18px -18px 0;
