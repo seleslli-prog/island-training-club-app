@@ -2641,7 +2641,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=notifications-clear-all"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=notifications-clear-all"',
+  'src="/app/js/app.js?v=payment-card-session-time"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -7782,6 +7782,14 @@ console.log("ok  reset");
     'data-action="confirm-payment"',
     "Confirm received",
   ]) assert.ok(rosterHtml.includes(marker), `Admin payment roster missing ${marker}`);
+  const sessionWhen = `${data.fmtDate(paidSessions[0].dateISO)} · ${data.sessionTimeLabel(paidSessions[0])}`;
+  assert.ok(rosterHtml.includes(sessionWhen), "Payment roster must name the session time with the date");
+  const cardHead = rosterAdminHtml.slice(rosterAdminHtml.lastIndexOf('class="kicker"', rosterStart), rosterStart);
+  assert.ok(cardHead.includes(sessionWhen), "Payment card date line must include the session time");
+  const attendanceAt = rosterAdminHtml.indexOf(`data-attendance-session="${paidSessions[0].id}"`);
+  const attendanceSummary = rosterAdminHtml.slice(attendanceAt, rosterAdminHtml.indexOf("</summary>", attendanceAt));
+  assert.equal(attendanceSummary.includes(data.sessionTimeLabel(paidSessions[0])), false,
+    "Expected arrivals must not repeat the session time");
   assert.match(
     rosterHtml,
     /data-action="mark-paid-and-confirm"[^>]*data-booking="roster-due-booking"/,

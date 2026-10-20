@@ -3056,7 +3056,7 @@ function adminQueueDisclosure({ id, title, subtitle, entries, memberUsers }) {
   </details>`;
 }
 
-function adminPaymentRoster({ id, label, dateISO, venue, bookings, memberUsers, queue = "" }) {
+function adminPaymentRoster({ id, label, dateISO, timeLabel = "", venue, bookings, memberUsers, queue = "" }) {
   const directory = new Map((memberUsers || []).map((member) => [member.id, member]));
   const displayName = (booking) => {
     const member = directory.get(booking.userId);
@@ -3075,7 +3075,8 @@ function adminPaymentRoster({ id, label, dateISO, venue, bookings, memberUsers, 
   for (const rows of grouped.values()) {
     rows.sort((a, b) => displayName(a).localeCompare(displayName(b)));
   }
-  return `<div class="admin-roster-disclosures" data-payment-roster="${esc(id)}" aria-label="Payment roster · ${esc(label)} · ${esc(fmtDate(dateISO))}">
+  const when = `${fmtDate(dateISO)}${timeLabel ? ` · ${timeLabel}` : ""}`;
+  return `<div class="admin-roster-disclosures" data-payment-roster="${esc(id)}" aria-label="Payment roster · ${esc(label)} · ${esc(when)}">
     <p class="muted small admin-roster-context">${esc(venue)}</p>
     ${definitions.map(([state, text, badgeClass]) => {
       const rows = grouped.get(state);
@@ -3117,7 +3118,7 @@ function adminAttendanceSession(session, memberUsers) {
     ${window.state === "open" ? `<button class="btn ${isArrived ? "ghost " : ""}sm" type="button" data-action="attendance-toggle" data-booking="${esc(booking.id)}" data-arrived="${isArrived ? "0" : "1"}">${isArrived ? "Undo" : "Mark Arrived"}</button>` : ""}
   </div>`;
   return `<details class="admin-attendance-session" data-attendance-session="${esc(session.id)}" open>
-    <summary><span><strong>Expected arrivals</strong><span class="muted small">${esc(fmtTime(session.time))} · ${esc(session.location || "Venue pending")}</span></span><span>${arrived.length} arrived · ${expected.length} still expected</span></summary>
+    <summary><span><strong>Expected arrivals</strong><span class="muted small">${esc(session.location || "Venue pending")}</span></span><span>${arrived.length} arrived · ${expected.length} still expected</span></summary>
     <p class="muted small admin-attendance-copy">${timingCopy}</p>
     ${expected.map((booking) => row(booking, false)).join("")}
     ${arrived.map((booking) => row(booking, true)).join("")}
@@ -3312,6 +3313,7 @@ function adminFinalizeGymCard(s, cardClass = "", memberUsers = []) {
     id: s.id,
     label: s.name || "ITC HYROX",
     dateISO: s.dateISO,
+    timeLabel: sessionTimeLabel(s),
     venue: s.location || "Venue pending",
     bookings: held,
     memberUsers,
@@ -3323,7 +3325,7 @@ function adminFinalizeGymCard(s, cardClass = "", memberUsers = []) {
   return adminVenueHandoff(s, {
     message,
     override,
-    meta: `<div class="kicker" style="margin-top:0">${esc(fmtDate(s.dateISO))}</div>`,
+    meta: `<div class="kicker" style="margin-top:0">${esc(fmtDate(s.dateISO))}${sessionTimeLabel(s) ? ` · ${esc(sessionTimeLabel(s))}` : ""}</div>`,
     heading: `ITC HYROX - ${venueName}`,
     subheading: "Payment reconciliation",
     cardClass: venueCardClass,
