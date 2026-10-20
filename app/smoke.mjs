@@ -2641,7 +2641,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=notifications-clear-all"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=payment-card-session-time"',
+  'src="/app/js/app.js?v=keep-admin-scroll"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -2801,6 +2801,25 @@ assert.doesNotMatch(signedInListenerSource, /location\.hash\s*=\s*"#\/home"/,
   "tab-refocus SIGNED_IN events must not replace the current route with Home");
 assert.match(signedInListenerSource, /await renderWithFeedback\(\);[\s\S]*?hydrateSignedInAfterPaint\(user\);/,
   "SIGNED_IN must refresh the current route before starting post-paint hydration");
+for (const marker of [
+  'case "admin-member-filter"',
+  'case "confirm-payment"',
+  'case "mark-paid-and-confirm"',
+  'case "attendance-toggle"',
+]) {
+  const start = integratedAppSource.indexOf(marker);
+  assert.ok(start >= 0, `${marker} must stay wired`);
+  assert.match(
+    integratedAppSource.slice(start, start + 900),
+    /renderWithFeedback\(\{ preserveScroll: true \}\)/,
+    `${marker} must keep the current scroll position`,
+  );
+}
+assert.match(
+  integratedAppSource,
+  /refreshAfterAdminMutation\(action === "approve" \? "Approved\." : "Declined\.", \{ preserveScroll: true \}\)/,
+  "Approve and Decline must keep the current scroll position",
+);
 assert.doesNotMatch(signedInListenerSource, /await store\.fetchApplicationForUser\(/,
   "SIGNED_IN must not block the first route paint on the application query");
 const bootSourceForIdentity = integratedAppSource.slice(
