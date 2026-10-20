@@ -2641,7 +2641,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=notifications-clear-all"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=keep-admin-scroll"',
+  'src="/app/js/app.js?v=keep-resume-scroll"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -2793,14 +2793,17 @@ assert.match(integratedViewSource, /listPaymentUsers\(\{ force: true \}\)[\s\S]*
 assert.match(integratedAppSource,
   /visibilitychange[\s\S]*?store\.startupRoute\(location\.hash, store\.currentUser\(\)\?\.id\)/,
   "resume must recover an unexpectedly empty hash before refreshing the route");
+assert.match(integratedAppSource,
+  /visibilitychange[\s\S]*?renderWithFeedback\(\{ preserveScroll: true \}\)/,
+  "returning to the app must refresh Payment without jumping to the top");
 const signedInListenerSource = integratedAppSource.match(
   /supabase\.auth\.onAuthStateChange\(\(event\) => \{[\s\S]*?\n\s*\}\);/
 )?.[0] || "";
 assert.ok(signedInListenerSource, "live auth SIGNED_IN listener must remain wired");
 assert.doesNotMatch(signedInListenerSource, /location\.hash\s*=\s*"#\/home"/,
   "tab-refocus SIGNED_IN events must not replace the current route with Home");
-assert.match(signedInListenerSource, /await renderWithFeedback\(\);[\s\S]*?hydrateSignedInAfterPaint\(user\);/,
-  "SIGNED_IN must refresh the current route before starting post-paint hydration");
+assert.match(signedInListenerSource, /await renderWithFeedback\(\{ preserveScroll: true \}\);[\s\S]*?hydrateSignedInAfterPaint\(user\);/,
+  "SIGNED_IN must refresh the current route in place before starting post-paint hydration");
 for (const marker of [
   'case "admin-member-filter"',
   'case "confirm-payment"',
@@ -2838,7 +2841,7 @@ assert.doesNotMatch(fastHomeBootSource, /await store\.(fetchApplicationForUser|h
 assert.match(integratedAppSource, /function hydrateSignedInAfterPaint\(user\)/,
   "signed-in application and operations hydration must have a post-paint path");
 assert.match(integratedAppSource,
-  /hydrateLiveOperations\(\{ ensureWindow: true \}\)\.then\([\s\S]*?parseHash\(\)\[0\] === "home"[\s\S]*?renderWithFeedback\(\)/,
+  /hydrateLiveOperations\(\{ ensureWindow: true \}\)\.then\([\s\S]*?parseHash\(\)\[0\] === "home"[\s\S]*?renderWithFeedback\(\{ preserveScroll: true \}\)/,
   "Home must refresh after background operations hydration completes");
 assert.match(integratedViewSource,
   /export async function viewHome\(\) \{[\s\S]*?store\.peekLiveApplication\(user\.id\)/,
