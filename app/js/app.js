@@ -622,10 +622,10 @@ function showCampaignError(control, message) {
   if (host) { host.textContent = message; host.className = "form-error"; host.setAttribute("role", "alert"); }
 }
 
-async function refreshAfterAdminMutation(successMessage) {
+async function refreshAfterAdminMutation(successMessage, options = {}) {
   toast(successMessage);
   try {
-    await renderWithFeedback();
+    await renderWithFeedback(options.preserveScroll ? { preserveScroll: true } : {});
     return { refreshed: true, message: "" };
   } catch (err) {
     const detail = err.message || "Refresh failed";
@@ -768,10 +768,37 @@ function renderNotificationChrome(user, active, generation, rowsPromise = null) 
   return request;
 }
 
+function adminDisclosureKey(el) {
+  const roster = el.closest("[data-payment-roster]")?.dataset.paymentRoster || "";
+  if (el.dataset.paymentState) return `pay|${roster}|${el.dataset.paymentState}`;
+  if (el.dataset.queueTitle) return `queue|${roster}|${el.dataset.queueTitle}`;
+  if (el.dataset.attendanceSession) return `attend|${el.dataset.attendanceSession}`;
+  return "";
+}
+
+function captureAdminDisclosures() {
+  return [...viewEl.querySelectorAll("details")].flatMap((el) => {
+    const key = adminDisclosureKey(el);
+    return key ? [{ key, open: el.open }] : [];
+  });
+}
+
+function restoreAdminDisclosures(snapshot) {
+  if (!snapshot?.length) return;
+  const openByKey = new Map(snapshot.map((row) => [row.key, row.open]));
+  const rows = [...viewEl.querySelectorAll("details")].flatMap((el) => {
+    const key = adminDisclosureKey(el);
+    return key && openByKey.has(key) ? [{ el, open: openByKey.get(key) }] : [];
+  });
+  rows.forEach((row) => { if (!row.open) row.el.open = false; });
+  rows.forEach((row) => { if (row.open) row.el.open = true; });
+}
+
 async function renderWithFeedback(options = {}) {
   const generation = ++renderGeneration;
   const preserveScroll = options.preserveScroll === true;
   const scrollY = preserveScroll ? window.scrollY : 0;
+  const disclosures = preserveScroll ? captureAdminDisclosures() : [];
   const routeLoader = document.getElementById("route-loader");
   viewEl.setAttribute("aria-busy", "true");
   const timer = setTimeout(() => {
@@ -780,7 +807,7 @@ async function renderWithFeedback(options = {}) {
     }
   }, 300);
   try {
-    await render(generation, { preserveScroll, scrollY });
+    await render(generation, { preserveScroll, scrollY, disclosures });
   } catch (err) {
     if (generation === renderGeneration) throw err;
   } finally {
@@ -962,6 +989,7 @@ async function render(generation = renderGeneration, options = {}) {
     [...venueForms].forEach((form) => { void syncWeekVenuePicker(form, { ownsGeneration }); });
   }
   if (options.preserveScroll) {
+    restoreAdminDisclosures(options.disclosures);
     window.scrollTo({ top: options.scrollY || 0 });
   } else {
     window.scrollTo({ top: 0 });
@@ -985,9 +1013,9 @@ document.addEventListener("input", async (e) => {
   if (field?.dataset?.input === "member-search") {
     views.adminMemberFilters.query = field.value;
     const cursor = field.selectionStart;
-    await renderWithFeedback();
+    await renderWithFeedback({ preserveScroll: true });
     const nextSearch = document.getElementById("member-search");
-    nextSearch?.focus();
+    nextSearch?.focus({ preventScroll: true });
     nextSearch?.setSelectionRange?.(cursor, cursor);
   }
 });
@@ -1157,7 +1185,7 @@ export async function runAvatarModeration(control) {
       : action === "reject"
       ? `${name}’s replacement rejected.`
       : `${name}’s profile photo hidden.`;
-    const result = await refreshAfterAdminMutation(message);
+    const result = await refreshAfterAdminMutation(message, { preserveScroll: true });
     refreshed = result.refreshed;
     return true;
   } catch (error) {
@@ -1262,16 +1290,16 @@ document.addEventListener("click", async (e) => {
       };
       if (!allowedValues[filterKey]?.includes(filterValue)) break;
       views.adminMemberFilters[filterKey] = filterValue;
-      await renderWithFeedback();
-      document.getElementById(`member-filter-${filterKey}-${filterValue}`)?.focus();
+      await renderWithFeedback({ preserveScroll: true });
+      document.getElementById(`member-filter-${filterKey}-${filterValue}`)?.focus({ preventScroll: true });
       break;
     }
     case "admin-member-filters-clear":
       views.adminMemberFilters.query = "";
       views.adminMemberFilters.status = "all";
       views.adminMemberFilters.role = "all";
-      await renderWithFeedback();
-      document.getElementById("member-search")?.focus();
+      await renderWithFeedback({ preserveScroll: true });
+      document.getElementById("member-search")?.focus({ preventScroll: true });
       break;
     case "save-draft": {
       const form = el.closest('form[data-form="apply"]');
@@ -1378,7 +1406,7 @@ document.addEventListener("click", async (e) => {
           } else if (!store.setRole(el.dataset.user, "pending")) {
             throw new Error("Unable to confirm revoked access.");
           }
-          refreshResult = await refreshAfterAdminMutation(`${name} moved to Pending.`);
+          refreshResult = await refreshAfterAdminMutation(`${name} moved to Pending.`, { preserveScroll: true });
         });
         if (refreshResult && !refreshResult.refreshed) lockAdminMutationControls(el);
       } catch (err) {
@@ -1407,7 +1435,7 @@ document.addEventListener("click", async (e) => {
         await withBusyControl(el, action === "approve" ? "Approving…" : "Declining…", async () => {
           await store.decideApplication(el.dataset.user, decision);
           mutationSucceeded = true;
-          refreshResult = await refreshAfterAdminMutation(action === "approve" ? "Approved." : "Declined.");
+          refreshResult = await refreshAfterAdminMutation(action === "approve" ? "Approved." : "Declined.", { preserveScroll: true });
         });
         if (refreshResult && !refreshResult.refreshed && decisionError) {
           decisionError.textContent = refreshResult.message;
@@ -1749,7 +1777,7 @@ document.addEventListener("click", async (e) => {
         await withBusyControl(el, "Confirming…", async () => {
           const res = await store.confirmBookingPayment(el.dataset.booking);
           toast(res ? "Payment confirmed — member notified" : "Nothing to confirm", !res);
-          await renderWithFeedback();
+          await renderWithFeedback({ preserveScroll: true });
         });
       } catch (err) { toast(err.message || "Unable to confirm payment", true); }
       break;
@@ -1760,7 +1788,7 @@ document.addEventListener("click", async (e) => {
         await withBusyControl(el, "Confirming…", async () => {
           const res = await store.markPaidAndConfirmBooking(el.dataset.booking);
           toast(res ? "Marked paid and confirmed — member notified" : "Nothing to confirm", !res);
-          await renderWithFeedback();
+          await renderWithFeedback({ preserveScroll: true });
         });
       } catch (err) { toast(err.message || "Unable to mark paid and confirm", true); }
       break;
@@ -1800,13 +1828,13 @@ document.addEventListener("click", async (e) => {
         await withBusyControl(el, arrived ? "Marking…" : "Undoing…", async () => {
           await store.setBookingAttendance(bookingId, arrived);
           toast(arrived ? "Marked Arrived" : "Attendance reset to Expected");
-          await renderWithFeedback();
+          await renderWithFeedback({ preserveScroll: true });
         });
       } catch (err) {
         toast(err.message || "Unable to update attendance", true);
         try {
           await store.hydrateLiveOperations({ force: true });
-          await renderWithFeedback();
+          await renderWithFeedback({ preserveScroll: true });
         } catch (refreshError) {
           console.warn("Unable to refresh attendance after mutation failure", refreshError);
         }
@@ -2502,7 +2530,7 @@ document.addEventListener("change", async (e) => {
           } else if (!store.setRole(el.dataset.user, el.value)) {
             throw new Error("Unable to confirm the role change.");
           }
-          refreshResult = await refreshAfterAdminMutation(`${name} is now ${targetLabel}.`);
+          refreshResult = await refreshAfterAdminMutation(`${name} is now ${targetLabel}.`, { preserveScroll: true });
         });
         if (refreshResult && !refreshResult.refreshed) lockAdminMutationControls(el);
       } catch (err) {
