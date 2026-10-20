@@ -279,8 +279,10 @@ async function refreshNotificationSurfaces() {
     // Only rewrite the inbox if the member is already looking at it.
     // Never re-render Schedule/Home/Activity for a badge update.
     if (onInbox) {
+      const scrollY = window.scrollY;
       notificationRouteRows = rows;
       viewEl.innerHTML = await views.viewNotifications(new Date(), rows);
+      window.scrollTo({ top: scrollY });
     }
   } catch (err) {
     console.warn("notification refresh failed", err);
@@ -325,7 +327,7 @@ function scheduleOperationalUiRefresh() {
     // starts another render, which hides the loader from the previous one and
     // loops. Returning from PayMe still refreshes via visibilitychange.
     if (page === "admin" && (!tab || tab === "payments" || tab === "ops")) {
-      void renderWithFeedback();
+      void renderWithFeedback({ preserveScroll: true });
     }
   }, 80);
 }
@@ -2608,7 +2610,7 @@ function bindOperationalUiRefresh() {
 function hydrateSignedInAfterPaint(user) {
   if (!user) return;
   void store.fetchApplicationForUser(user).then(async () => {
-    if (parseHash()[0] === "home") await renderWithFeedback();
+    if (parseHash()[0] === "home") await renderWithFeedback({ preserveScroll: true });
     await maybeRedirectToApply();
   }).catch(async (err) => {
     toast(err.message || "Application read failed", true);
@@ -2621,7 +2623,7 @@ function hydrateSignedInAfterPaint(user) {
   void syncApprovedGoogleAvatar({ ifMissing: true }).catch(() => {});
   if (user.status === "approved" || parseHash()[0] === "home") {
     void store.hydrateLiveOperations({ ensureWindow: true }).then(() => {
-      if (parseHash()[0] === "home") void renderWithFeedback();
+      if (parseHash()[0] === "home") void renderWithFeedback({ preserveScroll: true });
     }).catch((err) => {
       toast(err.message || "Unable to load live sessions", true);
     });
@@ -2642,7 +2644,7 @@ function bindLiveAuthState() {
         await store.getCurrentUser();
         const user = store.currentUser();
         const fastHomePaint = user?.status === "approved" && parseHash()[0] === "home";
-        await renderWithFeedback();
+        await renderWithFeedback({ preserveScroll: true });
         if (!fastHomePaint) await maybeRedirectToApply();
         if (fastHomePaint || user?.status === "approved") {
           hydrateSignedInAfterPaint(user);
@@ -2771,7 +2773,7 @@ async function boot() {
     if (document.visibilityState !== "visible") return;
     if (!viewEl.innerHTML.trim()) {
       try {
-        await renderWithFeedback();
+        await renderWithFeedback({ preserveScroll: true });
       } catch (err) {
         toast(err.message || "Unable to load this page", true);
       }
@@ -2787,7 +2789,7 @@ async function boot() {
     if (recoveredRoute) replaceRoute(resumedRoute);
     if (!recoveredRoute && parseHash()[0] !== "pay") return;
     try {
-      await renderWithFeedback();
+      await renderWithFeedback({ preserveScroll: true });
     } catch (err) {
       toast(err.message || "Unable to refresh the current page", true);
     }
