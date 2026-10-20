@@ -5502,4 +5502,24 @@ export async function markNotificationRead(id) {
   return data;
 }
 
+export async function markAllNotificationsRead() {
+  const readAt = new Date().toISOString();
+  if (!isLive() || !supabase) {
+    const user = currentUser();
+    let changed = false;
+    for (const notification of state.notifications) {
+      if (notification.userId !== user?.id || notification.read) continue;
+      notification.read = true;
+      changed = true;
+    }
+    if (changed) save();
+    return;
+  }
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: readAt })
+    .is("read_at", null);
+  if (error) throw error;
+}
+
 // --- Approval workflow (Supabase) — canonical Auth baseline exports ---

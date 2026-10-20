@@ -2639,9 +2639,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=hyrox-week-time-tbc"',
+  'href="/app/styles.css?v=notifications-clear-all"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=lunch-default-noon"',
+  'src="/app/js/app.js?v=notifications-clear-all"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -5574,8 +5574,13 @@ if (localUnreadBeforeClick < 1) {
 }
 const localInboxHtml = await views.viewNotifications(new Date(), localNotificationRows);
 if (!localInboxHtml.includes(`data-notification-id="${localPaymentNotification.id}"`)
-    || !localInboxHtml.includes(`data-destination="${localPaymentNotification.link}"`)) {
-  throw new Error("local Inbox must render the unread row with its exact destination");
+    || !localInboxHtml.includes(`data-destination="${localPaymentNotification.link}"`)
+    || !localInboxHtml.includes('data-action="notifications-clear-all"')) {
+  throw new Error("local Inbox must render the unread row, its destination, and Clear all");
+}
+const emptyInboxHtml = await views.viewNotifications(new Date(), []);
+if (emptyInboxHtml.includes("notifications-clear-all")) {
+  throw new Error("Clear all must stay hidden when the inbox is empty");
 }
 await store.markNotificationRead(localPaymentNotification.id);
 const persistedNotificationState = JSON.parse(localStorage.getItem("itc.prototype.v1"));
@@ -5610,6 +5615,22 @@ if (localInboxAfterClick.includes(`data-notification-id="${localPaymentNotificat
   throw new Error("the clicked local notification must hide from the unread-only Inbox");
 }
 console.log("ok  local notification Inbox, count, destination, and click persistence");
+{
+  const remainingUnread = (await store.listMyNotifications()).filter((row) => !row.read_at);
+  await store.markAllNotificationsRead();
+  const afterClear = await store.listMyNotifications();
+  if (afterClear.some((row) => !row.read_at)) {
+    throw new Error("Clear all must mark every remaining notification read");
+  }
+  const clearedState = JSON.parse(localStorage.getItem("itc.prototype.v1"));
+  for (const id of remainingUnread.map((row) => row.id)) {
+    const record = clearedState.notifications.find((row) => row.id === id);
+    if (record?.read !== true || Object.hasOwn(record, "read_at")) {
+      throw new Error("Clear all must persist only the existing local read flag");
+    }
+  }
+}
+console.log("ok  clear all marks the inbox read in one tap");
 const conf = store.confirmBookingPayment(r1.id);
 store.signIn(signIn.user.email);
 if (conf.booking.status !== "confirmed") throw new Error("collector confirm should confirm");

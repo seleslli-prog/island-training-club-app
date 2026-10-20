@@ -4109,8 +4109,13 @@ export async function viewNotifications(now = new Date(), prefetchedRows = null)
 
   return `
     <header class="notification-header">
-      <p class="kicker">Inbox</p>
-      <h1 class="display sm">Notifications</h1>
+      <div>
+        <p class="kicker">Inbox</p>
+        <h1 class="display sm">Notifications</h1>
+      </div>
+      ${visibleRows.length
+        ? `<button class="btn ghost sm" type="button" data-action="notifications-clear-all">Clear all</button>`
+        : ""}
     </header>
     <div class="notification-filter-scroll">
       <div class="notification-filter-chips" role="group" aria-label="Filter notifications">${filterButtons}</div>
