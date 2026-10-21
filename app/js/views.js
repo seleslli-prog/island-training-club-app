@@ -2586,7 +2586,7 @@ export function viewPay(bookingId) {
       </div>
     </div></div>
     <button class="btn mt16" type="button" data-action="confirm-own-collector-payment" data-booking="${b.id}">Confirm my payment</button>
-    <button class="btn ghost mt8" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>`;
+    <a class="btn ghost mt8" href="#/booking/${b.id}/cancel">Cancel booking</a>`;
   }
 
   return `
@@ -2643,7 +2643,7 @@ export function viewPay(bookingId) {
       </div></div>
       <button class="btn mt16" type="submit">I’ve paid</button>
     </form>
-    <button class="btn ghost mt8" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>`;
+    <a class="btn ghost mt8" href="#/booking/${b.id}/cancel">Cancel booking</a>`;
 }
 
 // --- Manual HYROX replacement invite -----------------------------------------------------------
@@ -2736,6 +2736,31 @@ function currentBookingFor(userId, sessionId) {
   ) ?? null;
 }
 
+export function viewCancelBooking(bookingId) {
+  if (store.isRetiredHyroxMemberRoute("booking", bookingId)) return viewRetiredSession();
+  const b = store.getBooking(bookingId);
+  const user = store.currentUser();
+  if (!b || !user || user.status !== "approved" || b.userId !== user.id) {
+    return viewNotFound("Booking not found.");
+  }
+  if (b.status !== "reserved" || b.paymentMarkedAt) return { redirect: `#/booking/${b.id}` };
+  const s = b.snapshot;
+  return `
+    <a class="back-link" href="#/booking/${esc(b.id)}">← Booking</a>
+    <div class="kicker mt16">Unpaid booking</div>
+    <h1 class="display sm">Release this spot?</h1>
+    <p class="subcopy mt8">You have not paid. Releasing the hold cancels this booking and opens the place for someone else.</p>
+    <div class="card mt16"><div class="card-body">
+      <div class="receipt-lines" style="margin-top:0;border-top:0">
+        <div class="line"><span>Session</span><strong>${esc(s.name)}</strong></div>
+        <div class="line"><span>When</span><strong>${esc(fmtDate(s.dateISO))}${s.time ? ` · ${fmtTime(s.time)}` : ""}</strong></div>
+        <div class="line total"><span>Where</span><strong>${esc(s.location || "Venue pending")}</strong></div>
+      </div>
+    </div></div>
+    <button class="btn mt16" type="button" data-action="release-reservation" data-booking="${esc(b.id)}">Release my spot</button>
+    <a class="btn ghost mt8" href="#/booking/${esc(b.id)}">Keep my booking</a>`;
+}
+
 export function viewBooking(bookingId) {
   if (store.isRetiredHyroxMemberRoute("booking", bookingId)) return viewRetiredSession();
   const b = store.getBooking(bookingId);
@@ -2764,9 +2789,9 @@ export function viewBooking(bookingId) {
     actions = mine ? (selfCollector ? `
       <button class="btn" type="button" data-action="confirm-own-collector-payment" data-booking="${b.id}">Confirm my payment</button>
       <a class="btn ghost" href="#/pay/${b.id}">Payment details</a>
-      <button class="btn ghost" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>` : `
+      <a class="btn ghost" href="#/booking/${b.id}/cancel">Cancel booking</a>` : `
       <a class="btn" href="#/pay/${b.id}">Pay ${fmtMoney(s.price)}</a>
-      <button class="btn ghost" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>`) : "";
+      <a class="btn ghost" href="#/booking/${b.id}/cancel">Cancel booking</a>`) : "";
   } else if (b.status === "reserved" && b.paymentMarkedAt) {
     const collector = store.collectorFor(b.sessionId);
     const cname = collector ? esc(collector.preferredName || collector.fullName) : "the collector";
