@@ -2664,9 +2664,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=collapse-expected-arrivals"',
+  'href="/app/styles.css?v=payment-session-jump"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=cancel-booking-page"',
+  'src="/app/js/app.js?v=payment-session-jump"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -7833,6 +7833,23 @@ console.log("ok  reset");
   assert.ok(rosterHtml.includes(sessionWhen), "Payment roster must name the session time with the date");
   const cardHead = rosterAdminHtml.slice(rosterAdminHtml.lastIndexOf('class="kicker"', rosterStart), rosterStart);
   assert.ok(cardHead.includes(sessionWhen), "Payment card date line must include the session time");
+  const jumpBlock = rosterAdminHtml.match(/<select id="admin-payment-session-jump"[\s\S]*?<\/select>/)?.[0] || "";
+  const jumpOptions = [...jumpBlock.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)];
+  assert.ok(jumpOptions.length >= 2, "Payments dropdown lists upcoming sessions");
+  assert.equal(new Set(jumpOptions.map(([, , label]) => label)).size, jumpOptions.length,
+    "each upcoming session date and time is its own dropdown row");
+  for (const [, sessionId, label] of jumpOptions) {
+    assert.match(rosterAdminHtml, new RegExp(`id="payment-session-${sessionId}"`),
+      `dropdown session ${sessionId} must have a payment card`);
+    assert.match(label, /·/, "dropdown row names the session time with the date");
+  }
+  const jumpHandler = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
+  const jumpCase = jumpHandler.slice(
+    jumpHandler.indexOf('case "admin-payment-session-jump"'),
+    jumpHandler.indexOf('case "set-role"'),
+  );
+  assert.match(jumpCase, /scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
+  assert.doesNotMatch(jumpCase, /render\(|releaseReservation|deferBooking/);
   const attendanceAt = rosterAdminHtml.indexOf(`data-attendance-session="${paidSessions[0].id}"`);
   const attendanceSummary = rosterAdminHtml.slice(attendanceAt, rosterAdminHtml.indexOf("</summary>", attendanceAt));
   assert.equal(attendanceSummary.includes(data.sessionTimeLabel(paidSessions[0])), false,

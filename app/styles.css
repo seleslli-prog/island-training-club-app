@@ -2399,7 +2399,8 @@ img.detail-photo[src*="itc-fitness-x-faith-2"] {
 @media (max-width: 420px) {
   .replacement-panel .btn-row { grid-template-columns: 1fr; }
 }
-.hyrox-venue-card { border: 1px solid var(--line-soft); margin: 0; }
+.admin-payment-jump { max-width: 420px; }
+.hyrox-venue-card { border: 1px solid var(--line-soft); margin: 0; scroll-margin-top: 76px; }
 .hyrox-island-ecc-card { margin-top: 12px; }
 .hyrox-venue-card h3 { overflow-wrap: anywhere; }
 
