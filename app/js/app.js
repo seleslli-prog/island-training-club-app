@@ -925,7 +925,9 @@ async function render(generation = renderGeneration, options = {}) {
     case "booking":
       out = store.isRetiredHyroxMemberRoute("booking", arg)
         ? views.viewRetiredSession()
-        : views.viewBooking(arg);
+        : arg2 === "cancel"
+          ? views.viewCancelBooking(arg)
+          : views.viewBooking(arg);
       break;
     case "replacement":
       out = await views.viewReplacementInvite(arg);
@@ -1599,13 +1601,6 @@ document.addEventListener("click", async (e) => {
 
     case "release-reservation":
       if (controlBusy.has(el)) break;
-      // The phone's confirm dialog labels the dismiss button "Cancel", so a
-      // tap meant to release the spot was closing the dialog instead.
-      if (el.dataset.confirmRelease !== "1") {
-        el.dataset.confirmRelease = "1";
-        el.textContent = "Yes, release my spot";
-        break;
-      }
       try {
         await withBusyControl(el, "Cancelling…", async () => {
           const released = await store.releaseReservation(el.dataset.booking);

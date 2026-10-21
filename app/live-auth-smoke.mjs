@@ -7043,7 +7043,6 @@ const releaseClick = click({ target: releaseControl, preventDefault() {} })
 const duplicateReleaseClick = click({ target: releaseControl, preventDefault() {} });
 await new Promise(setImmediate);
 assert.deepEqual(releaseRpcArgs, { p_booking_id: routedReleaseBooking.id });
-assert.equal(releaseConfirmation, "Cancel this unpaid booking? Your spot will be released.");
 assert.equal(releaseSettled, false);
 assert.equal(operationalRpcCalls.filter((call) => call.name === "release_operational_reservation"
   && call.args.p_booking_id === routedReleaseBooking.id).length, 1);

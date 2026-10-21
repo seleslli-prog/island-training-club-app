@@ -63,6 +63,7 @@ for (const route of [
   "#/checkout/hyrox-bft-2099-01-03",
   "#/pay/booking-123",
   "#/booking/booking-123",
+  "#/booking/booking-123/cancel",
   "#/receipt/receipt-123",
   "#/admin/payments",
   "#/admin/prayers",
@@ -722,14 +723,13 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
     cancelBookingSource.indexOf('case "release-reservation"'),
     cancelBookingSource.indexOf('case "defer-to"'),
   );
-  assert.match(releaseCase, /confirmRelease/);
-  assert.match(releaseCase, /Yes, release my spot/);
+  assert.match(cancelBookingSource, /arg2 === "cancel"[\s\S]*views\.viewCancelBooking\(arg\)/);
   assert.doesNotMatch(releaseCase, /confirm\(/);
   assert.match(
     readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8"),
-    /I’ve paid<\/button>\s*<\/form>\s*<button class="btn ghost mt8" type="button" data-action="release-reservation"/,
+    /href="#\/booking\/\$\{b\.id\}\/cancel">Cancel booking<\/a>[\s\S]*Release my spot/,
   );
-  console.log("ok  Cancel booking confirms in the page instead of the phone dialog");
+  console.log("ok  Cancel booking opens an in-app release page");
 {
   const heldCountMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261014000002_shared_session_held_count.sql"),
@@ -2666,7 +2666,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=notifications-clear-all"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=cancel-booking-tap"',
+  'src="/app/js/app.js?v=cancel-booking-page"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
