@@ -705,6 +705,31 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(jiffriyMove, /hyrox-quarry-bay-2026-10-24/);
   assert.equal((jiffriyMove.match(/update public\.operational_bookings/g) || []).length, 1);
   console.log("ok  Jiffriy Chandra moves from Sat 24 Oct 9:00 to 10:15");
+  const charmineCancel = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261021000001_cancel_charmine_oct_hyrox.sql"),
+    "utf8",
+  );
+  assert.match(charmineCancel, /charmine lau/);
+  assert.match(charmineCancel, /a\.preferred_name/);
+  assert.doesNotMatch(charmineCancel, /a\.full_name/);
+  assert.match(charmineCancel, /hyrox-quarry-bay-2026-10-24/);
+  assert.match(charmineCancel, /hyrox-quarry-bay-2026-10-31/);
+  assert.doesNotMatch(charmineCancel, /hyrox-quarry-bay-early/);
+  assert.match(charmineCancel, /set status = 'cancelled'/);
+  console.log("ok  Charmine Lau is removed from the 24 Oct and 31 Oct 10:15 sessions");
+  const cancelBookingSource = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
+  const releaseCase = cancelBookingSource.slice(
+    cancelBookingSource.indexOf('case "release-reservation"'),
+    cancelBookingSource.indexOf('case "defer-to"'),
+  );
+  assert.match(releaseCase, /confirmRelease/);
+  assert.match(releaseCase, /Yes, release my spot/);
+  assert.doesNotMatch(releaseCase, /confirm\(/);
+  assert.match(
+    readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8"),
+    /I’ve paid<\/button>\s*<\/form>\s*<button class="btn ghost mt8" type="button" data-action="release-reservation"/,
+  );
+  console.log("ok  Cancel booking confirms in the page instead of the phone dialog");
 {
   const heldCountMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261014000002_shared_session_held_count.sql"),
@@ -2641,7 +2666,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=notifications-clear-all"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=reopen-home"',
+  'src="/app/js/app.js?v=cancel-booking-tap"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',

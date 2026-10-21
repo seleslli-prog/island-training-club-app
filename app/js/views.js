@@ -2642,7 +2642,8 @@ export function viewPay(bookingId) {
         <p class="muted small mt8">${cname} confirms in-app when the money lands — your spot is held meanwhile.</p>
       </div></div>
       <button class="btn mt16" type="submit">I’ve paid</button>
-    </form>`;
+    </form>
+    <button class="btn ghost mt8" type="button" data-action="release-reservation" data-booking="${b.id}">Cancel booking</button>`;
 }
 
 // --- Manual HYROX replacement invite -----------------------------------------------------------

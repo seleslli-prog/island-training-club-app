@@ -1599,15 +1599,20 @@ document.addEventListener("click", async (e) => {
 
     case "release-reservation":
       if (controlBusy.has(el)) break;
-      if (confirm("Cancel this unpaid booking? Your spot will be released.")) {
-        try {
-          await withBusyControl(el, "Cancelling…", async () => {
-            const released = await store.releaseReservation(el.dataset.booking);
-            toast(released ? "Booking cancelled" : "Booking cannot be cancelled", !released);
-            await renderWithFeedback();
-          });
-        } catch (err) { toast(err.message || "Unable to cancel booking", true); }
+      // The phone's confirm dialog labels the dismiss button "Cancel", so a
+      // tap meant to release the spot was closing the dialog instead.
+      if (el.dataset.confirmRelease !== "1") {
+        el.dataset.confirmRelease = "1";
+        el.textContent = "Yes, release my spot";
+        break;
       }
+      try {
+        await withBusyControl(el, "Cancelling…", async () => {
+          const released = await store.releaseReservation(el.dataset.booking);
+          toast(released ? "Booking cancelled" : "Booking cannot be cancelled", !released);
+          await renderWithFeedback();
+        });
+      } catch (err) { toast(err.message || "Unable to cancel booking", true); }
       break;
 
     case "defer-to":
