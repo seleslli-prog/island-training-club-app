@@ -3169,7 +3169,7 @@ function adminVenueHandoff(session, { message, override, meta = "", extra = "", 
   // it onto the weekly override, so read session first and fall back.
   const gymConfirmedAt = session?.gymConfirmedAt || override?.gymConfirmedAt;
   const gymNote = session?.gymNote || override?.gymNote;
-  return `<div class="card hyrox-venue-card mt16 ${cardClass}"><div class="card-body">
+  return `<div class="card hyrox-venue-card mt16 ${cardClass}" id="payment-session-${esc(session.id)}"><div class="card-body">
     ${meta}
     <div class="section-head"><div><h3>${esc(heading)}</h3>${subheading ? `<p class="muted small hyrox-card-subtitle">${esc(subheading)}</p>` : ""}</div>${gymConfirmedAt ? `<span class="badge free">Confirmed</span>` : `<span class="badge neutral">Venue handoff</span>`}</div>
     ${extra}
@@ -3385,10 +3385,23 @@ function adminFinalizeGym(memberUsers) {
     return hasActiveBooking || withinDisplayWindow;
   }).sort(compareSessionsByStart);
   const cards = upcoming.map((session) => adminIslandEccHandoff(session, memberUsers)).join("");
+  const jumpOptions = upcoming.map((session) => {
+    const when = `${fmtDate(session.dateISO)}${sessionTimeLabel(session) ? ` · ${sessionTimeLabel(session)}` : ""}`;
+    return `<option value="${esc(session.id)}">${esc(when)}</option>`;
+  }).join("");
+  const jump = upcoming.length ? `
+    <div class="field admin-payment-jump">
+      <label for="admin-payment-session-jump">Upcoming session</label>
+      <select id="admin-payment-session-jump" data-change="admin-payment-session-jump">
+        <option value="">Choose a date</option>
+        ${jumpOptions}
+      </select>
+    </div>` : "";
   return `
     <section class="admin-control-group mt24" aria-labelledby="hyrox-venue-handoff-title">
       <div class="section-head"><h3 id="hyrox-venue-handoff-title">Venue handoff</h3></div>
       <p class="muted small mt8">Review each venue’s booking status, send the confirmed headcount, then record venue confirmation.</p>
+      ${jump}
       ${cards || `<div class="empty mt8">No upcoming venue handoffs.</div>`}
     </section>`;
 }

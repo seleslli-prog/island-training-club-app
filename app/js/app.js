@@ -2513,6 +2513,14 @@ document.addEventListener("change", async (e) => {
   if (!el) return;
 
   switch (el.dataset.change) {
+    case "admin-payment-session-jump": {
+      const sessionId = el.value;
+      if (!sessionId) break;
+      const card = document.getElementById(`payment-session-${sessionId}`);
+      card?.scrollIntoView({ behavior: "smooth", block: "start" });
+      break;
+    }
+
     case "set-role": {
       const viewer = store.currentUser();
       if (!viewer || !["superadmin", "super_admin"].includes(viewer.role) || viewer.id === el.dataset.user) break;
