@@ -892,7 +892,7 @@ a.profile-row:hover .pr-text strong { color: var(--accent); }
 .progress-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--muted); }
 .progress-meta strong { color: var(--accent); }
 .chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
-.chip { font-family: var(--font-display); font-size: 12px; font-weight: 800; letter-spacing: .04em; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.chip { font-family: var(--font-display); font-size: 12px; font-weight: 800; letter-spacing: .04em; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink); text-decoration: none; cursor: pointer; }
 .chip.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* The next upcoming session on Home, highlighted in the club's neon accent. */
@@ -977,6 +977,7 @@ a.profile-row:hover .pr-text strong { color: var(--accent); }
   font-weight: 800;
   letter-spacing: .05em;
   text-transform: uppercase;
+  text-decoration: none;
   cursor: pointer;
 }
 

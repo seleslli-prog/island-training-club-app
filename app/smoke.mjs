@@ -58,6 +58,8 @@ for (const route of [
   "#/giving",
   "#/notifications",
   "#/account/bookings/attended",
+  "#/account/bookings/upcoming",
+  "#/account/bookings/past",
   "#/account/notifications/edit",
   "#/apply",
   "#/checkout/hyrox-bft-2099-01-03",
@@ -2664,9 +2666,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=collapse-expected-arrivals"',
+  'href="/app/styles.css?v=upcoming-booking-count"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=past-sessions"',
+  'src="/app/js/app.js?v=upcoming-booking-count"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -5972,17 +5974,32 @@ for (const [label, html] of [
     console.error(`FAIL profile > ${label} hierarchy: ${err.message}`);
   }
 }
-if (!allBookingsHtml.includes("All bookings") || !allBookingsHtml.includes("Upcoming")) {
+if (!allBookingsHtml.includes("All bookings") || !allBookingsHtml.includes(">Upcoming<") || !allBookingsHtml.includes(">Past<")) {
   failures++;
-  console.error("FAIL Bookings link should render the grouped all-bookings view");
+  console.error("FAIL Bookings link should render All, Upcoming, and Past filters");
+}
+if (allBookingsHtml.includes(">Attended</a>")) {
+  failures++;
+  console.error("FAIL Bookings filters should replace Attended with Upcoming and Past");
+}
+const upcomingBookingsHtml = await views.viewAccount("bookings", "upcoming");
+const pastBookingsHtml = await views.viewAccount("bookings", "past");
+if (!upcomingBookingsHtml.includes('href="#/account/bookings/upcoming" class="chip active"')
+    && !upcomingBookingsHtml.includes('class="chip active" href="#/account/bookings/upcoming"')) {
+  failures++;
+  console.error("FAIL Upcoming filter should be the active chip");
+}
+if (!pastBookingsHtml.includes('class="chip active" href="#/account/bookings/past"')) {
+  failures++;
+  console.error("FAIL Past filter should be the active chip");
 }
 if (!attendedBookingsHtml.includes("Attended sessions will appear here.")) {
   failures++;
   console.error("FAIL Attended link should render the attended-only view");
 }
-if (statCount(bookingProfileHtml, "#/account/bookings") !== countBookingCards(allBookingsHtml)) {
+if (statCount(bookingProfileHtml, "#/account/bookings") !== countBookingCards(upcomingBookingsHtml)) {
   failures++;
-  console.error("FAIL Bookings neon count should match its linked booking cards");
+  console.error("FAIL Bookings count should include upcoming bookings only");
 }
 if (statCount(bookingProfileHtml, "#/account/bookings/attended") !== countBookingCards(attendedBookingsHtml)) {
   failures++;
@@ -6000,11 +6017,11 @@ try {
   booking.status = "cancelled";
   const cancelledProfile = await views.viewAccount();
   const cancelledPage = await views.viewAccount("bookings");
-  if (statCount(cancelledProfile, "#/account/bookings") !== 1
+  if (statCount(cancelledProfile, "#/account/bookings") !== 0
       || countBookingCards(cancelledPage) !== 1
       || !cancelledPage.includes("Cancelled")) {
     failures++;
-    console.error("FAIL paid cancellation should count once and remain visible in Bookings");
+    console.error("FAIL a cancelled booking stays on the Bookings page and drops out of the upcoming count");
   }
 } finally {
   booking.status = "confirmed";

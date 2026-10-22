@@ -1607,7 +1607,7 @@ export async function viewAccount(section, sub) {
     case "notifications/edit":
       return await accountNotificationsEdit(user);
     case "bookings":
-      return accountBookings(user, sub === "attended" ? "attended" : "all");
+      return accountBookings(user, ["upcoming", "past", "attended"].includes(sub) ? sub : "all");
     case "history":
       return accountBookings(user, "all");
     default:
@@ -1815,6 +1815,7 @@ async function accountMember(user) {
   }[normalized];
 
   const bookings = visibleBookingsForUser(user.id);
+  const upcomingCount = bookings.filter(isUpcomingBooking).length;
   const attended = bookings.filter((b) => b.status === "attended").length;
 
   return `
@@ -1835,7 +1836,7 @@ async function accountMember(user) {
       </div>
       <div class="ph-stats">
         <a class="ph-stat" href="#/account/bookings" aria-label="View all bookings">
-          <strong>${bookings.length}</strong><span>Bookings</span>
+          <strong>${upcomingCount}</strong><span>Bookings</span>
         </a>
         <a class="ph-stat" href="#/account/bookings/attended" aria-label="View attended bookings">
           <strong>${attended}</strong><span>Attended</span>
@@ -2230,32 +2231,47 @@ function bookingGroup(title, bookings) {
     : "";
 }
 
+function isUpcomingBooking(booking) {
+  return booking.status !== "cancelled" && !sessionStarted(bookingDisplaySnapshot(booking));
+}
+
+function isPastBooking(booking) {
+  return booking.status !== "cancelled" && sessionStarted(bookingDisplaySnapshot(booking));
+}
+
 function accountBookings(user, filter = "all") {
   const records = visibleBookingsForUser(user.id);
-  const filtered = filter === "attended"
-    ? records.filter((booking) => booking.status === "attended")
-    : records;
-  const upcoming = sortBookings(
-    filtered.filter((booking) => booking.status !== "cancelled" && !sessionStarted(bookingDisplaySnapshot(booking)))
-  );
-  const past = sortBookings(
-    filtered.filter((booking) => booking.status !== "cancelled" && sessionStarted(bookingDisplaySnapshot(booking))),
-    "desc"
-  );
+  const upcoming = sortBookings(records.filter(isUpcomingBooking));
+  const past = sortBookings(records.filter(isPastBooking), "desc");
   const cancelled = sortBookings(
-    filtered.filter((booking) => booking.status === "cancelled"),
+    records.filter((booking) => booking.status === "cancelled"),
     "desc"
   );
-  const hasRecords = upcoming.length || past.length || cancelled.length;
+  const attended = sortBookings(
+    records.filter((booking) => booking.status === "attended"),
+    "desc"
+  );
+  const visible = filter === "upcoming" ? upcoming
+    : filter === "past" ? past
+      : filter === "attended" ? attended
+        : null;
+  const hasRecords = visible ? visible.length : upcoming.length || past.length || cancelled.length;
+  const empty = filter === "upcoming" ? "Upcoming bookings will appear here."
+    : filter === "past" ? "Past sessions will appear here."
+      : filter === "attended" ? "Attended sessions will appear here."
+        : "Your bookings will appear here.";
+  const groups = filter === "upcoming" ? bookingGroup("Upcoming", upcoming)
+    : filter === "past" ? bookingGroup("Past", past)
+      : filter === "attended" ? bookingGroup("Past", attended)
+        : `${bookingGroup("Upcoming", upcoming)}${bookingGroup("Past", past)}${bookingGroup("Cancelled", cancelled)}`;
   return `
     ${profileSubpageHeader({ title: "Bookings" })}
     <div class="chip-row mt16" aria-label="Booking filter">
       <a class="chip ${filter === "all" ? "active" : ""}" href="#/account/bookings">All bookings</a>
-      <a class="chip ${filter === "attended" ? "active" : ""}" href="#/account/bookings/attended">Attended</a>
+      <a class="chip ${filter === "upcoming" ? "active" : ""}" href="#/account/bookings/upcoming">Upcoming</a>
+      <a class="chip ${filter === "past" ? "active" : ""}" href="#/account/bookings/past">Past</a>
     </div>
-    ${hasRecords
-      ? `${bookingGroup("Upcoming", upcoming)}${bookingGroup("Past", past)}${bookingGroup("Cancelled", cancelled)}`
-      : `<div class="empty mt16">${filter === "attended" ? "Attended sessions will appear here." : "Your bookings will appear here."}</div>`}`;
+    ${hasRecords ? groups : `<div class="empty mt16">${empty}</div>`}`;
 }
 
 // --- Apply ---------------------------------------------------------------------------------

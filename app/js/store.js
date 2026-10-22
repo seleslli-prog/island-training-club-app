@@ -73,7 +73,7 @@ const ROUTE_ID = "[A-Za-z0-9._~-]+";
 const RESTORABLE_ROUTE_PATTERNS = [
   /^#\/(?:home|schedule|giving|notifications|apply)$/,
   /^#\/community(?:\/(?:prayers|fellowship|meals|announcements|about))?$/,
-  /^#\/account(?:\/(?:details(?:\/edit)?|indemnity|agreements|donor|payments|privacy(?:\/edit)?|notifications(?:\/edit)?|bookings(?:\/attended)?|history))?$/,
+  /^#\/account(?:\/(?:details(?:\/edit)?|indemnity|agreements|donor|payments|privacy(?:\/edit)?|notifications(?:\/edit)?|bookings(?:\/(?:attended|upcoming|past))?|history))?$/,
   new RegExp(`^#/(?:activity|checkout|pay|receipt)/${ROUTE_ID}$`),
   new RegExp(`^#/booking/${ROUTE_ID}(?:/cancel)?$`),
   new RegExp(`^#/hyrox/${ROUTE_ID}(?:/register)?$`),
