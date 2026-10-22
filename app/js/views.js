@@ -3406,7 +3406,7 @@ function adminFinalizeGym(memberUsers) {
   const pastCards = pastSessions.map((session) => adminIslandEccHandoff(session, memberUsers)).join("");
   const pastSection = pastSessions.length ? `
     <details class="admin-section admin-past-sessions">
-      <summary><h3>Past sessions</h3><span class="muted small">${pastSessions.length}</span></summary>
+      <summary><h3>Past sessions</h3></summary>
       <!-- past-sessions-start -->
       ${pastCards}
       <!-- past-sessions-end -->
