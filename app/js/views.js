@@ -3384,12 +3384,18 @@ function adminFinalizeGym(memberUsers) {
       && store.attendanceWindowForSession(session).state !== "locked";
     return hasActiveBooking || withinDisplayWindow;
   }).sort(compareSessionsByStart);
-  const cards = upcoming.map((session) => adminIslandEccHandoff(session, memberUsers)).join("");
-  const jumpOptions = upcoming.map((session) => {
+  const todayISO = todayHktISO();
+  const currentSessions = upcoming.filter((session) => session.dateISO >= todayISO);
+  const pastSessions = upcoming.filter((session) => session.dateISO < todayISO).sort((a, b) => {
+    if (a.dateISO !== b.dateISO) return a.dateISO < b.dateISO ? 1 : -1;
+    return compareSessionsByStart(a, b);
+  });
+  const cards = currentSessions.map((session) => adminIslandEccHandoff(session, memberUsers)).join("");
+  const jumpOptions = currentSessions.map((session) => {
     const when = `${fmtDate(session.dateISO)}${sessionTimeLabel(session) ? ` · ${sessionTimeLabel(session)}` : ""}`;
     return `<option value="${esc(session.id)}">${esc(when)}</option>`;
   }).join("");
-  const jump = upcoming.length ? `
+  const jump = currentSessions.length ? `
     <div class="field admin-payment-jump">
       <label for="admin-payment-session-jump">Upcoming session</label>
       <select id="admin-payment-session-jump" data-change="admin-payment-session-jump">
@@ -3397,12 +3403,21 @@ function adminFinalizeGym(memberUsers) {
         ${jumpOptions}
       </select>
     </div>` : "";
+  const pastCards = pastSessions.map((session) => adminIslandEccHandoff(session, memberUsers)).join("");
+  const pastSection = pastSessions.length ? `
+    <details class="admin-section admin-past-sessions">
+      <summary><h3>Past sessions</h3><span class="muted small">${pastSessions.length}</span></summary>
+      <!-- past-sessions-start -->
+      ${pastCards}
+      <!-- past-sessions-end -->
+    </details>` : "";
   return `
     <section class="admin-control-group mt24" aria-labelledby="hyrox-venue-handoff-title">
       <div class="section-head"><h3 id="hyrox-venue-handoff-title">Venue handoff</h3></div>
       <p class="muted small mt8">Review each venue’s booking status, send the confirmed headcount, then record venue confirmation.</p>
       ${jump}
       ${cards || `<div class="empty mt8">No upcoming venue handoffs.</div>`}
+      ${pastSection}
     </section>`;
 }
 
