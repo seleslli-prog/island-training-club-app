@@ -2664,9 +2664,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=payment-session-jump"',
+  'href="/app/styles.css?v=past-sessions"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=payment-session-jump"',
+  'src="/app/js/app.js?v=past-sessions"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -8023,6 +8023,64 @@ console.log("ok  reset");
     /Session is cancelled/,
   );
   console.log("ok  local attendance selectors and mutation enforce paid Admin timing rules");
+}
+
+{
+  const savedPayments = localStorage.getItem("itc.prototype.v1");
+  const originalPastNow = Date.now;
+  const atHkt = (iso) => Date.parse(iso);
+  const pastSlice = (html) => {
+    const start = html.indexOf("<!-- past-sessions-start -->");
+    const end = html.indexOf("<!-- past-sessions-end -->");
+    return start >= 0 && end > start ? html.slice(start, end) : "";
+  };
+  try {
+    store.resetLocalData();
+    installLocalFixtures();
+    const raw = JSON.parse(localStorage.getItem("itc.prototype.v1"));
+    for (const [id, sessionId, time] of [
+      ["past-early-booking", "hyrox-quarry-bay-early-2026-10-17", "09:00"],
+      ["past-late-booking", "hyrox-quarry-bay-2026-10-17", "10:15"],
+      ["still-upcoming-booking", "hyrox-quarry-bay-2026-10-24", "10:15"],
+    ]) {
+      raw.bookings.push({
+        id, userId: "fixture-member", sessionId, status: "reserved",
+        paymentMarkedAt: null, attendedAt: null, attendedBy: null,
+        snapshot: { name: "ITC HYROX", dateISO: sessionId.slice(-10), time, price: 180 },
+      });
+    }
+    localStorage.setItem("itc.prototype.v1", JSON.stringify(raw));
+    store.load();
+    store.signIn("admin@example.test");
+
+    Date.now = () => atHkt("2026-10-17T23:00:00+08:00");
+    const sameDayHtml = await views.viewAdmin("payments");
+    assert.equal(pastSlice(sameDayHtml).includes("hyrox-quarry-bay-2026-10-17"), false,
+      "a session stays with upcoming cards until its Hong Kong day has ended");
+    assert.match(sameDayHtml, /id="payment-session-hyrox-quarry-bay-early-2026-10-17"/);
+    assert.match(sameDayHtml, /id="payment-session-hyrox-quarry-bay-2026-10-17"/);
+
+    Date.now = () => atHkt("2026-10-18T00:30:00+08:00");
+    const nextDayHtml = await views.viewAdmin("payments");
+    const pastHtml = pastSlice(nextDayHtml);
+    assert.match(nextDayHtml, /<details class="admin-section admin-past-sessions">[\s\S]*Past sessions/);
+    assert.match(pastHtml, /id="payment-session-hyrox-quarry-bay-early-2026-10-17"/);
+    assert.match(pastHtml, /id="payment-session-hyrox-quarry-bay-2026-10-17"/);
+    assert.ok(
+      pastHtml.indexOf("hyrox-quarry-bay-early-2026-10-17") < pastHtml.indexOf("hyrox-quarry-bay-2026-10-17"),
+      "the same past day stays in start-time order",
+    );
+    const jumpHtml = nextDayHtml.match(/<select id="admin-payment-session-jump"[\s\S]*?<\/select>/)?.[0] || "";
+    assert.equal(jumpHtml.includes("2026-10-17"), false, "the upcoming dropdown omits past sessions");
+    assert.match(jumpHtml, /hyrox-quarry-bay-2026-10-24/);
+    assert.equal(pastHtml.includes("hyrox-quarry-bay-2026-10-24"), false);
+    console.log("ok  past HYROX payment cards move after the session day ends");
+  } finally {
+    Date.now = originalPastNow;
+    if (savedPayments == null) localStorage.removeItem("itc.prototype.v1");
+    else localStorage.setItem("itc.prototype.v1", savedPayments);
+    store.load();
+  }
 }
 
 // --- Install neutral fixtures for local authenticated paths (no demo seeds) ---

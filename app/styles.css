@@ -340,6 +340,7 @@ h1.kicker {
 }
 
 .admin-section[open] > summary::after { transform: rotate(-135deg); }
+.admin-past-sessions > summary { margin-top: 24px; min-height: 44px; align-items: center; }
 
 input[type="time"].time-blank::-webkit-datetime-edit,
 input[type="time"].time-blank::-webkit-datetime-edit-fields-wrapper,
