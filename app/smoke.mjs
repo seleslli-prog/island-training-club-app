@@ -2664,7 +2664,7 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=past-sessions"',
+  'href="/app/styles.css?v=collapse-expected-arrivals"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js?v=past-sessions"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
@@ -7854,6 +7854,16 @@ console.log("ok  reset");
   const attendanceSummary = rosterAdminHtml.slice(attendanceAt, rosterAdminHtml.indexOf("</summary>", attendanceAt));
   assert.equal(attendanceSummary.includes(data.sessionTimeLabel(paidSessions[0])), false,
     "Expected arrivals must not repeat the session time");
+  assert.match(
+    rosterAdminHtml,
+    new RegExp(`<details class="admin-attendance-session" data-attendance-session="${paidSessions[0].id}">`),
+    "Expected arrivals starts collapsed",
+  );
+  assert.doesNotMatch(
+    rosterAdminHtml.slice(attendanceAt, attendanceAt + 160),
+    /\sopen(?:\s|>)/,
+    "Expected arrivals must not be forced open",
+  );
   assert.match(
     rosterHtml,
     /data-action="mark-paid-and-confirm"[^>]*data-booking="roster-due-booking"/,

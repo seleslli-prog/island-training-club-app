@@ -425,6 +425,9 @@ input[type="time"].time-blank:focus::-webkit-datetime-edit-ampm-field {
   background: var(--surface-2);
   font-size: 12px;
 }
+.admin-attendance-session > summary::-webkit-details-marker { display: none; }
+.admin-attendance-session > summary::after { content: "›"; font-size: 20px; line-height: 1; }
+.admin-attendance-session[open] > summary::after { transform: rotate(90deg); }
 .admin-attendance-session > summary > span:first-child { display: grid; gap: 3px; }
 .admin-attendance-copy,
 .admin-attendance-empty { padding: 10px 14px; }

@@ -3143,7 +3143,7 @@ function adminAttendanceSession(session, memberUsers) {
     <span class="admin-attendance-name"><strong>${esc(displayName(booking))}</strong><span class="badge ${isArrived ? "free" : "neutral"}">${isArrived ? "Arrived" : "Expected"}</span></span>
     ${window.state === "open" ? `<button class="btn ${isArrived ? "ghost " : ""}sm" type="button" data-action="attendance-toggle" data-booking="${esc(booking.id)}" data-arrived="${isArrived ? "0" : "1"}">${isArrived ? "Undo" : "Mark Arrived"}</button>` : ""}
   </div>`;
-  return `<details class="admin-attendance-session" data-attendance-session="${esc(session.id)}" open>
+  return `<details class="admin-attendance-session" data-attendance-session="${esc(session.id)}">
     <summary><span><strong>Expected arrivals</strong><span class="muted small">${esc(session.location || "Venue pending")}</span></span><span>${arrived.length} arrived · ${expected.length} still expected</span></summary>
     <p class="muted small admin-attendance-copy">${timingCopy}</p>
     ${expected.map((booking) => row(booking, false)).join("")}
