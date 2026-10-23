@@ -3889,7 +3889,7 @@ function memberContactDisclosure(user, membershipPhones, membershipPhonesFailed)
     : esc(phoneText);
   return `
     <details class="member-contact">
-      <summary>Email and phone</summary>
+      <summary>Contact details</summary>
       <div class="member-contact-panel" role="group" aria-label="Membership details for ${esc(user.fullName)}">
         <div class="member-contact-line"><span>Email</span><strong>${emailValue}</strong></div>
         <div class="member-contact-line"><span>Mobile / WhatsApp number</span><strong>${phoneValue}</strong></div>
