@@ -4015,12 +4015,13 @@ function adminMembers(
             className: "admin-member-avatar",
             decorative: true,
           })}
-          <span class="member-avatar-copy"><strong>${esc(u.fullName)}</strong>${memberContactDisclosure(u, membershipPhones, membershipPhonesFailed)}</span>
+          <span class="member-avatar-copy"><strong>${esc(u.fullName)}</strong></span>
         </div>
         <div class="member-admin-controls">
           <div class="member-photo-state">${photoStateLabel(avatarRow)}${photoControls}</div>
           ${editor}
         </div>
+        ${memberContactDisclosure(u, membershipPhones, membershipPhonesFailed)}
       </div>`;
   }).join("");
   const hasActiveFilters = adminMemberFilters.query.length > 0 ||
