@@ -1525,13 +1525,15 @@ img.detail-photo[src*="itc-fitness-x-faith-2"] {
 }
 
 .member-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
   padding: 13px 2px;
   border-bottom: 1px solid var(--line-soft);
 }
+.member-avatar-who { order: 1; }
+.member-contact { order: 2; }
+.member-admin-controls { order: 3; }
 
 .member-row .who strong { display: block; font-size: 13.5px; }
 .member-row .who > span:not(.avatar) { font-size: 11px; color: var(--muted); }
@@ -1540,7 +1542,11 @@ img.detail-photo[src*="itc-fitness-x-faith-2"] {
 .member-avatar-copy { min-width: 0; }
 .member-avatar-copy > span { display: block; overflow-wrap: anywhere; }
 
-.member-contact { display: block; position: relative; margin-top: 2px; }
+.member-contact {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 2px 0 0 50px;
+}
 .member-contact > summary {
   display: inline-flex;
   align-items: center;
@@ -1596,20 +1602,10 @@ img.detail-photo[src*="itc-fitness-x-faith-2"] {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-@media (min-width: 521px) {
-  .member-contact-panel {
-    position: absolute;
-    z-index: 6;
-    left: 0;
-    top: calc(100% - 2px);
-    width: 260px;
-    margin: 0;
-  }
-}
 .admin-member-avatar,
 .admin-pending-avatar { background: var(--surface-3); color: var(--accent); }
-.member-admin-controls { display: grid; justify-items: end; gap: 8px; min-width: min(280px, 52%); }
-.member-photo-state { display: grid; justify-items: end; gap: 8px; width: 100%; }
+.member-admin-controls { display: grid; justify-items: stretch; gap: 8px; width: 100%; }
+.member-photo-state { display: grid; justify-items: start; gap: 8px; width: 100%; }
 .avatar-hide-controls { width: 100%; }
 .avatar-hide-controls > label,
 .avatar-review-actions > label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 700; }
@@ -1636,9 +1632,6 @@ img.detail-photo[src*="itc-fitness-x-faith-2"] {
 .avatar-review-actions .btn-row { margin-top: 8px; }
 
 @media (max-width: 520px) {
-  .member-row { align-items: flex-start; flex-direction: column; }
-  .member-admin-controls { justify-items: stretch; width: 100%; max-width: none; }
-  .member-photo-state { justify-items: start; }
   .avatar-hide-action { flex-direction: column; }
   .avatar-moderation-reason { text-align: left; }
 }
