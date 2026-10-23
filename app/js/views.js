@@ -3003,6 +3003,8 @@ export async function viewAdmin(tab = "members") {
   let adminAvatarRows = null;
   let avatarLoadFailed = false;
   let pendingApplicants = [];
+  let membershipPhones = new Map();
+  let membershipPhonesFailed = false;
   if (canonicalTab === "payments") {
     const cachedUsers = isLive() ? store.peekLivePaymentDirectory() : null;
     memberUsers = (cachedUsers || await store.listPaymentUsers())
@@ -3014,13 +3016,19 @@ export async function viewAdmin(tab = "members") {
         avatarLoadFailed = true;
       });
     }
-    const [users, applicants] = await Promise.all([
+    const [users, applicants, phones] = await Promise.all([
       store.listPaymentUsers({ force: true }),
       store.listApprovalCandidates(),
+      store.listMembershipPhones().catch((error) => {
+        membershipPhonesFailed = true;
+        console.warn("Unable to load Membership Details phones", error);
+        return new Map();
+      }),
     ]);
     memberUsers = users.sort((a, b) => a.fullName.localeCompare(b.fullName));
     pendingApplicants = applicants;
     adminAvatarRows = cachedAvatars;
+    membershipPhones = phones;
   }
   let prayerRows = [];
   let prayerLoadFailed = false;
@@ -3039,7 +3047,7 @@ export async function viewAdmin(tab = "members") {
       memberUsers,
       pendingApplicants,
       adminAvatarRows,
-      { avatarLoadFailed },
+      { avatarLoadFailed, membershipPhones, membershipPhonesFailed },
     );
   } else if (canonicalTab === "prayers") {
     body = prayerLoadFailed ? adminPrayerLoadError() : adminPrayerRequests(prayerRows);
@@ -3866,12 +3874,35 @@ function adminActivities() {
     ${adminOneOffEvents()}`;
 }
 
+function memberContactDisclosure(user, membershipPhones, membershipPhonesFailed) {
+  const email = String(user.email || "").trim();
+  const phone = membershipPhonesFailed
+    ? ""
+    : String(membershipPhones?.get(user.id) || "").trim();
+  const phoneText = membershipPhonesFailed ? "Unavailable" : (phone || "Not provided");
+  const dial = phone.replace(/[^\d+]/g, "");
+  const emailValue = email
+    ? `<a href="mailto:${esc(email)}">${esc(email)}</a>`
+    : "Not provided";
+  const phoneValue = !membershipPhonesFailed && dial
+    ? `<a href="tel:${esc(dial)}">${esc(phone)}</a>`
+    : esc(phoneText);
+  return `
+    <details class="member-contact">
+      <summary>Email and phone</summary>
+      <div class="member-contact-panel" role="group" aria-label="Membership details for ${esc(user.fullName)}">
+        <div class="member-contact-line"><span>Email</span><strong>${emailValue}</strong></div>
+        <div class="member-contact-line"><span>Mobile / WhatsApp number</span><strong>${phoneValue}</strong></div>
+      </div>
+    </details>`;
+}
+
 function adminMembers(
   viewer,
   users = [],
   pendingApplicants = [],
   avatarRows = null,
-  { avatarLoadFailed = false } = {},
+  { avatarLoadFailed = false, membershipPhones = new Map(), membershipPhonesFailed = false } = {},
 ) {
   const canEdit = isSuperRole(viewer.role);
   const canModerate = isAdminRole(viewer.role);
@@ -3984,7 +4015,7 @@ function adminMembers(
             className: "admin-member-avatar",
             decorative: true,
           })}
-          <span class="member-avatar-copy"><strong>${esc(u.fullName)}</strong><span>${esc(u.email)}</span></span>
+          <span class="member-avatar-copy"><strong>${esc(u.fullName)}</strong>${memberContactDisclosure(u, membershipPhones, membershipPhonesFailed)}</span>
         </div>
         <div class="member-admin-controls">
           <div class="member-photo-state">${photoStateLabel(avatarRow)}${photoControls}</div>

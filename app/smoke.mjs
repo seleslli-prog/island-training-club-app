@@ -15,7 +15,14 @@ globalThis.localStorage = {
 
 function islandEccOpenNow(session, now = Date.now()) {
   if (!session?.dateISO || !data.ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session.activityId)) return now;
-  return Math.max(now, data.islandEccSignupOpensAt(session.dateISO));
+  const opensAt = data.islandEccSignupOpensAt(session.dateISO);
+  if (now < opensAt) return opensAt;
+  // After Thursday 6 PM HKT the real clock is past close, but these reserves
+  // need a moment while sign-up is still open.
+  if (data.islandEccSignupClosed(session.dateISO, now)) {
+    return data.islandEccPaymentDeadlineAt(session.dateISO) - 1;
+  }
+  return now;
 }
 const store = await import("./js/store.js");
 const views = await import("./js/views.js");
@@ -2666,7 +2673,7 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=upcoming-booking-count"',
+  'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
   'src="/app/js/app.js?v=upcoming-booking-count"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
@@ -4445,6 +4452,27 @@ const adminMembersHtml = await views.viewAdmin("members");
 if (!adminMembersHtml.includes('data-action="download-indemnity-list"')) {
   throw new Error("Admin Members must expose the indemnity list download");
 }
+{
+  const memberRows = adminMembersHtml.split('class="member-row"').slice(1);
+  const rowFor = (name) => memberRows.find((row) => row.includes(name)) || "";
+  const memberRow = rowFor("Test Member");
+  const adminRow = rowFor("Test Admin");
+  assert.match(memberRow, /<details class="member-contact">\s*<summary>Email and phone<\/summary>/,
+    "Admin member names must hide contact behind a collapsed disclosure");
+  assert.equal(memberRow.includes('<details class="member-contact" open'), false,
+    "member contact stays collapsed until opened");
+  assert.match(memberRow, /aria-label="Membership details for Test Member"/);
+  assert.match(memberRow, /mailto:member@example\.test/);
+  assert.match(memberRow, />member@example\.test</);
+  assert.match(memberRow, /tel:\+85250000002/);
+  assert.match(memberRow, />\+852 5000 0002</);
+  assert.match(memberRow, /Mobile \/ WhatsApp number/);
+  assert.doesNotMatch(memberRow, /<span class="member-avatar-copy"><strong>Test Member<\/strong><span>/,
+    "the email must not stay visible under the member name");
+  assert.match(adminRow, /mailto:admin@example\.test/);
+  assert.match(adminRow, />\+852 5000 0001</);
+  console.log("ok  Admin member contact is a collapsed Membership Details popup");
+}
 const indemnityRecords = await store.listIndemnityRecords();
 if (!indemnityRecords.some((record) => record.fullName === "Test Admin")
     || !indemnityRecords.some((record) => record.fullName === "Test Member")) {
@@ -5498,7 +5526,14 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   views.scheduleState.selected = lockedUi.dateISO;
   views.scheduleState.filter = "all";
   assert.match(views.viewSchedule(), /Opens Monday at 6 PM/);
-  const otherDetail = views.viewActivity(otherIslandEccSlot.id);
+  const otherDetailNow = Date.now;
+  let otherDetail;
+  try {
+    Date.now = () => reservationNow;
+    otherDetail = views.viewActivity(otherIslandEccSlot.id);
+  } finally {
+    Date.now = otherDetailNow;
+  }
   assert.match(otherDetail, /already registered this Saturday|Opens Monday at 6 PM/);
   assert.doesNotMatch(otherDetail, /Book &amp; pay|Book & pay/);
   assert.doesNotMatch(otherDetail, /join-waitlist/);

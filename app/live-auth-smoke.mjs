@@ -3295,6 +3295,25 @@ assert.doesNotMatch(liveActivitiesHtml, /#\/admin\/activity\//);
 console.log("ok  live Admin Activities groups dated controls without a recurring editor");
 
 const membersHtml = await views.viewAdmin("members");
+{
+  const liveMemberRows = membersHtml.split('class="member-row"').slice(1);
+  const liveRowFor = (name) => liveMemberRows.find((row) => row.includes(name)) || "";
+  const rileyRow = liveRowFor("Riley Runner");
+  const tinaRow = liveRowFor("Tina Admin");
+  assert.match(rileyRow, /<details class="member-contact">\s*<summary>Email and phone<\/summary>/);
+  assert.equal(rileyRow.includes('<details class="member-contact" open'), false,
+    "live member contact stays collapsed");
+  assert.match(rileyRow, /mailto:runner@example\.com/);
+  assert.match(rileyRow, /tel:\+85261234567/);
+  assert.match(rileyRow, />\+852 6123 4567</);
+  assert.match(rileyRow, /Mobile \/ WhatsApp number/);
+  assert.doesNotMatch(rileyRow, /<strong>Riley Runner<\/strong><span>runner@example\.com<\/span>/,
+    "live member email must not stay visible under the name");
+  assert.match(tinaRow, /mailto:tina\.admin@example\.com/);
+  assert.match(tinaRow, /Mobile \/ WhatsApp number[\s\S]*Not provided/,
+    "members without a Membership Details phone must say so inside the popup");
+  assert.doesNotMatch(membersHtml, /<details class="member-contact" open/);
+}
 assert.doesNotMatch(membersHtml, /member-summary|Member status counts|data-change="member-(?:status|role)-filter"/);
 for (const [key, options] of Object.entries({
   status: [["all", "All"], ["approved", "Approved"], ["pending", "Pending"], ["declined", "Declined"]],
