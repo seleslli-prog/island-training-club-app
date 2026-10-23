@@ -3300,7 +3300,7 @@ const membersHtml = await views.viewAdmin("members");
   const liveRowFor = (name) => liveMemberRows.find((row) => row.includes(name)) || "";
   const rileyRow = liveRowFor("Riley Runner");
   const tinaRow = liveRowFor("Tina Admin");
-  assert.match(rileyRow, /<details class="member-contact">\s*<summary>Email and phone<\/summary>/);
+  assert.match(rileyRow, /<details class="member-contact">\s*<summary>Contact details<\/summary>/);
   assert.equal(rileyRow.includes('<details class="member-contact" open'), false,
     "live member contact stays collapsed");
   assert.match(rileyRow, /mailto:runner@example\.com/);

@@ -4457,7 +4457,7 @@ if (!adminMembersHtml.includes('data-action="download-indemnity-list"')) {
   const rowFor = (name) => memberRows.find((row) => row.includes(name)) || "";
   const memberRow = rowFor("Test Member");
   const adminRow = rowFor("Test Admin");
-  assert.match(memberRow, /<details class="member-contact">\s*<summary>Email and phone<\/summary>/,
+  assert.match(memberRow, /<details class="member-contact">\s*<summary>Contact details<\/summary>/,
     "Admin member names must hide contact behind a collapsed disclosure");
   assert.equal(memberRow.includes('<details class="member-contact" open'), false,
     "member contact stays collapsed until opened");
