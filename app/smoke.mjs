@@ -2673,9 +2673,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=admin-member-contact"',
+  'href="/app/styles.css?v=upcoming-session-heading"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=upcoming-booking-count"',
+  'src="/app/js/app.js?v=upcoming-session-heading"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -7902,6 +7902,13 @@ console.log("ok  reset");
   );
   assert.match(jumpCase, /scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
   assert.doesNotMatch(jumpCase, /render\(|releaseReservation|deferBooking/);
+  const upcomingTitleAt = rosterAdminHtml.indexOf('id="upcoming-session-title"');
+  const upcomingJumpAt = rosterAdminHtml.indexOf('id="admin-payment-session-jump"');
+  const upcomingReviewAt = rosterAdminHtml.indexOf("Review each venue");
+  assert.ok(upcomingTitleAt >= 0 && upcomingTitleAt < upcomingJumpAt && upcomingJumpAt < upcomingReviewAt,
+    "Upcoming session heading sits above the date menu");
+  assert.match(rosterAdminHtml, /aria-labelledby="upcoming-session-title"/);
+  assert.doesNotMatch(rosterAdminHtml, /<label for="admin-payment-session-jump">/);
   const attendanceAt = rosterAdminHtml.indexOf(`data-attendance-session="${paidSessions[0].id}"`);
   const attendanceSummary = rosterAdminHtml.slice(attendanceAt, rosterAdminHtml.indexOf("</summary>", attendanceAt));
   assert.equal(attendanceSummary.includes(data.sessionTimeLabel(paidSessions[0])), false,

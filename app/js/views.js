@@ -3421,8 +3421,7 @@ function adminFinalizeGym(memberUsers) {
   }).join("");
   const jump = currentSessions.length ? `
     <div class="field admin-payment-jump">
-      <label for="admin-payment-session-jump">Upcoming session</label>
-      <select id="admin-payment-session-jump" data-change="admin-payment-session-jump">
+      <select id="admin-payment-session-jump" data-change="admin-payment-session-jump" aria-labelledby="upcoming-session-title">
         <option value="">Choose a date</option>
         ${jumpOptions}
       </select>
@@ -3436,10 +3435,10 @@ function adminFinalizeGym(memberUsers) {
       <!-- past-sessions-end -->
     </details>` : "";
   return `
-    <section class="admin-control-group mt24" aria-labelledby="hyrox-venue-handoff-title">
-      <div class="section-head"><h3 id="hyrox-venue-handoff-title">Venue handoff</h3></div>
-      <p class="muted small mt8">Review each venue’s booking status, send the confirmed headcount, then record venue confirmation.</p>
+    <section class="admin-control-group mt24" aria-labelledby="upcoming-session-title">
+      <div class="section-head"><h3 id="upcoming-session-title" class="admin-upcoming-session-title">Upcoming session</h3></div>
       ${jump}
+      <p class="muted small mt8">Review each venue’s booking status, send the confirmed headcount, then record venue confirmation.</p>
       ${cards || `<div class="empty mt8">No upcoming venue handoffs.</div>`}
       ${pastSection}
     </section>`;
