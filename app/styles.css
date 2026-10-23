@@ -1539,6 +1539,73 @@ img.detail-photo[src*="itc-fitness-x-faith-2"] {
 .member-avatar-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .member-avatar-copy { min-width: 0; }
 .member-avatar-copy > span { display: block; overflow-wrap: anywhere; }
+
+.member-contact { display: block; position: relative; margin-top: 2px; }
+.member-contact > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 0;
+  list-style: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.member-contact > summary::-webkit-details-marker { display: none; }
+.member-contact > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+  flex: none;
+}
+.member-contact[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.member-contact > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.member-contact-panel {
+  display: grid;
+  gap: 8px;
+  margin: 2px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+}
+.member-row .member-contact-line { display: grid; gap: 1px; min-width: 0; }
+.member-row .member-contact-line span {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.member-row .member-contact-line strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.member-contact-line a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+@media (min-width: 521px) {
+  .member-contact-panel {
+    position: absolute;
+    z-index: 6;
+    left: 0;
+    top: calc(100% - 2px);
+    width: 260px;
+    margin: 0;
+  }
+}
 .admin-member-avatar,
 .admin-pending-avatar { background: var(--surface-3); color: var(--accent); }
 .member-admin-controls { display: grid; justify-items: end; gap: 8px; min-width: min(280px, 52%); }

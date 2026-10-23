@@ -1617,6 +1617,27 @@ export async function listPaymentUsers({ force = false } = {}) {
   return refreshLivePaymentDirectory();
 }
 
+// Membership Details phone. Local profiles store it on the user. Live mode
+// keeps the authoritative number on applications.mobile, not the payment
+// directory, so the Admin members list can show it without putting phone
+// numbers onto payment rosters.
+export async function listMembershipPhones() {
+  requirePaymentAdminActor();
+  if (!isLive() || !supabase) {
+    return new Map(state.users.map((user) => [user.id, String(user.phone || "").trim()]));
+  }
+  const { data, error } = await supabase
+    .from("applications")
+    .select("profile_id, mobile");
+  if (error) throw error;
+  const phones = new Map();
+  for (const row of data || []) {
+    if (!row?.profile_id) continue;
+    phones.set(row.profile_id, String(row.mobile || "").trim());
+  }
+  return phones;
+}
+
 export function pendingPaymentBookings() {
   if (isLive()) {
     const list = liveOps.livePendingBookings();
