@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=upcoming-session-heading"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=upcoming-session-heading"',
+  'src="/app/js/app.js?v=past-session-count"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -8132,7 +8132,7 @@ console.log("ok  reset");
     Date.now = () => atHkt("2026-10-18T00:30:00+08:00");
     const nextDayHtml = await views.viewAdmin("payments");
     const pastHtml = pastSlice(nextDayHtml);
-    assert.match(nextDayHtml, /<details class="admin-section admin-past-sessions">[\s\S]*Past sessions/);
+    assert.match(nextDayHtml, /<summary><h3>Past sessions<\/h3><\/summary>/);
     assert.match(pastHtml, /id="payment-session-hyrox-quarry-bay-early-2026-10-17"/);
     assert.match(pastHtml, /id="payment-session-hyrox-quarry-bay-2026-10-17"/);
     assert.ok(
