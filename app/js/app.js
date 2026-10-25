@@ -2209,6 +2209,32 @@ document.addEventListener("submit", async (e) => {
       break;
     }
 
+    case "form-island-ecc-pay": {
+      e.preventDefault();
+      const user = store.currentUser();
+      if (!form.dataset.session || !user || user.status !== "approved") return;
+      const fd = new FormData(form);
+      const control = form.querySelector('[type="submit"]');
+      const controls = [...form.querySelectorAll("input, button")];
+      try {
+        await withBusyControl(control, "Saving payment…", async () => {
+          const booking = await store.reserveSession(user.id, form.dataset.session);
+          try {
+            const paid = await store.markBookingPaid(booking.id, fd.get("method"), fd.get("ref"));
+            if (!paid) throw new Error("Unable to mark payment");
+          } catch (err) {
+            await store.releaseReservation(booking.id);
+            throw err;
+          }
+          toast("Payment marked — awaiting collector confirmation");
+          location.hash = `#/booking/${booking.id}`;
+        }, { busyKey: form, controls });
+      } catch (err) {
+        toast(err.message || "Unable to take this spot", true);
+      }
+      break;
+    }
+
     case "form-mark-paid": {
       e.preventDefault();
       const booking = store.getBooking(form.dataset.booking);

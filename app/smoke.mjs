@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=upcoming-session-heading"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=past-session-count"',
+  'src="/app/js/app.js?v=hyrox-pay-first"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -5369,6 +5369,44 @@ assert.throws(
 );
 console.log("ok  one Island ECC booking or queue commitment per Saturday");
 {
+  const previousEmail = store.currentUser()?.email;
+  const realNow = Date.now;
+  const openAt = data.islandEccSignupOpensAt("2026-12-05");
+  let directPaid = null;
+  try {
+    store.signIn("member@example.test");
+    Date.now = () => openAt;
+    for (const sessionId of ["hyrox-quarry-bay-2026-12-05", "hyrox-quarry-bay-early-2026-12-05"]) {
+      const detail = views.viewActivity(sessionId);
+      assert.match(detail, new RegExp(`href="#/checkout/${sessionId}"`));
+      assert.match(detail, /Pay · HK\$180/);
+      assert.doesNotMatch(detail, /Reserve spot|form-reserve|Book &amp; pay|Book & pay/);
+      const spotsBefore = store.spotsLeft(store.getSession(sessionId));
+      const payPage = views.viewCheckout(sessionId);
+      assert.equal(typeof payPage, "string");
+      assert.match(payPage, /id="form-island-ecc-pay"/);
+      assert.match(payPage, /I’ve paid/);
+      assert.match(payPage, /Thursday 6 PM/);
+      assert.doesNotMatch(payPage, /form-reserve|Reserve spot/);
+      assert.equal(store.spotsLeft(store.getSession(sessionId)), spotsBefore);
+      assert.equal(store.userReservationFor(store.currentUser().id, sessionId), null);
+    }
+    Date.now = () => openAt - 1;
+    const beforeOpenDetail = views.viewActivity("hyrox-quarry-bay-2026-12-05");
+    assert.match(beforeOpenDetail, /Opens Monday at 6 PM/);
+    assert.doesNotMatch(beforeOpenDetail, /Pay · HK\$180/);
+    Date.now = () => openAt;
+    directPaid = store.reserveSession(store.currentUser().id, "hyrox-quarry-bay-early-2026-12-05", openAt);
+    const markedDirect = store.markBookingPaid(directPaid.id, "FPS", "ITC-PAYFIRST");
+    assert.ok(markedDirect?.paymentMarkedAt, "I’ve paid must mark the new HYROX hold paid");
+  } finally {
+    if (directPaid) directPaid.status = "cancelled";
+    Date.now = realNow;
+    if (previousEmail) store.signIn(previousEmail);
+  }
+  console.log("ok  Island ECC signup opens onto pay without holding a spot");
+}
+{
   const lockedSaturday = "2026-10-24";
   const lockedLate = store.getSession(`hyrox-quarry-bay-${lockedSaturday}`);
   const lockedEarly = store.getSession(`hyrox-quarry-bay-early-${lockedSaturday}`);
@@ -5456,7 +5494,11 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
       .filter((n) => n.kind === "operational_island_ecc_payment_reminder").length,
     0,
   );
-  const markedSaturday = "2026-10-31";
+  let markedSaturday = "2026-10-31";
+  if (store.userBookingFor(signIn.user.id, `hyrox-quarry-bay-${markedSaturday}`)
+      || store.userReservationFor(signIn.user.id, `hyrox-quarry-bay-${markedSaturday}`)) {
+    markedSaturday = "2026-11-28";
+  }
   const markedSession = store.getSession(`hyrox-quarry-bay-${markedSaturday}`);
   const markedHold = store.reserveSession(signIn.user.id, markedSession, data.islandEccSignupOpensAt(markedSaturday));
   store.markBookingPaid(markedHold.id, "PayMe", "MARKED-HOLD");
@@ -5575,6 +5617,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     const thursdayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
     assert.equal(typeof thursdayCheckout, "string");
     assert.match(thursdayCheckout, /Thursday 6 PM/);
+    assert.doesNotMatch(thursdayCheckout, /form-reserve|Reserve spot/);
     Date.now = () => data.islandEccPaymentDeadlineAt("2026-12-05");
     const fridayCheckout = views.viewCheckout("hyrox-quarry-bay-2026-12-05");
     assert.equal(fridayCheckout.redirect, "#/activity/hyrox-quarry-bay-2026-12-05");

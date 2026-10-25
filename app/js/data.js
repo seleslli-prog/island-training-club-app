@@ -466,8 +466,8 @@ export function sessionsInRange(activities, fromDate, days) {
 // A session counts as past once its start time has passed — a date-only
 // check would keep this morning's session "upcoming" (and bookable) all day.
 // Works for live sessions and booking snapshots (both carry dateISO + time).
-export function sessionStarted(s) {
-  return hktEventStartMs(s.dateISO, s.time) <= Date.now();
+export function sessionStarted(s, now = Date.now()) {
+  return hktEventStartMs(s.dateISO, s.time) <= now;
 }
 
 export function findSession(activities, sessionId) {

@@ -2355,7 +2355,7 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
   if (!session) throw new Error("Unknown session");
   if (session.kind !== "paid") throw new Error("Session is not paid");
   if (session.cancelled) throw new Error("Session is cancelled");
-  if (sessionStarted(session)) throw new Error("Session has already started");
+  if (sessionStarted(session, now)) throw new Error("Session has already started");
   if (spotsLeft(session) <= 0) throw new Error("Session is full");
   if (isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now)) {
     throw new Error(ISLAND_ECC_SIGNUP_LOCKED_ERROR);

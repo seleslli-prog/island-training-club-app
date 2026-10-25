@@ -887,6 +887,13 @@ export function viewActivity(sessionId, options) {
         <button class="btn" type="button" data-action="confirm-own-collector-session" data-session="${s.id}">Confirm my spot · ${fmtMoney(s.price)}</button>
         ${directionsLink}
       </div>`;
+  } else if (isMember && ISLAND_ECC_HYROX_ACTIVITY_IDS.has(s.activityId)) {
+    actionBlock = `
+      <div class="btn-row">
+        <a class="btn" href="#/checkout/${s.id}">Pay · ${fmtMoney(s.price)}</a>
+        ${directionsLink}
+      </div>
+      <p class="muted small mt8 center">Pay now to take the spot. Leaving this page does not hold a place.</p>`;
   } else if (isMember) {
     actionBlock = `
       <div class="btn-row">
@@ -2488,6 +2495,63 @@ function viewApplyLocal() {
 
 // --- Checkout --------------------------------------------------------------------------------
 
+function islandEccDirectPayHtml(session, user) {
+  const collector = store.collectorFor(session.id);
+  const cname = collector ? esc(collector.preferredName || collector.fullName) : "the on-duty collector";
+  const payouts = collector ? store.collectorPayoutsFor(collector.id) : null;
+  const payme = payouts?.paymeLink || collector?.paymeLink || "";
+  const fps = payouts?.fpsPhone || collector?.fpsPhone || "";
+  const raw = `${user.id}-${session.id}`.replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase();
+  const paymentReference = `ITC-${raw || "PAYMENT"}`;
+  const memberName = user.fullName || user.preferredName || "ITC Member";
+  const paymentNote = `${session.name} · ${fmtDate(session.dateISO)} · ${session.location || "Venue TBC"} · ${memberName}`;
+  return `
+    <a class="back-link" href="#/activity/${session.id}">← ${esc(session.name)}</a>
+    <div class="kicker mt16">Pay to secure your spot</div>
+    <h1 class="display sm">${fmtMoney(session.price)} to ${cname}.</h1>
+    <p class="subcopy mt8">Sign-up stays open until <strong>Thursday 6 PM</strong>. The spot is taken only when you tap I’ve paid.</p>
+    <div class="card mt16"><div class="card-body">
+      <h3>PayMe</h3>
+      ${payme ? `
+        <p class="muted small">PayMe opens the collector’s profile. Enter the displayed amount of <strong>${fmtMoney(session.price)}</strong> after it opens.</p>
+        <a class="btn mt8" href="${esc(payme)}" target="_blank" rel="noopener">PayMe to ${cname} · ${fmtMoney(session.price)}</a>
+      ` : `
+        <p class="muted small">PayMe is unavailable for this collector. Please use FPS below to send <strong>${fmtMoney(session.price)}</strong>.</p>
+        <button class="btn mt8" type="button" disabled>PayMe unavailable</button>
+      `}
+      <p class="muted small mt8">Suggested payment note</p>
+      <p><strong>${esc(paymentNote)}</strong>
+        <button class="btn ghost sm" type="button" data-action="copy-payment-note" data-note="${esc(paymentNote)}">Copy note</button>
+      </p>
+      <h3 class="mt24">FPS to ${cname}</h3>
+      <p class="muted small">Copy these details, then switch to your banking app to make the transfer.</p>
+      <div class="receipt-lines">
+        <div class="line"><span>Assigned collector / payee</span><strong>${cname}</strong></div>
+        <div class="line"><span>FPS mobile number</span><strong class="mono">${fps ? esc(fps) : "Not available"}</strong></div>
+        <div class="line"><span>Exact amount</span><strong>${fmtMoney(session.price)}</strong></div>
+        <div class="line total"><span>Suggested reference</span><strong class="mono">${esc(paymentReference)}</strong></div>
+      </div>
+      <div class="btn-row two">
+        ${fps ? `<button class="btn ghost" type="button" data-action="copy-fps"
+          data-copy-value="${esc(fps)}" data-copy-kind="number" aria-label="Copy FPS number">Copy FPS number</button>` : ""}
+        <button class="btn ghost" type="button" data-action="copy-reference"
+          data-copy-value="${esc(paymentReference)}" data-copy-kind="reference" aria-label="Copy payment reference">Copy reference</button>
+      </div>
+    </div></div>
+    <form id="form-island-ecc-pay" class="mt16" data-session="${session.id}">
+      <div class="card"><div class="card-body">
+        <h3>Done? Tell the collector</h3>
+        <div class="field-row">
+          <label class="chip"><input type="radio" name="method" value="PayMe"${payme ? " checked" : " disabled"}> PayMe</label>
+          <label class="chip"><input type="radio" name="method" value="FPS"${payme ? "" : " checked"}> FPS</label>
+        </div>
+        <div class="field"><label for="pay-ref">Reference (optional)</label><input id="pay-ref" name="ref" value="${esc(paymentReference)}"></div>
+        <p class="muted small mt8">Nothing is held until you tap I’ve paid. ${cname} confirms in-app when the money lands.</p>
+      </div></div>
+      <button class="btn mt16" type="submit">I’ve paid</button>
+    </form>`;
+}
+
 export function viewCheckout(sessionId) {
   if (store.isRetiredHyroxMemberRoute("checkout", sessionId)) return viewRetiredSession();
   const s = store.getSession(sessionId);
@@ -2529,6 +2593,7 @@ export function viewCheckout(sessionId) {
     </div></div>
     <button class="btn mt16" type="button" data-action="confirm-own-collector-session" data-session="${s.id}">Confirm my spot · ${fmtMoney(s.price)}</button>`;
   }
+  if (ISLAND_ECC_HYROX_ACTIVITY_IDS.has(s.activityId)) return islandEccDirectPayHtml(s, user);
   const islandEccPayBy = ISLAND_ECC_HYROX_ACTIVITY_IDS.has(s.activityId)
     && !islandEccHardThursday(s.dateISO)
     && Date.now() >= islandEccPaymentDeadlineAt(s.dateISO)
