@@ -6080,13 +6080,33 @@ try {
   const lunch = store.upcomingSessions(21).find((session) => session.activityId === "lunch" && !data.sessionStarted(session));
   if (!lunch) throw new Error("expected an upcoming Post-Training Lunch");
   const rsvp = await store.rsvpSession(store.currentUser().id, lunch.id);
-  const rsvpProfile = await views.viewAccount();
-  const rsvpPage = await views.viewAccount("bookings", "attended");
-  if (statCount(rsvpProfile, "#/account/bookings/attended") !== attendedBeforeRsvp + 1
-      || countBookingCards(rsvpPage) !== attendedBeforeRsvp + 1
-      || !rsvpPage.includes("Post-Training Lunch")) {
+  const joinedProfile = await views.viewAccount();
+  const joinedPage = await views.viewAccount("bookings", "attended");
+  if (statCount(joinedProfile, "#/account/bookings/attended") !== attendedBeforeRsvp
+      || countBookingCards(joinedPage) !== attendedBeforeRsvp
+      || joinedPage.includes("Post-Training Lunch")) {
     failures++;
-    console.error("FAIL a confirmed RSVP should count on Attended");
+    console.error("FAIL a confirmed RSVP should stay off Attended until the Hong Kong day ends");
+  }
+  const today = data.todayHktISO();
+  rsvp.snapshot.dateISO = today;
+  const sameDayProfile = await views.viewAccount();
+  const sameDayPage = await views.viewAccount("bookings", "attended");
+  if (statCount(sameDayProfile, "#/account/bookings/attended") !== attendedBeforeRsvp
+      || countBookingCards(sameDayPage) !== attendedBeforeRsvp) {
+    failures++;
+    console.error("FAIL a confirmed RSVP should stay off Attended during its Hong Kong day");
+  }
+  const [year, month, day] = today.split("-").map(Number);
+  const yesterday = new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+  rsvp.snapshot.dateISO = yesterday;
+  const endedProfile = await views.viewAccount();
+  const endedPage = await views.viewAccount("bookings", "attended");
+  if (statCount(endedProfile, "#/account/bookings/attended") !== attendedBeforeRsvp + 1
+      || countBookingCards(endedPage) !== attendedBeforeRsvp + 1
+      || !endedPage.includes("Post-Training Lunch")) {
+    failures++;
+    console.error("FAIL a confirmed RSVP should count on Attended after the Hong Kong day ends");
   }
   await store.withdrawRsvp(rsvp.id);
   const afterWithdrawProfile = await views.viewAccount();

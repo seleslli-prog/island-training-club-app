@@ -2251,7 +2251,9 @@ function countsAsAttended(booking) {
   if (booking.status === "attended") return true;
   if (booking.status !== "confirmed") return false;
   const snapshot = bookingDisplaySnapshot(booking);
-  return store.sessionRequiresRsvp(snapshot) && Number(snapshot.price ?? 0) === 0;
+  if (!(store.sessionRequiresRsvp(snapshot) && Number(snapshot.price ?? 0) === 0)) return false;
+  // A confirmed RSVP counts once that Hong Kong calendar day has ended.
+  return typeof snapshot.dateISO === "string" && snapshot.dateISO < todayHktISO();
 }
 
 function accountBookings(user, filter = "all") {
