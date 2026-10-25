@@ -2124,19 +2124,45 @@ async function accountNotifications(user) {
     </div></div>`;
 }
 
+function activityIdFromSessionId(sessionId) {
+  const match = String(sessionId || "").match(/^(.*)-(\d{4}-\d{2}-\d{2})$/);
+  return match ? match[1] : "";
+}
+
+function sessionDateFromId(sessionId) {
+  const match = String(sessionId || "").match(/(\d{4}-\d{2}-\d{2})$/);
+  return match ? match[1] : null;
+}
+
+function rsvpTemplateFallback(activityId) {
+  if (!activityId) return null;
+  if (isLive()) {
+    const template = liveOps.liveActivityTemplates().find((row) => row.activity_id === activityId);
+    if (!template?.requires_rsvp || template.external_payment) return null;
+    if (Number(template.price_hkd ?? 0) > 0) return null;
+    return { requiresRsvp: true, kind: activityId === "lunch" ? "rsvp" : "free", price: 0, name: template.name || null };
+  }
+  const activity = store.getActivity(activityId);
+  if (!activity || !store.sessionRequiresRsvp(activity) || Number(activity.price ?? 0) > 0) return null;
+  return { requiresRsvp: true, kind: activity.kind || "free", price: 0, name: activity.name || null };
+}
+
 function bookingDisplaySnapshot(b) {
   const snapshot = b.snapshot || {};
   const session = b.sessionId ? store.getSession(b.sessionId) : null;
+  // Live sessions older than a week are not loaded. Their booking snapshot
+  // still has the date, and the activity template still says it is an RSVP.
+  const template = session ? null : rsvpTemplateFallback(activityIdFromSessionId(b.sessionId));
   return {
     ...snapshot,
-    dateISO: snapshot.dateISO ?? session?.dateISO,
+    dateISO: snapshot.dateISO ?? session?.dateISO ?? sessionDateFromId(b.sessionId),
     time: snapshot.time ?? snapshot.startTime ?? session?.time ?? session?.startTime,
-    name: snapshot.name ?? session?.name ?? "ITC HYROX",
+    name: snapshot.name ?? session?.name ?? template?.name ?? "ITC HYROX",
     location: snapshot.location ?? session?.location,
     durationMin: snapshot.durationMin ?? session?.durationMin,
-    kind: snapshot.kind ?? session?.kind,
-    requiresRsvp: snapshot.requiresRsvp ?? session?.requiresRsvp ?? snapshot.kind === "rsvp",
-    price: snapshot.price ?? session?.price ?? snapshot.priceHkd,
+    kind: session?.kind ?? template?.kind ?? snapshot.kind,
+    requiresRsvp: snapshot.requiresRsvp ?? session?.requiresRsvp ?? template?.requiresRsvp ?? snapshot.kind === "rsvp",
+    price: snapshot.price ?? session?.price ?? snapshot.priceHkd ?? template?.price,
   };
 }
 

@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=attended-count"',
+  'src="/app/js/app.js?v=attended-rsvp-day"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -6108,7 +6108,23 @@ try {
     failures++;
     console.error("FAIL a confirmed RSVP should count on Attended after the Hong Kong day ends");
   }
-  await store.withdrawRsvp(rsvp.id);
+  rsvp.sessionId = "lunch-2026-10-17";
+  rsvp.snapshot = {
+    name: "Post-Training Lunch",
+    dateISO: "2026-10-17",
+    time: "12:00",
+    price: 0,
+    kind: "paid",
+  };
+  const oct17Profile = await views.viewAccount();
+  const oct17Page = await views.viewAccount("bookings", "attended");
+  if (statCount(oct17Profile, "#/account/bookings/attended") !== attendedBeforeRsvp + 1
+      || countBookingCards(oct17Page) !== attendedBeforeRsvp + 1
+      || !oct17Page.includes("Post-Training Lunch")) {
+    failures++;
+    console.error("FAIL the 17 Oct lunch RSVP should count on Attended");
+  }
+  rsvp.status = "cancelled";
   const afterWithdrawProfile = await views.viewAccount();
   const afterWithdrawPage = await views.viewAccount("bookings", "attended");
   if (statCount(afterWithdrawProfile, "#/account/bookings/attended") !== attendedBeforeRsvp
