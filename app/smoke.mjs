@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=hyrox-pay-first"',
+  'src="/app/js/app.js?v=attended-count"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -6073,7 +6073,52 @@ if (!pastBookingsHtml.includes('class="chip active" href="#/account/bookings/pas
 }
 if (!attendedBookingsHtml.includes("Attended sessions will appear here.")) {
   failures++;
-  console.error("FAIL Attended link should render the attended-only view");
+  console.error("FAIL a paid HYROX booking stays off Attended until Mark Arrived");
+}
+try {
+  const attendedBeforeRsvp = statCount(await views.viewAccount(), "#/account/bookings/attended");
+  const lunch = store.upcomingSessions(21).find((session) => session.activityId === "lunch" && !data.sessionStarted(session));
+  if (!lunch) throw new Error("expected an upcoming Post-Training Lunch");
+  const rsvp = await store.rsvpSession(store.currentUser().id, lunch.id);
+  const joinedProfile = await views.viewAccount();
+  const joinedPage = await views.viewAccount("bookings", "attended");
+  if (statCount(joinedProfile, "#/account/bookings/attended") !== attendedBeforeRsvp
+      || countBookingCards(joinedPage) !== attendedBeforeRsvp
+      || joinedPage.includes("Post-Training Lunch")) {
+    failures++;
+    console.error("FAIL a confirmed RSVP should stay off Attended until the Hong Kong day ends");
+  }
+  const today = data.todayHktISO();
+  rsvp.snapshot.dateISO = today;
+  const sameDayProfile = await views.viewAccount();
+  const sameDayPage = await views.viewAccount("bookings", "attended");
+  if (statCount(sameDayProfile, "#/account/bookings/attended") !== attendedBeforeRsvp
+      || countBookingCards(sameDayPage) !== attendedBeforeRsvp) {
+    failures++;
+    console.error("FAIL a confirmed RSVP should stay off Attended during its Hong Kong day");
+  }
+  const [year, month, day] = today.split("-").map(Number);
+  const yesterday = new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+  rsvp.snapshot.dateISO = yesterday;
+  const endedProfile = await views.viewAccount();
+  const endedPage = await views.viewAccount("bookings", "attended");
+  if (statCount(endedProfile, "#/account/bookings/attended") !== attendedBeforeRsvp + 1
+      || countBookingCards(endedPage) !== attendedBeforeRsvp + 1
+      || !endedPage.includes("Post-Training Lunch")) {
+    failures++;
+    console.error("FAIL a confirmed RSVP should count on Attended after the Hong Kong day ends");
+  }
+  await store.withdrawRsvp(rsvp.id);
+  const afterWithdrawProfile = await views.viewAccount();
+  const afterWithdrawPage = await views.viewAccount("bookings", "attended");
+  if (statCount(afterWithdrawProfile, "#/account/bookings/attended") !== attendedBeforeRsvp
+      || countBookingCards(afterWithdrawPage) !== attendedBeforeRsvp) {
+    failures++;
+    console.error("FAIL withdrawing an RSVP should drop it from Attended");
+  }
+} catch (err) {
+  failures++;
+  console.error(`FAIL confirmed RSVP Attended count: ${err.message}`);
 }
 if (statCount(bookingProfileHtml, "#/account/bookings") !== countBookingCards(upcomingBookingsHtml)) {
   failures++;

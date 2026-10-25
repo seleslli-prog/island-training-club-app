@@ -1823,7 +1823,7 @@ async function accountMember(user) {
 
   const bookings = visibleBookingsForUser(user.id);
   const upcomingCount = bookings.filter(isUpcomingBooking).length;
-  const attended = bookings.filter((b) => b.status === "attended").length;
+  const attended = bookings.filter(countsAsAttended).length;
 
   return `
     <div class="kicker">Profile</div>
@@ -2246,6 +2246,16 @@ function isPastBooking(booking) {
   return booking.status !== "cancelled" && sessionStarted(bookingDisplaySnapshot(booking));
 }
 
+function countsAsAttended(booking) {
+  if (!booking || booking.status === "cancelled" || booking.status === "withdrawn") return false;
+  if (booking.status === "attended") return true;
+  if (booking.status !== "confirmed") return false;
+  const snapshot = bookingDisplaySnapshot(booking);
+  if (!(store.sessionRequiresRsvp(snapshot) && Number(snapshot.price ?? 0) === 0)) return false;
+  // A confirmed RSVP counts once that Hong Kong calendar day has ended.
+  return typeof snapshot.dateISO === "string" && snapshot.dateISO < todayHktISO();
+}
+
 function accountBookings(user, filter = "all") {
   const records = visibleBookingsForUser(user.id);
   const upcoming = sortBookings(records.filter(isUpcomingBooking));
@@ -2254,10 +2264,7 @@ function accountBookings(user, filter = "all") {
     records.filter((booking) => booking.status === "cancelled"),
     "desc"
   );
-  const attended = sortBookings(
-    records.filter((booking) => booking.status === "attended"),
-    "desc"
-  );
+  const attended = sortBookings(records.filter(countsAsAttended), "desc");
   const visible = filter === "upcoming" ? upcoming
     : filter === "past" ? past
       : filter === "attended" ? attended
@@ -2269,7 +2276,7 @@ function accountBookings(user, filter = "all") {
         : "Your bookings will appear here.";
   const groups = filter === "upcoming" ? bookingGroup("Upcoming", upcoming)
     : filter === "past" ? bookingGroup("Past", past)
-      : filter === "attended" ? bookingGroup("Past", attended)
+      : filter === "attended" ? bookingGroup("Attended", attended)
         : `${bookingGroup("Upcoming", upcoming)}${bookingGroup("Past", past)}${bookingGroup("Cancelled", cancelled)}`;
   return `
     ${profileSubpageHeader({ title: "Bookings" })}
