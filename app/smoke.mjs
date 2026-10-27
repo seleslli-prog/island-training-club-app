@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=attended-rsvp-day"',
+  'src="/app/js/app.js?v=awaiting-pay-badge"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -4014,35 +4014,77 @@ if (!unpaidBadgeSession) {
   failures++;
   console.error("FAIL smoke needs an upcoming HYROX session for badge state checks");
 } else {
-  const unpaidReservation = store.reserveSession("fixture-member", unpaidBadgeSession.id, islandEccOpenNow(unpaidBadgeSession));
-  const unpaidBadgeHtml = views.viewActivity(unpaidBadgeSession.id);
-  if (!unpaidBadgeHtml.includes('badge warn">To be paid</span>')) {
-    failures++;
-    console.error("FAIL reserved unpaid paid activity should show To be paid");
-  } else console.log("ok  reserved unpaid paid activity shows To be paid");
-  if (store.markBookingPaid(unpaidReservation.id, "FPS", "BADGE-STATE")) {
-    const awaitingBadgeHtml = views.viewActivity(unpaidBadgeSession.id);
-    if (!awaitingBadgeHtml.includes('badge warn">Awaiting confirmation</span>')) {
+  const priorSchedule = { ...views.scheduleState };
+  try {
+    const badgeWeekMs = 7 * 24 * 3600 * 1000;
+    views.scheduleState.weekOffset = Math.round(
+      (data.sundayOf(data.parseISO(unpaidBadgeSession.dateISO)) - data.sundayOf(data.todayLocal())) / badgeWeekMs
+    );
+    views.scheduleState.selected = unpaidBadgeSession.dateISO;
+    views.scheduleState.filter = "all";
+    const scheduleBadgeRow = () => {
+      const html = views.viewSchedule();
+      const start = html.indexOf(`href="#/activity/${unpaidBadgeSession.id}"`);
+      const end = html.indexOf("</a>", start);
+      return start >= 0 ? html.slice(start, end) : "";
+    };
+    const unpaidReservation = store.reserveSession("fixture-member", unpaidBadgeSession.id, islandEccOpenNow(unpaidBadgeSession));
+    const unpaidBadgeHtml = views.viewActivity(unpaidBadgeSession.id);
+    if (!unpaidBadgeHtml.includes('badge warn">To be paid</span>')) {
       failures++;
-      console.error("FAIL marked-paid paid activity should show Awaiting confirmation");
-    } else console.log("ok  marked-paid paid activity shows Awaiting confirmation");
-  } else {
-    failures++;
-    console.error("FAIL badge-state fixture should mark its reservation paid");
-  }
-  store.signOut();
-  store.signIn("admin@example.test");
-  if (!store.confirmBookingPayment(unpaidReservation.id)) {
-    failures++;
-    console.error("FAIL badge-state fixture should confirm its paid reservation");
-  } else {
+      console.error("FAIL reserved unpaid paid activity should show To be paid");
+    } else console.log("ok  reserved unpaid paid activity shows To be paid");
+    const unpaidScheduleRow = scheduleBadgeRow();
+    if (!unpaidScheduleRow.includes("Pay by ") || unpaidScheduleRow.includes("Awaiting confirmation")) {
+      failures++;
+      console.error("FAIL unpaid reservation schedule row should show the pay deadline");
+    } else console.log("ok  unpaid reservation schedule row shows the pay deadline");
+    if (!unpaidBadgeHtml.includes("Pay by ") || !unpaidBadgeHtml.includes(`href="#/pay/${unpaidReservation.id}"`)) {
+      failures++;
+      console.error("FAIL unpaid reservation activity should still offer Pay now");
+    } else console.log("ok  unpaid reservation activity still offers Pay now");
+    if (store.markBookingPaid(unpaidReservation.id, "FPS", "BADGE-STATE")) {
+      const awaitingBadgeHtml = views.viewActivity(unpaidBadgeSession.id);
+      const awaitingScheduleRow = scheduleBadgeRow();
+      if (!awaitingBadgeHtml.includes('badge warn">Awaiting confirmation</span>')) {
+        failures++;
+        console.error("FAIL marked-paid paid activity should show Awaiting confirmation");
+      } else console.log("ok  marked-paid paid activity shows Awaiting confirmation");
+      if (!awaitingScheduleRow.includes('badge warn">Awaiting confirmation</span>')
+          || awaitingScheduleRow.includes("Pay by ")) {
+        failures++;
+        console.error("FAIL marked-paid schedule row should show Awaiting confirmation");
+      } else console.log("ok  marked-paid schedule row shows Awaiting confirmation");
+      if (awaitingBadgeHtml.includes("Pay by ") || awaitingBadgeHtml.includes(`href="#/pay/${unpaidReservation.id}"`)) {
+        failures++;
+        console.error("FAIL marked-paid activity should not ask the member to pay by the deadline");
+      } else console.log("ok  marked-paid activity no longer asks for payment");
+    } else {
+      failures++;
+      console.error("FAIL badge-state fixture should mark its reservation paid");
+    }
     store.signOut();
-    store.signIn("member@example.test");
-    const confirmedBadgeHtml = views.viewActivity(unpaidBadgeSession.id);
-    if (!confirmedBadgeHtml.includes('badge free">Paid</span>')) {
+    store.signIn("admin@example.test");
+    if (!store.confirmBookingPayment(unpaidReservation.id)) {
       failures++;
-      console.error("FAIL confirmed paid activity should show Paid");
-    } else console.log("ok  confirmed paid activity shows Paid");
+      console.error("FAIL badge-state fixture should confirm its paid reservation");
+    } else {
+      store.signOut();
+      store.signIn("member@example.test");
+      const confirmedBadgeHtml = views.viewActivity(unpaidBadgeSession.id);
+      const confirmedScheduleRow = scheduleBadgeRow();
+      if (!confirmedBadgeHtml.includes('badge free">Paid</span>')) {
+        failures++;
+        console.error("FAIL confirmed paid activity should show Paid");
+      } else console.log("ok  confirmed paid activity shows Paid");
+      if (!confirmedScheduleRow.includes("Booked") || confirmedScheduleRow.includes("Pay by ")
+          || confirmedScheduleRow.includes("Awaiting confirmation")) {
+        failures++;
+        console.error("FAIL confirmed schedule row should show Booked");
+      } else console.log("ok  confirmed schedule row shows Booked");
+    }
+  } finally {
+    Object.assign(views.scheduleState, priorSchedule);
   }
 }
 store.signOut();
