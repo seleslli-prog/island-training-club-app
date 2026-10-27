@@ -174,6 +174,8 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
     end = store.sessionRequiresRsvp(s)
       ? `<span class="badge free booked">Going</span><span class="spots">${store.attendeeCountFor(s)} going</span>`
       : `<span class="badge free booked">${booked.status === "attended" ? "Arrived" : "Booked"}</span>`;
+  } else if (reserved?.paymentMarkedAt) {
+    end = `<span class="badge warn">Awaiting confirmation</span>`;
   } else if (reserved) {
     end = `<span class="badge warn">Pay by ${fmtDeadline(reserved.payDeadlineAt)}</span>`;
   } else if (store.islandEccSignupLocked(s)) {
@@ -819,6 +821,14 @@ export function viewActivity(sessionId, options) {
       </div>
       <div class="btn-row">
         <button class="btn" type="button" data-action="confirm-own-collector-payment" data-booking="${reservation.id}">Confirm my payment</button>
+        ${directionsLink}
+      </div>` : reservation.paymentMarkedAt ? `
+      <div class="banner mt16">
+        <span class="kicker">Awaiting confirmation</span>
+        <p>The collector is checking this payment. Your spot stays held.</p>
+      </div>
+      <div class="btn-row">
+        <a class="btn" href="#/booking/${reservation.id}">View booking</a>
         ${directionsLink}
       </div>` : `
       <div class="banner mt16">
