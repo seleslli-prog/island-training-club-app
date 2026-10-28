@@ -4017,7 +4017,7 @@ function adminMembers(
   const avatarById = new Map((avatarRows || []).map((row) => [row.profileId, row]));
   const photoStateLabel = (row) => {
     if (avatarLoadFailed) return '<span class="badge neutral">Photo status unavailable</span>';
-    if (!row || row.source === "initials" && row.state === "active") return '<span class="badge neutral">No photo</span>';
+    if (!row || row.source === "initials" && row.state === "active") return "";
     if (row.state === "pending_review") return '<span class="badge warn">Photo pending review</span>';
     if (row.state === "hidden") return '<span class="badge danger">Photo hidden</span>';
     return `<span class="badge free">${row.source === "google" ? "Google photo" : "Custom photo"}</span>`;
@@ -4098,6 +4098,10 @@ function adminMembers(
       : avatarRow?.state === "hidden" && avatarRow.moderationReason
       ? `<p class="muted small avatar-moderation-reason">Reason: ${esc(avatarRow.moderationReason)}</p>`
       : "";
+    const photoLabel = photoStateLabel(avatarRow);
+    const photoState = photoLabel || photoControls
+      ? `<div class="member-photo-state">${photoLabel}${photoControls}</div>`
+      : "";
     const roleBadge =
       u.status === "pending"
         ? '<span class="badge warn">Pending</span>'
@@ -4126,7 +4130,7 @@ function adminMembers(
           <span class="member-avatar-copy"><strong>${esc(u.fullName)}</strong></span>
         </div>
         <div class="member-admin-controls">
-          <div class="member-photo-state">${photoStateLabel(avatarRow)}${photoControls}</div>
+          ${photoState}
           ${editor}
         </div>
         ${memberContactDisclosure(u, membershipPhones, membershipPhonesFailed)}

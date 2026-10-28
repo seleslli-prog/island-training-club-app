@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=awaiting-pay-badge"',
+  'src="/app/js/app.js?v=member-no-photo"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -4513,7 +4513,19 @@ if (!adminMembersHtml.includes('data-action="download-indemnity-list"')) {
     "the email must not stay visible under the member name");
   assert.match(adminRow, /mailto:admin@example\.test/);
   assert.match(adminRow, />\+852 5000 0001</);
+  assert.doesNotMatch(memberRow, />No photo</, "a member without a photo must not show a No photo badge");
+  assert.doesNotMatch(adminRow, />No photo</, "an admin without a photo must not show a No photo badge");
+  const photoLabelSource = integratedViewSource.slice(
+    integratedViewSource.indexOf("const photoStateLabel"),
+    integratedViewSource.indexOf("const pendingRows"),
+  );
+  assert.match(photoLabelSource, /Google photo/);
+  assert.match(photoLabelSource, /Custom photo/);
+  assert.match(photoLabelSource, /Photo pending review/);
+  assert.match(photoLabelSource, /Photo hidden/);
+  assert.doesNotMatch(photoLabelSource, />No photo</);
   console.log("ok  Admin member contact is a collapsed Membership Details popup");
+  console.log("ok  members without a photo omit the No photo badge");
 }
 const indemnityRecords = await store.listIndemnityRecords();
 if (!indemnityRecords.some((record) => record.fullName === "Test Admin")
