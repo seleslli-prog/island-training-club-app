@@ -571,6 +571,16 @@ const fakeSupabase = {
         select() {
           return {
             eq(column, value) {
+              if (column === "role" && value === "pending") {
+                return {
+                  then(resolve, reject) {
+                    return Promise.resolve({
+                      data: structuredClone(pendingProfiles).filter((row) => row.role === "pending"),
+                      error: profileListError,
+                    }).then(resolve, reject);
+                  },
+                };
+              }
               if (column !== "id" || value !== authUser.id) {
                 throw new Error("Profile query did not target the signed-in user");
               }
@@ -725,6 +735,18 @@ const fakeSupabase = {
         select() {
           return {
             eq(column, value) {
+              if (column === "profiles.role") {
+                return {
+                  then(resolve, reject) {
+                    return Promise.resolve({
+                      data: Array.from(applicationRows.values())
+                        .filter((row) => row.profiles?.role === value)
+                        .map((row) => structuredClone(row)),
+                      error: applicationListError,
+                    }).then(resolve, reject);
+                  },
+                };
+              }
               if (column !== "profile_id" || value !== authUser.id) {
                 throw new Error("Application query did not target the signed-in user");
               }

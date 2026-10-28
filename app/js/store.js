@@ -98,6 +98,9 @@ let livePublishedAnnouncements = [];
 let livePaymentDirectory = new Map();
 let livePaymentDirectoryFetchedAt = 0;
 let livePaymentDirectoryRefresh = null;
+let liveMembershipPhones = null;
+let liveMembershipPhonesFetchedAt = 0;
+let liveMembershipPhonesRefresh = null;
 let liveNotifications = null;
 const liveReplacementTokens = new Map();
 const livePendingReplacementStates = new Map();
@@ -1626,16 +1629,47 @@ export async function listMembershipPhones() {
   if (!isLive() || !supabase) {
     return new Map(state.users.map((user) => [user.id, String(user.phone || "").trim()]));
   }
-  const { data, error } = await supabase
-    .from("applications")
-    .select("profile_id, mobile");
-  if (error) throw error;
-  const phones = new Map();
-  for (const row of data || []) {
-    if (!row?.profile_id) continue;
-    phones.set(row.profile_id, String(row.mobile || "").trim());
+  if (liveMembershipPhonesRefresh) return liveMembershipPhonesRefresh;
+  const fresh = liveMembershipPhones
+    && Date.now() - liveMembershipPhonesFetchedAt <= LIVE_PROFILE_TTL_MS;
+  if (fresh) return liveMembershipPhones;
+  if (liveMembershipPhones) {
+    void refreshLiveMembershipPhones().catch((err) => {
+      console.warn("membership phone refresh failed", err);
+    });
+    return liveMembershipPhones;
   }
-  return phones;
+  return refreshLiveMembershipPhones();
+}
+
+async function refreshLiveMembershipPhones() {
+  if (liveMembershipPhonesRefresh) return liveMembershipPhonesRefresh;
+  const pending = (async () => {
+    const { data, error } = await supabase
+      .from("applications")
+      .select("profile_id, mobile");
+    if (error) throw error;
+    const phones = new Map();
+    for (const row of data || []) {
+      if (!row?.profile_id) continue;
+      phones.set(row.profile_id, String(row.mobile || "").trim());
+    }
+    liveMembershipPhones = phones;
+    liveMembershipPhonesFetchedAt = Date.now();
+    return phones;
+  })();
+  liveMembershipPhonesRefresh = pending;
+  try {
+    return await pending;
+  } finally {
+    if (liveMembershipPhonesRefresh === pending) liveMembershipPhonesRefresh = null;
+  }
+}
+
+function clearAdminMemberListCaches() {
+  liveMembershipPhones = null;
+  liveMembershipPhonesFetchedAt = 0;
+  liveMembershipPhonesRefresh = null;
 }
 
 export function pendingPaymentBookings() {
@@ -4911,6 +4945,7 @@ export async function signOutLive() {
   livePaymentDirectory = new Map();
   livePaymentDirectoryFetchedAt = 0;
   livePaymentDirectoryRefresh = null;
+  clearAdminMemberListCaches();
   liveNotifications = null;
   livePublishedAnnouncements = [];
   invalidateLiveApplicationCache();
@@ -5023,6 +5058,7 @@ export async function updateProfileRole(profileId, newRole, reason, expectedRole
   }
   livePaymentDirectory = new Map();
   livePaymentDirectoryFetchedAt = 0;
+  clearAdminMemberListCaches();
   // The DB trigger writes role_changes + welcome notification automatically.
   // Persisting `reason` to role_changes.reason requires a small Postgres
   // RPC that sets a session-local config; deferred. ⏳
@@ -5402,10 +5438,10 @@ export async function listPendingApplications() {
   if (!isLive() || !supabase) return pendingApplicants();
   const { data, error } = await supabase
     .from("applications")
-    .select("*, profiles(id, email, full_name, role)");
+    .select("*, profiles!inner(id, email, full_name, role)")
+    .eq("profiles.role", "pending");
   if (error) throw error;
   return (data || [])
-    .filter((a) => a.profiles?.role === "pending")
     .map((a) => ({
       id: a.profiles.id,
       fullName: a.profiles.full_name || a.profiles.email,
@@ -5425,6 +5461,15 @@ export async function listPendingApplications() {
     }));
 }
 
+async function listPendingProfiles() {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, full_name, role, created_at")
+    .eq("role", "pending");
+  if (error) throw error;
+  return data || [];
+}
+
 export async function listApprovalCandidates() {
   if (!isLive() || !supabase) {
     return pendingApplicants().map((user) => ({
@@ -5433,7 +5478,7 @@ export async function listApprovalCandidates() {
     }));
   }
   const [profiles, applications] = await Promise.all([
-    listProfiles(),
+    listPendingProfiles(),
     listPendingApplications(),
   ]);
   const applicationByProfile = new Map(applications.map((item) => [item.id, item]));

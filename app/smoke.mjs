@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=member-no-photo"',
+  'src="/app/js/app.js?v=members-tab-load"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -2822,8 +2822,25 @@ assert.match(integratedStyleSource, /avatar\.is-ready \.avatar__image/,
   "initials must remain visible until the profile photo is ready");
 assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"), /itc\.ownAvatar\.v1/,
   "own avatar presentation must persist across reloads");
-assert.match(integratedViewSource, /listPaymentUsers\(\{ force: true \}\)[\s\S]*listApprovalCandidates/,
-  "Admin Members must load the directory and approval queue in parallel");
+assert.match(integratedViewSource, /canonicalTab === "members"[\s\S]*?Promise\.all\(\[[\s\S]*?listPaymentUsers\(\)[\s\S]*?listApprovalCandidates\(/,
+  "Admin Members must load the cached directory and approval queue in parallel");
+assert.doesNotMatch(
+  integratedViewSource.slice(
+    integratedViewSource.indexOf('canonicalTab === "members"'),
+    integratedViewSource.indexOf('canonicalTab === "prayers"'),
+  ),
+  /listPaymentUsers\(\{ force: true \}\)/,
+  "Admin Members must not force a directory reload on every visit",
+);
+assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
+  /profiles!inner\(id, email, full_name, role\)[\s\S]{0,80}\.eq\("profiles\.role", "pending"\)/,
+  "Admin Members must load pending applications only");
+assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
+  /function listPendingProfiles\(\)[\s\S]{0,240}\.eq\("role", "pending"\)[\s\S]{0,400}listPendingProfiles\(\)/,
+  "Admin Members must load pending profiles only for the approval queue");
+assert.match(readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
+  /liveMembershipPhonesFetchedAt <= LIVE_PROFILE_TTL_MS/,
+  "Admin member phones must reuse the directory cache window");
 assert.match(integratedAppSource,
   /visibilitychange[\s\S]*?store\.startupRoute\(location\.hash, store\.currentUser\(\)\?\.id\)/,
   "resume must recover an unexpectedly empty hash before refreshing the route");
