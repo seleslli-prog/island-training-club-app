@@ -3119,13 +3119,16 @@ export async function viewAdmin(tab = "members") {
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   } else if (canonicalTab === "members") {
     const cachedAvatars = store.peekAdminAvatarRows();
-    if (!cachedAvatars) {
-      void store.getAdminAvatarRows().catch(() => {
-        avatarLoadFailed = true;
-      });
-    }
+    let fetchedAvatars = null;
+    const avatarTask = cachedAvatars
+      ? null
+      : store.getAdminAvatarRows().then((rows) => {
+          fetchedAvatars = rows;
+        }, () => {
+          avatarLoadFailed = true;
+        });
     const [users, applicants, phones] = await Promise.all([
-      store.listPaymentUsers({ force: true }),
+      store.listPaymentUsers(),
       store.listApprovalCandidates(),
       store.listMembershipPhones().catch((error) => {
         membershipPhonesFailed = true;
@@ -3133,9 +3136,17 @@ export async function viewAdmin(tab = "members") {
         return new Map();
       }),
     ]);
+    // Photo status must not hold the member list. A result that is already
+    // ready, including an immediate failure, is applied before paint.
+    if (avatarTask) {
+      await Promise.race([
+        avatarTask,
+        new Promise((resolve) => setTimeout(resolve, 0)),
+      ]);
+    }
     memberUsers = users.sort((a, b) => a.fullName.localeCompare(b.fullName));
     pendingApplicants = applicants;
-    adminAvatarRows = cachedAvatars;
+    adminAvatarRows = cachedAvatars || fetchedAvatars;
     membershipPhones = phones;
   }
   let prayerRows = [];
