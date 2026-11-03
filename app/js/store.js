@@ -38,6 +38,7 @@ import {
   uid,
   normalizeDonorId,
   donorIdProblem,
+  membershipPhoneKey,
 } from "./data.js";
 import { config, supabase, isLive, isLiveConfigured, ensureLiveClient } from "./config.js";
 import {
@@ -1166,6 +1167,7 @@ const normalizePaymentUser = (profile) => {
     preferredName: profile.preferredName || null,
     role,
     status: profile.status || (role === "pending" || role === "declined" ? role : "approved"),
+    appliedAt: profile.appliedAt || profile.created_at || null,
   };
 };
 
@@ -5265,12 +5267,22 @@ export async function saveMyApplication(form) {
   clearApplyDraft({ profileId: cu.id });
 }
 
+function assertMembershipPhoneAvailable(profileId, mobile) {
+  const key = membershipPhoneKey(mobile);
+  if (!key || isLive()) return;
+  const user = state.users.find((item) => item.id === profileId);
+  if (user && membershipPhoneKey(user.phone) === key) return;
+  const taken = state.users.some((item) => item.id !== profileId && membershipPhoneKey(item.phone) === key);
+  if (taken) throw new Error("This mobile number is already used by another ITC account.");
+}
+
 export async function updateMyMembershipDetails(form) {
   const patch = membershipPatch(form);
   const fullName = parseFullName(form);
   if (!isLive() || !supabase) {
     const user = currentUser();
     if (!user) throw new Error("Not signed in");
+    assertMembershipPhoneAvailable(user.id, patch.mobile);
     user.phone = patch.mobile;
     user.isMinor = patch.is_minor;
     user.guardianName = patch.guardian_name;

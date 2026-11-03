@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=members-tab-load"',
+  'src="/app/js/app.js?v=member-phone-dedupe"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -4544,6 +4544,45 @@ if (!adminMembersHtml.includes('data-action="download-indemnity-list"')) {
   console.log("ok  Admin member contact is a collapsed Membership Details popup");
   console.log("ok  members without a photo omit the No photo badge");
 }
+assert.equal(data.membershipPhoneKey("+852 6123 4567"), "61234567");
+assert.equal(data.membershipPhoneKey("6123-4567"), data.membershipPhoneKey("+852 6123 4567"));
+assert.equal(data.membershipPhoneKey(""), "");
+{
+  const admin = store.allUsers().find((user) => user.id === "fixture-admin");
+  const member = store.allUsers().find((user) => user.id === "fixture-member");
+  const adminPhone = admin.phone;
+  const memberPhone = member.phone;
+  try {
+    admin.phone = "+852 6123 4567";
+    member.phone = "61234567";
+    const dedupedHtml = await views.viewAdmin("members");
+    assert.match(dedupedHtml, /<strong>Test Admin<\/strong>/);
+    assert.doesNotMatch(dedupedHtml, /<strong>Test Member<\/strong>/,
+      "Admin Members must keep one account when two profiles share a mobile number");
+    assert.match(dedupedHtml, /data-action="download-indemnity-list"/);
+  } finally {
+    admin.phone = adminPhone;
+    member.phone = memberPhone;
+  }
+  store.signIn("member@example.test");
+  try {
+    await assert.rejects(
+      () => store.updateMyMembershipDetails({
+        mobile: admin.phone,
+        age_over_18: "yes",
+        emergency_name: "Test Contact",
+        emergency_relationship: "Sibling",
+        emergency_phone: "50009002",
+        heard_source: "friend",
+      }),
+      /already used by another ITC account/,
+    );
+    assert.equal(member.phone, memberPhone);
+  } finally {
+    store.signIn("admin@example.test");
+  }
+  console.log("ok  Admin Members keeps one account per mobile number");
+}
 const indemnityRecords = await store.listIndemnityRecords();
 if (!indemnityRecords.some((record) => record.fullName === "Test Admin")
     || !indemnityRecords.some((record) => record.fullName === "Test Member")) {
@@ -5577,7 +5616,11 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   assert.equal(store.getBooking(markedHold.id).status, "reserved");
   markedHold.userId = "__smoke-marked-hold-cleanup__";
 
-  const nudgeSaturday = "2026-11-07";
+  let nudgeSaturday = "2026-11-07";
+  if (store.userBookingFor("fixture-member", `hyrox-quarry-bay-${nudgeSaturday}`)
+      || store.userReservationFor("fixture-member", `hyrox-quarry-bay-${nudgeSaturday}`)) {
+    nudgeSaturday = "2026-11-28";
+  }
   const nudgeSession = store.getSession(`hyrox-quarry-bay-${nudgeSaturday}`);
   store.signIn("member@example.test");
   store.reserveSession("fixture-member", nudgeSession, data.islandEccSignupOpensAt(nudgeSaturday));

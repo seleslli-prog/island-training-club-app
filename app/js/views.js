@@ -48,6 +48,7 @@ import {
   notificationCategory,
   islandEccPaymentDeadlineAt,
   islandEccHardThursday,
+  dedupeMembersByPhone,
 } from "./data.js";
 
 // Auth roles are normalized: live Supabase returns "super_admin"; the
@@ -4077,7 +4078,8 @@ function adminMembers(
         </div>`).join("") : '<div class="empty">No profile photos awaiting review.</div>'}
     </section>`;
   const query = adminMemberFilters.query.trim().toLocaleLowerCase();
-  const filtered = users.filter((u) => {
+  const visibleUsers = dedupeMembersByPhone(users, membershipPhones);
+  const filtered = visibleUsers.filter((u) => {
     const matchesQuery = !query || `${u.fullName || ""} ${u.email || ""}`.toLocaleLowerCase().includes(query);
     const matchesStatus = adminMemberFilters.status === "all" || u.status === adminMemberFilters.status;
     const matchesRole = adminMemberFilters.role === "all" || normalizedRole(u.role) === adminMemberFilters.role;
