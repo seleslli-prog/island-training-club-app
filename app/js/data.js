@@ -424,6 +424,55 @@ export function donorIdProblem(raw) {
   return DONOR_ID_RE.test(v) ? null : "format";
 }
 
+// Hong Kong mobiles are compared without spaces or a leading 852, so
+// "+852 9123 4567" and "91234567" are one number. Blank numbers do not match.
+export function membershipPhoneKey(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  return /^852\d{8}$/.test(digits) ? digits.slice(3) : digits;
+}
+
+function memberPhoneRank(user) {
+  const status = user?.status === "approved" ? 0 : user?.status === "pending" ? 1 : 2;
+  const role = user?.role === "superadmin" || user?.role === "super_admin"
+    ? 0
+    : user?.role === "admin" ? 1 : 2;
+  const applied = Date.parse(user?.appliedAt || "");
+  return {
+    status,
+    role,
+    appliedAt: Number.isFinite(applied) ? applied : Number.POSITIVE_INFINITY,
+    id: String(user?.id || ""),
+  };
+}
+
+function memberPhonePreferred(candidate, incumbent) {
+  const next = memberPhoneRank(candidate);
+  const current = memberPhoneRank(incumbent);
+  if (next.status !== current.status) return next.status < current.status;
+  if (next.role !== current.role) return next.role < current.role;
+  if (next.appliedAt !== current.appliedAt) return next.appliedAt < current.appliedAt;
+  return next.id < current.id;
+}
+
+// One Admin Members row per mobile number. Accounts with no number stay
+// listed. The kept account is approved, then higher role, then earlier signup.
+export function dedupeMembersByPhone(users, phones) {
+  const keeper = new Map();
+  const phoneFor = (user) => phones?.get?.(user.id) ?? user.phone;
+  for (const user of users || []) {
+    const key = membershipPhoneKey(phoneFor(user));
+    if (!key) continue;
+    const current = keeper.get(key);
+    if (!current || memberPhonePreferred(user, current)) keeper.set(key, user);
+  }
+  const keepIds = new Set([...keeper.values()].map((user) => user.id));
+  return (users || []).filter((user) => {
+    const key = membershipPhoneKey(phoneFor(user));
+    return !key || keepIds.has(user.id);
+  });
+}
+
 // --- Sessions -----------------------------------------------------------------
 // A session is a dated instance of an activity template, generated on demand
 // with a deterministic id (`${activityId}-${YYYY-MM-DD}`) so bookings survive
