@@ -1,0 +1,26 @@
+select
+     s.session_date,
+     s.start_time,
+     s.id,
+     s.capacity,
+     count(*) filter (where b.status = 'reserved') as still_reserved,
+     count(*) filter (where b.status in ('reserved', 'confirmed')) as
+ active_places,
+     count(*) filter (where b.status = 'confirmed') as confirmed_paid,
+     count(*) filter (where b.status = 'attended') as attended,
+     count(*) filter (where b.status in ('confirmed', 'attended')) as
+ paid_places_filled
+   from public.operational_sessions s
+   left join public.operational_bookings b on b.session_id = s.id
+   where s.session_date between date '2026-10-12' and date '2026-11-03'
+     and s.cancelled_at is null
+     and s.price_hkd > 0
+   group by s.session_date, s.start_time, s.id, s.capacity
+   order by s.session_date, s.start_time;
+
+select
+     count(*) filter (where role = 'member') as approved_members,
+     count(*) filter (where role in ('admin', 'super_admin')) as admins,
+     count(*) filter (where role in ('member', 'admin', 'super_admin')) as
+ approved_members_and_admins
+   from public.profiles;
