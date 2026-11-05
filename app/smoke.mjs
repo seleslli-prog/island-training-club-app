@@ -2675,7 +2675,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=upcoming-session-heading"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=member-phone-dedupe"',
+  'src="/app/js/app.js?v=sign-in-paint"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -2986,6 +2986,15 @@ const bootSource = integratedAppSource.slice(
 );
 assert.match(bootSource, /await renderWithFeedback\(\);\n\s*if \(paintHomeFirst && startLiveHydration\) pendingVisitorHydrate = startLiveHydration\(\);/,
   "the first Home paint must happen before live client and identity hydration");
+assert.match(bootSource, /noteAuthReturnIfPresent\(\)[\s\S]*?prepareIncomingGoogleRedirect\(\)[\s\S]*?paintHomeFirst = /,
+  "Google's id_token fragment must be removed before the first paint decides the route");
+assert.match(bootSource, /finally \{\s*clearAuthReturn\(\);/,
+  "a finished sign-in must drop the restoring shell before the follow-up paint");
+assert.match(integratedViewSource, /isAuthReturnPending\(\)/,
+  "Home and navigation must keep the signed-in shell while an auth return is exchanging");
+assert.match(integratedViewSource,
+  /else if \(isLiveConfigured\(\) && !liveOps\.operationalStateStatus\(\)\.loaded\) \{[\s\S]*?Loading this week's sessions/,
+  "approved Home must keep the loading week until bookings are hydrated");
 assert.match(bootSource, /if \(!paintHomeFirst && pendingVisitorHydrate\) \{[\s\S]*?await renderWithFeedback\(\);[\s\S]*?await pendingVisitorHydrate/,
   "reopening on a saved route must paint before live identity hydration");
 assert.match(readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8"), /lock: acquireAuthLock/,
@@ -3519,6 +3528,65 @@ if (!localVisitorHome.includes("Join the club.")) {
   throw new Error("removing the stored session must leave the visitor join card intact");
 }
 console.log("ok  stored sign-in hides the join card without waiting on the network");
+{
+  const liveConfig = await import("./js/config.js");
+  const previousLocation = globalThis.location;
+  globalThis.location = { hash: "", search: "?code=magic-link", pathname: "/app/" };
+  liveConfig.noteAuthReturnIfPresent();
+  const returningHome = await views.viewHome();
+  if (returningHome.includes("Join the club.") || returningHome.includes('data-action="sign-in-google"') || returningHome.includes("Train together.") || returningHome.includes("This week — open to all")) {
+    throw new Error("an auth return must not flash the visitor Home before the session exists");
+  }
+  if (!returningHome.includes("Good to see you.") || !returningHome.includes(">My Week<") || !returningHome.includes("Loading this week's sessions…")) {
+    throw new Error("an auth return must paint the signed-in Home shell before the profile loads");
+  }
+  const returningNav = primaryNavLabels(views.navHTML("home", null));
+  if (JSON.stringify(returningNav) !== JSON.stringify(["Home", "Schedule", "Community", "Giving", "Profile"])) {
+    throw new Error(`auth-return navigation was ${JSON.stringify(returningNav)}`);
+  }
+  liveConfig.clearAuthReturn();
+  const clearedHome = await views.viewHome();
+  if (!clearedHome.includes("Join the club.")) {
+    throw new Error("clearing an auth return must restore the visitor join card");
+  }
+  if (previousLocation === undefined) delete globalThis.location;
+  else globalThis.location = previousLocation;
+  console.log("ok  auth return paints the signed-in shell before the session exists");
+}
+{
+  const previousLocation = globalThis.location;
+  const previousWindow = globalThis.window;
+  const previousSession = globalThis.sessionStorage;
+  const sessionMem = new Map();
+  globalThis.sessionStorage = {
+    getItem: (key) => (sessionMem.has(key) ? sessionMem.get(key) : null),
+    setItem: (key, value) => sessionMem.set(key, String(value)),
+    removeItem: (key) => sessionMem.delete(key),
+  };
+  globalThis.location = {
+    hash: "#id_token=aaa.bbb.ccc&authuser=0",
+    pathname: "/app/",
+    search: "",
+    origin: "https://feature.example",
+  };
+  globalThis.window = {
+    location: globalThis.location,
+    sessionStorage: globalThis.sessionStorage,
+    history: globalThis.history,
+  };
+  globalThis.sessionStorage.setItem("itc.gis.nonce", "redirect-nonce");
+  assert.equal(store.prepareIncomingGoogleRedirect(), true);
+  assert.equal(globalThis.location.hash, "#/home");
+  assert.equal(globalThis.sessionStorage.getItem("itc.gis.nonce"), null);
+  assert.equal(store.prepareIncomingGoogleRedirect(), true, "a stashed Google credential must survive a second prepare");
+  if (previousLocation === undefined) delete globalThis.location;
+  else globalThis.location = previousLocation;
+  if (previousWindow === undefined) delete globalThis.window;
+  else globalThis.window = previousWindow;
+  if (previousSession === undefined) delete globalThis.sessionStorage;
+  else globalThis.sessionStorage = previousSession;
+  console.log("ok  Google redirect fragment is replaced with Home before paint");
+}
 await check("home (visitor)", () => views.viewHome());
 const scheduleHtml = await check("schedule", () => views.viewSchedule());
 try {

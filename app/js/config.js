@@ -83,6 +83,23 @@ export function returningFromAuthRedirect() {
   }
 }
 
+// Set while Google or an email link is still exchanging a session. The first
+// paint uses the signed-in shell so the join card does not flash in between.
+let authReturnPending = false;
+
+export function noteAuthReturnIfPresent() {
+  if (returningFromAuthRedirect()) authReturnPending = true;
+  return authReturnPending;
+}
+
+export function isAuthReturnPending() {
+  return authReturnPending;
+}
+
+export function clearAuthReturn() {
+  authReturnPending = false;
+}
+
 function loadVendorScript() {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return Promise.reject(new Error("supabase vendor requires a browser"));

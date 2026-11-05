@@ -4895,8 +4895,28 @@ async function createGoogleSupabaseSession(credential) {
   if (error) throw error;
 }
 
+let pendingGoogleCredential = null;
+
+// Drop Google's #id_token fragment before the first paint. Leaving it in the
+// hash makes the router treat the token as a page and flash a 404.
+export function prepareIncomingGoogleRedirect() {
+  if (pendingGoogleCredential?.token) return true;
+  if (!String(globalThis.location?.hash || "").includes("id_token=")) return false;
+  const credential = consumeGoogleRedirectCredential();
+  if (credential?.token) pendingGoogleCredential = credential;
+  return true;
+}
+
 export async function completeGoogleSignInFromRedirect() {
   if (!isLiveConfigured()) return false;
+  const prepared = pendingGoogleCredential;
+  pendingGoogleCredential = null;
+  if (prepared?.token) {
+    if (!supabase) await ensureLiveClient();
+    if (!supabase) throw new Error("Unable to load sign-in");
+    await createGoogleSupabaseSession(prepared);
+    return true;
+  }
   if (!String(globalThis.location?.hash || "").includes("id_token=")) return false;
   if (!supabase) await ensureLiveClient();
   if (!supabase) throw new Error("Unable to load sign-in");

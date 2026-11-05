@@ -6,7 +6,7 @@
 // ==========================================================================
 
 import * as store from "./store.js";
-import { isLive, isLiveConfigured, peekStoredLiveSession } from "./config.js";
+import { isLive, isLiveConfigured, isAuthReturnPending, peekStoredLiveSession } from "./config.js";
 import * as liveOps from "./operations.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
@@ -321,7 +321,7 @@ const NAV_ITEMS = [
 ];
 
 export function navHTML(routeKey, user) {
-  const isSignedIn = !!user || peekStoredLiveSession();
+  const isSignedIn = !!user || peekStoredLiveSession() || isAuthReturnPending();
   return NAV_ITEMS.filter((i) => !i.roles || (i.roles.includes("signed-in") && isSignedIn))
     .map(
       (i) => `
@@ -429,7 +429,7 @@ export async function viewHome() {
     const t = parseISO(iso).getTime();
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
-  const restoringSession = !user && peekStoredLiveSession();
+  const restoringSession = !user && (peekStoredLiveSession() || isAuthReturnPending());
   const name = hydrated ? esc(greetingName(hydrated)) : null;
   const headline = name
     ? `Good to see you, ${name}.`
@@ -452,7 +452,15 @@ export async function viewHome() {
     weekHeading = "This week — open to all";
   } else if (user.status !== "approved") {
     rows = upcoming.filter((session) => session.kind === "free" && inThisWeek(session));
-    emptyMsg = "No open sessions this week — check back soon.";
+    emptyMsg = isLiveConfigured() && !liveOps.operationalStateStatus().loaded
+      ? "Loading this week's sessions…"
+      : "No open sessions this week — check back soon.";
+    weekHeading = "My Week";
+  } else if (isLiveConfigured() && !liveOps.operationalStateStatus().loaded) {
+    // Bookings arrive with the operational hydrate. Painting "Nothing booked"
+    // first makes Home blink empty and then fill in after sign-in.
+    rows = [];
+    emptyMsg = "Loading this week's sessions…";
     weekHeading = "My Week";
   } else {
     const bookedIds = new Set(
@@ -465,7 +473,7 @@ export async function viewHome() {
     weekHeading = "My Week";
   }
 
-  const guest = !user && !peekStoredLiveSession()
+  const guest = !user && !restoringSession
     ? `
     <div class="card mt24"><div class="card-body">
       <span class="kicker">Join ITC</span>

@@ -12,6 +12,9 @@ import {
   ensureLiveClient,
   peekStoredLiveSession,
   returningFromAuthRedirect,
+  noteAuthReturnIfPresent,
+  isAuthReturnPending,
+  clearAuthReturn,
   supabase,
 } from "./config.js";
 import * as components from "./components.js";
@@ -77,16 +80,33 @@ document.addEventListener("load", (event) => {
   markAvatarImageReady(event.target);
 }, true);
 
+let lastTopAvatarMarkup = null;
+const profileAvatarMarkup = new WeakMap();
+
+function commitMarkup(el, markup, previous) {
+  if (!el || previous === markup) return previous;
+  el.innerHTML = markup;
+  return markup;
+}
+
 export function commitOwnAvatarPresentation(presentation) {
   const user = store.currentUser();
   if (!user?.id) return false;
   avatarEl.dataset.avatarSource = presentation?.source || "initials";
-  avatarEl.innerHTML = views.avatarHTML(user, presentation);
-  revealLoadedAvatars(avatarEl);
+  const markup = views.avatarHTML(user, presentation);
+  if (markup !== lastTopAvatarMarkup) {
+    lastTopAvatarMarkup = markup;
+    avatarEl.innerHTML = markup;
+    revealLoadedAvatars(avatarEl);
+  }
   const profileButton = viewEl.querySelector?.('[data-action="manage-profile-photo"]');
   if (profileButton) {
-    profileButton.innerHTML = views.profileAvatarHTML(user, presentation);
-    revealLoadedAvatars(profileButton);
+    const profileMarkup = views.profileAvatarHTML(user, presentation);
+    if (profileAvatarMarkup.get(profileButton) !== profileMarkup) {
+      profileAvatarMarkup.set(profileButton, profileMarkup);
+      profileButton.innerHTML = profileMarkup;
+      revealLoadedAvatars(profileButton);
+    }
   }
   return true;
 }
@@ -167,14 +187,22 @@ function initialsRosterFromNames(attendeeNames) {
   }));
 }
 
+function sessionRestoring(user) {
+  return !user && (peekStoredLiveSession() || isAuthReturnPending());
+}
+
 function paintOwnAvatarChrome(user, generation) {
-  const restoringSession = !user && peekStoredLiveSession();
+  const restoringSession = sessionRestoring(user);
   const cached = canManageOwnAvatar(user) ? store.peekOwnAvatar() : null;
   avatarEl.classList.toggle("is-empty", !user && !restoringSession);
   avatarEl.setAttribute("aria-label", user || restoringSession ? "Profile" : "Sign in");
   avatarEl.dataset.avatarSource = cached?.source || "initials";
-  avatarEl.innerHTML = views.avatarHTML(user, cached);
-  revealLoadedAvatars(avatarEl);
+  const markup = views.avatarHTML(user, cached);
+  if (markup !== lastTopAvatarMarkup) {
+    lastTopAvatarMarkup = markup;
+    avatarEl.innerHTML = markup;
+    revealLoadedAvatars(avatarEl);
+  }
   if (!canManageOwnAvatar(user)) return;
   void store.getOwnAvatar().then((presentation) => {
     if (generation !== renderGeneration) return;
@@ -504,6 +532,53 @@ function parseHash() {
     .filter(Boolean);
 }
 
+function isAuthCallbackHash(hash = location.hash) {
+  const value = String(hash || "");
+  return value.includes("id_token=")
+    || value.includes("access_token=")
+    || /(?:^#|&)error=/.test(value);
+}
+
+function scrollViewTo(top) {
+  const y = top || 0;
+  if (window.scrollY === y) return;
+  window.scrollTo({ top: y, behavior: "auto" });
+}
+
+let lastCommittedView = null;
+let lastNavMarkup = null;
+
+function commitViewMarkup(html) {
+  const current = typeof viewEl.innerHTML === "string" ? viewEl.innerHTML : "";
+  // Identical markup must not rebuild the page. A cleared view still commits
+  // so resume can refill a blank screen.
+  if (html === lastCommittedView && current.trim()) return false;
+  const images = typeof viewEl.querySelectorAll === "function"
+    ? [...viewEl.querySelectorAll("img[src]")]
+    : [];
+  const template = images.length && typeof document?.createElement === "function"
+    ? document.createElement("template")
+    : null;
+  if (template?.content?.querySelectorAll && typeof viewEl.replaceChildren === "function") {
+    const reusable = new Map();
+    for (const image of images) {
+      const src = image.getAttribute("src");
+      if (src && !reusable.has(src)) reusable.set(src, image);
+    }
+    template.innerHTML = html;
+    for (const image of template.content.querySelectorAll("img[src]")) {
+      const prev = reusable.get(image.getAttribute("src"));
+      if (prev) image.replaceWith(prev);
+    }
+    viewEl.replaceChildren(template.content);
+    lastCommittedView = html;
+    return true;
+  }
+  viewEl.innerHTML = html;
+  lastCommittedView = html;
+  return true;
+}
+
 function replaceRoute(route) {
   history.replaceState(history.state, "", `${location.pathname}${location.search}${route}`);
 }
@@ -712,8 +787,14 @@ export async function maybeRedirectToApply() {
   }
 }
 
+let lastNotificationMarkup = null;
+
+function commitNotificationMarkup(markup) {
+  lastNotificationMarkup = commitMarkup(notificationEl, markup, lastNotificationMarkup);
+}
+
 function commitNotificationCount(unreadCount, active) {
-  notificationEl.innerHTML = views.notificationBellHTML(unreadCount, active);
+  commitNotificationMarkup(views.notificationBellHTML(unreadCount, active));
   notificationEl.setAttribute(
     "aria-label",
     unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"
@@ -721,7 +802,7 @@ function commitNotificationCount(unreadCount, active) {
 }
 
 function renderNotificationChrome(user, active, generation, rowsPromise = null) {
-  const restoringSession = !user && peekStoredLiveSession();
+  const restoringSession = sessionRestoring(user);
   notificationEl.hidden = !user && !restoringSession;
   // The Notifications page fetches a fresh count. Browse routes reuse the last
   // known badge so Schedule does not flash zero or wait on Kong.
@@ -729,9 +810,9 @@ function renderNotificationChrome(user, active, generation, rowsPromise = null) 
   const cachedUnread = Array.isArray(cachedRows)
     ? cachedRows.filter((row) => !row.read_at).length
     : 0;
-  notificationEl.innerHTML = user || restoringSession
+  commitNotificationMarkup(user || restoringSession
     ? views.notificationBellHTML(cachedRows ? cachedUnread : 0, active)
-    : "";
+    : "");
   if (!user && restoringSession) {
     notificationEl.setAttribute("aria-label", "Notifications");
     notificationEl.removeAttribute("aria-current");
@@ -779,6 +860,7 @@ function adminDisclosureKey(el) {
 }
 
 function captureAdminDisclosures() {
+  if (typeof viewEl.querySelectorAll !== "function") return [];
   return [...viewEl.querySelectorAll("details")].flatMap((el) => {
     const key = adminDisclosureKey(el);
     return key ? [{ key, open: el.open }] : [];
@@ -786,7 +868,7 @@ function captureAdminDisclosures() {
 }
 
 function restoreAdminDisclosures(snapshot) {
-  if (!snapshot?.length) return;
+  if (!snapshot?.length || typeof viewEl.querySelectorAll !== "function") return;
   const openByKey = new Map(snapshot.map((row) => [row.key, row.open]));
   const rows = [...viewEl.querySelectorAll("details")].flatMap((el) => {
     const key = adminDisclosureKey(el);
@@ -823,7 +905,7 @@ async function renderWithFeedback(options = {}) {
 
 async function render(generation = renderGeneration, options = {}) {
   views.captureGuestEmailLink(viewEl);
-  const parts = parseHash();
+  const parts = isAuthCallbackHash() ? ["home"] : parseHash();
   const [page, arg, arg2] = parts.length ? parts : ["home"];
 
   // Keep the last committed Notifications rows available while a same-route
@@ -966,15 +1048,19 @@ async function render(generation = renderGeneration, options = {}) {
   const user = store.currentUser();
   if (generation !== renderGeneration) return;
 
-  viewEl.innerHTML = out;
-  revealLoadedAvatars(viewEl);
-  if (!viewEl.querySelector("[data-route-not-found]")) {
+  const viewChanged = commitViewMarkup(out);
+  if (viewChanged) revealLoadedAvatars(viewEl);
+  if (!isAuthCallbackHash() && !viewEl.querySelector("[data-route-not-found]")) {
     store.rememberLastRoute(location.hash, user?.id);
   }
-  navEl.innerHTML = views.navHTML(NAV_FOR[page] ?? "home", user);
+  const navMarkup = views.navHTML(NAV_FOR[page] ?? "home", user);
+  if (navMarkup !== lastNavMarkup) {
+    lastNavMarkup = navMarkup;
+    navEl.innerHTML = navMarkup;
+  }
   paintOwnAvatarChrome(user, generation);
   if (!notificationsActive) renderNotificationChrome(user, false, generation);
-  if (page === "activity") {
+  if (viewChanged && page === "activity") {
     const ownsGeneration = () => generation === renderGeneration;
     const mapHost = viewEl.querySelector("#activity-map");
     if (mapHost) {
@@ -987,18 +1073,18 @@ async function render(generation = renderGeneration, options = {}) {
     const session = store.getSession(arg);
     void fillActivityRoster(arg, session, user, generation);
   }
-  if (page === "admin" && arg === "activities") {
+  if (viewChanged && page === "admin" && arg === "activities") {
     const ownsGeneration = () => generation === renderGeneration;
     const venueForms = viewEl.querySelectorAll?.('form[data-action="form-week-venue"]') || [];
     [...venueForms].forEach((form) => { void syncWeekVenuePicker(form, { ownsGeneration }); });
   }
-  if (options.preserveScroll) {
+  if (viewChanged && options.preserveScroll) {
     restoreAdminDisclosures(options.disclosures);
-    window.scrollTo({ top: options.scrollY || 0 });
-  } else {
-    window.scrollTo({ top: 0 });
+    scrollViewTo(options.scrollY || 0);
+  } else if (viewChanged) {
+    scrollViewTo(0);
+    viewEl.focus({ preventScroll: true });
   }
-  viewEl.focus({ preventScroll: true });
   prevPage = page;
 }
 
@@ -2693,7 +2779,9 @@ function bindLiveAuthState() {
 
 async function boot() {
   store.load();
+  if (isLiveConfigured()) noteAuthReturnIfPresent();
   const authCallbackError = consumeAuthCallbackError();
+  if (isLiveConfigured()) store.prepareIncomingGoogleRedirect();
   let pendingVisitorHydrate = null;
   let paintHomeFirst = false;
   // Live mode hydrates identity after the first paint. This keeps the Home
@@ -2703,7 +2791,7 @@ async function boot() {
   // until after paint so Continue with Google can navigate immediately.
   let startLiveHydration = null;
   if (isLiveConfigured()) {
-    const needClientNow = isLive() || peekStoredLiveSession() || returningFromAuthRedirect();
+    const needClientNow = isLive() || peekStoredLiveSession() || returningFromAuthRedirect() || isAuthReturnPending();
     startLiveHydration = () => {
       if (needClientNow) {
         if (authCallbackError) toast(authCallbackError, true);
@@ -2716,6 +2804,8 @@ async function boot() {
             user = store.currentUser();
           } catch (err) {
             toast(err.message || "Application read failed", true);
+          } finally {
+            clearAuthReturn();
           }
           bindLiveAuthState();
           if (user && paintHomeFirst) {
@@ -2745,6 +2835,7 @@ async function boot() {
       return (async () => {
         await ensureLiveClient();
         bindLiveAuthState();
+        clearAuthReturn();
         await store.hydrateLiveOperations({ ensureWindow: true });
       })();
     };
@@ -2840,7 +2931,7 @@ async function boot() {
     try {
       await pendingVisitorHydrate;
       bindOperationalUiRefresh();
-      await renderWithFeedback();
+      await renderWithFeedback({ preserveScroll: true });
     } catch (err) {
       toast(err.message || "Unable to load this week's sessions", true);
     }
@@ -2851,7 +2942,7 @@ async function boot() {
       try {
         await pendingVisitorHydrate;
         bindOperationalUiRefresh();
-        await renderWithFeedback();
+        await renderWithFeedback({ preserveScroll: true });
       } catch (err) {
         toast(err.message || "Unable to load this week's sessions", true);
       }
