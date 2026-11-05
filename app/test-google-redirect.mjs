@@ -134,3 +134,30 @@ test("consumeGoogleRedirectCredential extracts token + nonce from the hash and r
   );
   assert.match(location.hash, /#\/home$/, "hash must be rewound to #/home");
 });
+
+test("beginAuthReturn parks the id_token hash and keeps the credential for sign-in", async () => {
+  const token = "header." + "x".repeat(64) + ".sig";
+  const { location } = makeEnv();
+  location.hash = `#id_token=${token}&state=abc`;
+  globalThis.sessionStorage.setItem("itc.gis.nonce", "raw-nonce-123");
+  const gis = await import("./js/google-gis.js?park");
+  const credential = gis.beginAuthReturn();
+  assert.equal(credential?.token, token);
+  assert.equal(credential?.nonce, "raw-nonce-123");
+  assert.equal(location.hash, "#/home", "id_token must leave the address before first paint");
+  assert.equal(gis.googleAuthPending(), true);
+  assert.equal(gis.takeHeldGoogleCredential()?.token, token);
+  assert.equal(gis.takeHeldGoogleCredential(), null, "the parked credential is single-use");
+  gis.clearGoogleAuthPending();
+  assert.equal(gis.googleAuthPending(), false);
+});
+
+test("beginAuthReturn leaves a magic-link access_token in the hash", async () => {
+  const { location } = makeEnv();
+  location.hash = "#access_token=aaa&refresh_token=bbb&token_type=bearer";
+  const gis = await import("./js/google-gis.js?magic");
+  assert.equal(gis.beginAuthReturn(), null);
+  assert.equal(location.hash, "#access_token=aaa&refresh_token=bbb&token_type=bearer");
+  assert.equal(gis.googleAuthPending(), true);
+  gis.clearGoogleAuthPending();
+});

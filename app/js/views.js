@@ -7,6 +7,7 @@
 
 import * as store from "./store.js";
 import { isLive, isLiveConfigured, peekStoredLiveSession } from "./config.js";
+import { googleAuthPending } from "./google-gis.js";
 import * as liveOps from "./operations.js";
 import { sessionCancellationCopy } from "./operations.js";
 import { avatarMarkup } from "./avatar.js";
@@ -320,8 +321,12 @@ const NAV_ITEMS = [
   { key: "account", label: "Account", icon: "user", href: "#/account", roles: ["signed-in"] },
 ];
 
+function signedInShell(user) {
+  return !!user || peekStoredLiveSession() || googleAuthPending();
+}
+
 export function navHTML(routeKey, user) {
-  const isSignedIn = !!user || peekStoredLiveSession();
+  const isSignedIn = signedInShell(user);
   return NAV_ITEMS.filter((i) => !i.roles || (i.roles.includes("signed-in") && isSignedIn))
     .map(
       (i) => `
@@ -429,7 +434,7 @@ export async function viewHome() {
     const t = parseISO(iso).getTime();
     return t >= weekStart.getTime() && t <= weekEnd.getTime();
   };
-  const restoringSession = !user && peekStoredLiveSession();
+  const restoringSession = !user && signedInShell(null);
   const name = hydrated ? esc(greetingName(hydrated)) : null;
   const headline = name
     ? `Good to see you, ${name}.`
@@ -465,7 +470,7 @@ export async function viewHome() {
     weekHeading = "My Week";
   }
 
-  const guest = !user && !peekStoredLiveSession()
+  const guest = !signedInShell(user)
     ? `
     <div class="card mt24"><div class="card-body">
       <span class="kicker">Join ITC</span>

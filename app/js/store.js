@@ -44,6 +44,7 @@ import { config, supabase, isLive, isLiveConfigured, ensureLiveClient } from "./
 import {
   requestGoogleIdCredential,
   consumeGoogleRedirectCredential,
+  takeHeldGoogleCredential,
 } from "./google-gis.js";
 import { INDEMNITY_VERSION } from "./documents.js";
 import { normalizeAvatarPresentation } from "./avatar.js";
@@ -4897,10 +4898,11 @@ async function createGoogleSupabaseSession(credential) {
 
 export async function completeGoogleSignInFromRedirect() {
   if (!isLiveConfigured()) return false;
-  if (!String(globalThis.location?.hash || "").includes("id_token=")) return false;
+  const held = takeHeldGoogleCredential();
+  if (!held && !String(globalThis.location?.hash || "").includes("id_token=")) return false;
   if (!supabase) await ensureLiveClient();
   if (!supabase) throw new Error("Unable to load sign-in");
-  const credential = consumeGoogleRedirectCredential();
+  const credential = held || consumeGoogleRedirectCredential();
   if (!credential) return false;
   await createGoogleSupabaseSession(credential);
   return true;

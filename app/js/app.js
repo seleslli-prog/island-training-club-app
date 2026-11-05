@@ -10,10 +10,12 @@ import {
   isLive,
   isLiveConfigured,
   ensureLiveClient,
+  isAuthCallbackHash,
   peekStoredLiveSession,
   returningFromAuthRedirect,
   supabase,
 } from "./config.js";
+import { beginAuthReturn, clearGoogleAuthPending } from "./google-gis.js";
 import * as components from "./components.js";
 import { openAvatarManager } from "./avatar-cropper.js";
 import {
@@ -823,7 +825,8 @@ async function renderWithFeedback(options = {}) {
 
 async function render(generation = renderGeneration, options = {}) {
   views.captureGuestEmailLink(viewEl);
-  const parts = parseHash();
+  // Google and magic-link returns put tokens in the hash. That is not a page.
+  const parts = isAuthCallbackHash(location.hash) ? ["home"] : parseHash();
   const [page, arg, arg2] = parts.length ? parts : ["home"];
 
   // Keep the last committed Notifications rows available while a same-route
@@ -2693,6 +2696,8 @@ function bindLiveAuthState() {
 
 async function boot() {
   store.load();
+  const authReturn = returningFromAuthRedirect();
+  beginAuthReturn();
   const authCallbackError = consumeAuthCallbackError();
   let pendingVisitorHydrate = null;
   let paintHomeFirst = false;
@@ -2703,7 +2708,7 @@ async function boot() {
   // until after paint so Continue with Google can navigate immediately.
   let startLiveHydration = null;
   if (isLiveConfigured()) {
-    const needClientNow = isLive() || peekStoredLiveSession() || returningFromAuthRedirect();
+    const needClientNow = isLive() || peekStoredLiveSession() || authReturn;
     startLiveHydration = () => {
       if (needClientNow) {
         if (authCallbackError) toast(authCallbackError, true);
@@ -2717,6 +2722,7 @@ async function boot() {
           } catch (err) {
             toast(err.message || "Application read failed", true);
           }
+          clearGoogleAuthPending();
           bindLiveAuthState();
           if (user && paintHomeFirst) {
             hydrateSignedInAfterPaint(user);
@@ -2748,8 +2754,9 @@ async function boot() {
         await store.hydrateLiveOperations({ ensureWindow: true });
       })();
     };
-  } else if (authCallbackError) {
-    toast(authCallbackError, true);
+  } else {
+    clearGoogleAuthPending();
+    if (authCallbackError) toast(authCallbackError, true);
   }
   paintHomeFirst = !location.hash || location.hash === "#/home";
   // A full relaunch has an empty hash. Open Home. Switching away and back
