@@ -2988,6 +2988,12 @@ assert.match(bootSource, /await renderWithFeedback\(\);\n\s*if \(paintHomeFirst 
   "the first Home paint must happen before live client and identity hydration");
 assert.match(bootSource, /if \(!paintHomeFirst && pendingVisitorHydrate\) \{[\s\S]*?await renderWithFeedback\(\);[\s\S]*?await pendingVisitorHydrate/,
   "reopening on a saved route must paint before live identity hydration");
+assert.match(bootSource, /beginAuthReturn\(\)/,
+  "boot must park a Google id_token before the first paint");
+assert.match(integratedAppSource, /isAuthCallbackHash\(location\.hash\) \? \["home"\]/,
+  "an auth return hash must paint Home instead of Page not found");
+assert.match(readFileSync(resolve(__dirnameSmoke, "js/views.js"), "utf8"), /googleAuthPending\(\)/,
+  "Home must keep the signed-in shell while an auth return finishes");
 assert.match(readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8"), /lock: acquireAuthLock/,
   "sign-in must not wait on the browser lock that sticks after an iOS reopen");
 {
@@ -2998,6 +3004,10 @@ assert.match(readFileSync(resolve(__dirnameSmoke, "js/config.js"), "utf8"), /loc
     "supabase-js UMD must load on demand");
   assert.match(configSource, /document\.createElement\("script"\)/,
     "vendor load must inject the UMD after first paint");
+  assert.match(configSource, /storage: durableAuthStorage/,
+    "live sign-in must be stored where a closed app can restore it");
+  assert.match(configSource, /export function isAuthCallbackHash/,
+    "auth return hashes must be recognizable before routing");
 }
 {
   const storeSource = readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8");
@@ -3519,6 +3529,117 @@ if (!localVisitorHome.includes("Join the club.")) {
   throw new Error("removing the stored session must leave the visitor join card intact");
 }
 console.log("ok  stored sign-in hides the join card without waiting on the network");
+
+{
+  const { createDurableAuthStorage } = await import("./js/auth-storage.js");
+  const { peekStoredLiveSession: peekSession, isAuthCallbackHash } = await import("./js/config.js");
+  const gis = await import("./js/google-gis.js");
+  assert.equal(isAuthCallbackHash("#/home"), false);
+  assert.equal(isAuthCallbackHash("#/schedule"), false);
+  assert.equal(isAuthCallbackHash("#id_token=aaa.bbb.ccc"), true);
+  assert.equal(isAuthCallbackHash("#access_token=token&refresh_token=refresh"), true);
+  const jar = new Map();
+  const previousDocument = globalThis.document;
+  globalThis.document = {
+    get cookie() {
+      return [...jar.entries()].map(([key, value]) => `${key}=${value}`).join("; ");
+    },
+    set cookie(raw) {
+      const text = String(raw);
+      const [pair] = text.split(";");
+      const eq = pair.indexOf("=");
+      const name = pair.slice(0, eq).trim();
+      const maxAge = /Max-Age=(-?\d+)/i.exec(text);
+      if (maxAge && Number(maxAge[1]) <= 0) jar.delete(name);
+      else jar.set(name, pair.slice(eq + 1));
+    },
+  };
+  const previousLocation = globalThis.location;
+  const previousHistory = globalThis.history;
+  try {
+    const storage = createDurableAuthStorage("itc.supabase.session");
+    const kept = JSON.stringify({
+      access_token: "kept-access",
+      refresh_token: "kept-refresh",
+      expires_at: 4_102_444_800,
+      token_type: "bearer",
+      user: { id: "member-1", email: "member@example.com" },
+    });
+    const bulky = JSON.stringify({
+      access_token: "bulky",
+      refresh_token: "r".repeat(5000),
+      expires_at: 4_102_444_800,
+    });
+    localStorage.setItem("itc.supabase.session", kept);
+    assert.equal(jar.size, 0);
+    assert.equal(storage.getItem("itc.supabase.session"), kept);
+    assert.ok(jar.size > 0, "an existing sign-in must be copied to the cookie on the next open");
+    jar.clear();
+    storage.setItem("itc.supabase.session", kept);
+    assert.ok(jar.size > 0, "sign-in must copy the session into a first-party cookie");
+    localStorage.removeItem("itc.supabase.session");
+    assert.equal(storage.getItem("itc.supabase.session"), kept,
+      "closing the app must not drop a signed-in session");
+    assert.equal(localStorage.getItem("itc.supabase.session"), kept,
+      "a reopened app must restore the cookie copy into localStorage");
+    storage.setItem("itc.supabase.session", bulky);
+    localStorage.removeItem("itc.supabase.session");
+    assert.equal(storage.getItem("itc.supabase.session"), bulky,
+      "a long session must survive in more than one cookie");
+    storage.setItem("itc.supabase.session-code-verifier", "verifier");
+    localStorage.removeItem("itc.supabase.session-code-verifier");
+    assert.equal(storage.getItem("itc.supabase.session-code-verifier"), null,
+      "only the session cookie is restored");
+    storage.removeItem("itc.supabase.session");
+    assert.equal(jar.size, 0, "sign out must clear the session cookie");
+    assert.equal(storage.getItem("itc.supabase.session"), null);
+    assert.equal(peekSession(), false);
+
+    storage.setItem("itc.supabase.session", kept);
+    localStorage.removeItem("itc.supabase.session");
+    assert.equal(peekSession(), true, "Home must see a cookie session before the profile loads");
+    storage.removeItem("itc.supabase.session");
+    localStorage.removeItem("itc.supabase.session");
+
+    globalThis.history = { state: null, replaceState() {} };
+    globalThis.location = {
+      hash: "#id_token=aaa.bbb.ccc&authuser=0",
+      pathname: "/app/",
+      search: "",
+      origin: "http://127.0.0.1:4173",
+      protocol: "http:",
+    };
+    gis.beginAuthReturn();
+    const authReturnHome = await views.viewHome();
+    if (authReturnHome.includes("Page not found") || authReturnHome.includes("Join the club.")) {
+      throw new Error("an auth return must paint the signed-in Home shell, not Page not found");
+    }
+    if (!authReturnHome.includes("Good to see you.") || !authReturnHome.includes(">My Week<")) {
+      throw new Error("an auth return must keep the signed-in Home shell before the profile loads");
+    }
+    assert.equal(globalThis.location.hash, "#/home", "Google's id_token hash must be parked on Home");
+    const parkedNav = primaryNavLabels(views.navHTML("home", null));
+    if (JSON.stringify(parkedNav) !== JSON.stringify(["Home", "Schedule", "Community", "Giving", "Profile"])) {
+      throw new Error(`auth return navigation was ${JSON.stringify(parkedNav)}`);
+    }
+  } finally {
+    gis.clearGoogleAuthPending();
+    gis.takeHeldGoogleCredential();
+    localStorage.removeItem("itc.supabase.session");
+    localStorage.removeItem("itc.supabase.session-code-verifier");
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousLocation === undefined) delete globalThis.location;
+    else globalThis.location = previousLocation;
+    if (previousHistory === undefined) delete globalThis.history;
+    else globalThis.history = previousHistory;
+  }
+  const visitorAfterAuth = await views.viewHome();
+  if (!visitorAfterAuth.includes("Join the club.")) {
+    throw new Error("clearing an auth return must restore the visitor join card");
+  }
+  console.log("ok  sign-in survives a closed app and does not paint Page not found");
+}
 await check("home (visitor)", () => views.viewHome());
 const scheduleHtml = await check("schedule", () => views.viewSchedule());
 try {

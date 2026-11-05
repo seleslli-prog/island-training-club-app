@@ -6,7 +6,10 @@
 // re-evaluate it after stubbing `window`; in production it returns whether
 // the supabase client was created.
 
+import { createDurableAuthStorage } from "./auth-storage.js";
+
 export const LIVE_SESSION_STORAGE_KEY = "itc.supabase.session";
+const durableAuthStorage = createDurableAuthStorage(LIVE_SESSION_STORAGE_KEY);
 export const SUPABASE_VENDOR_SRC = "/app/vendor/supabase-js.2.117.2.umd.js";
 export const SUPABASE_VENDOR_INTEGRITY = "sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok";
 
@@ -27,6 +30,7 @@ const AUTH_OPTIONS = {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: LIVE_SESSION_STORAGE_KEY,
+    storage: durableAuthStorage,
     lock: acquireAuthLock,
   },
 };
@@ -51,9 +55,19 @@ export function isLive() {
   return supabase !== null;
 }
 
+export function isAuthCallbackHash(hash) {
+  const value = String(hash || "");
+  if (!value || value === "#" || value === "#/" || value === "#/home") return false;
+  return value.includes("id_token=")
+    || value.includes("access_token=")
+    || value.includes("refresh_token=")
+    || value.includes("error_description=")
+    || /(?:^#|[?&#])error=/.test(value);
+}
+
 export function peekStoredLiveSession() {
   try {
-    const raw = globalThis.localStorage?.getItem(LIVE_SESSION_STORAGE_KEY);
+    const raw = durableAuthStorage.getItem(LIVE_SESSION_STORAGE_KEY);
     if (!raw) return false;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return false;

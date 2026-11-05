@@ -84,6 +84,48 @@ function restoreAppHash() {
   loc.hash = "#/home";
 }
 
+let heldGoogleCredential = null;
+let authReturnPending = false;
+
+export function googleAuthPending() {
+  return authReturnPending;
+}
+
+export function clearGoogleAuthPending() {
+  authReturnPending = false;
+}
+
+export function takeHeldGoogleCredential() {
+  const credential = heldGoogleCredential;
+  heldGoogleCredential = null;
+  return credential || null;
+}
+
+// Park a Google redirect before the first paint. The id_token hash is not a
+// page; leaving it in place paints "Page not found" and then Home.
+export function beginAuthReturn() {
+  const loc = envWindow()?.location;
+  const hash = String(loc?.hash || "");
+  const search = String(loc?.search || "");
+  const returning = hash.includes("id_token=")
+    || hash.includes("access_token=")
+    || hash.includes("refresh_token=")
+    || hash.includes("error=")
+    || hash.includes("error_description=")
+    || /[?&]code=/.test(search)
+    || /[?&]error=/.test(search);
+  if (!returning) return null;
+  authReturnPending = true;
+  if (hash.includes("access_token=") || hash.includes("refresh_token=")) return null;
+  if (!hash.includes("id_token=")) {
+    if (hash.includes("error=") || hash.includes("error_description=")) restoreAppHash();
+    return null;
+  }
+  const credential = consumeGoogleRedirectCredential();
+  if (credential) heldGoogleCredential = credential;
+  return credential;
+}
+
 export function consumeGoogleRedirectCredential() {
   const loc = envWindow()?.location;
   if (!loc) return null;
