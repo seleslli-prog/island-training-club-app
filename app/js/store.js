@@ -31,6 +31,8 @@ import {
   islandEccCollectorFinalizeNudgeAt,
   ISLAND_ECC_SIGNUP_LOCKED_ERROR,
   ISLAND_ECC_SIGNUP_CLOSED_ERROR,
+  ISLAND_ECC_SIGNUP_PAUSED_ERROR,
+  ISLAND_ECC_SIGNUP_PAUSED_NOTICE,
   islandEccPaymentDeadlineAt,
   sessionReminderTomorrowAt,
   sessionReminderMorningAt,
@@ -2364,6 +2366,10 @@ export function islandEccSignupClosedFor(session, now = Date.now()) {
   return isIslandEccHyroxSession(session) && islandEccSignupClosed(session.dateISO, now);
 }
 
+export function islandEccSignupPaused(session) {
+  return isIslandEccHyroxSession(session) && session?.signupPaused === true;
+}
+
 export function islandEccOtherSlotTaken(session, userId = currentUser()?.id) {
   if (!userId || !isIslandEccHyroxSession(session)) return false;
   if (userBookingFor(userId, session.id) || userReservationFor(userId, session.id)) return false;
@@ -2392,6 +2398,7 @@ function reserveApprovedSession(userId, sessionOrId, now = Date.now()) {
   if (!session) throw new Error("Unknown session");
   if (session.kind !== "paid") throw new Error("Session is not paid");
   if (session.cancelled) throw new Error("Session is cancelled");
+  if (islandEccSignupPaused(session)) throw new Error(ISLAND_ECC_SIGNUP_PAUSED_ERROR);
   if (sessionStarted(session, now)) throw new Error("Session has already started");
   if (spotsLeft(session) <= 0) throw new Error("Session is full");
   if (isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now)) {
@@ -2504,8 +2511,8 @@ export function canConfirmOwnCollectorSession(sessionId) {
   if (held) return canConfirmOwnCollectorBooking(held.id);
   if (sessionStarted(session)) return false;
   if (spotsLeft(session) != null && spotsLeft(session) <= 0) return false;
-  if (islandEccSignupLocked(session) || islandEccSignupClosedFor(session)
-      || islandEccOtherSlotTaken(session)) return false;
+  if (islandEccSignupPaused(session) || islandEccSignupLocked(session)
+      || islandEccSignupClosedFor(session) || islandEccOtherSlotTaken(session)) return false;
   return true;
 }
 
@@ -2798,7 +2805,7 @@ function islandEccDatesFromState() {
 
 function cascadeSession(sessionId, now = Date.now()) {
   const session = getSession(sessionId);
-  if (!session || session.cancelled) return;
+  if (!session || session.cancelled || islandEccSignupPaused(session)) return;
   const q = paymentQueueFor(sessionId);
   while (spotsLeft(session) > 0 && q.waitlist.length) {
     const { userId } = q.waitlist.shift();
@@ -2819,6 +2826,7 @@ function cascadeSession(sessionId, now = Date.now()) {
 function joinQueue(userId, sessionId, kind, now = Date.now()) {
   requireAuthorizedPaymentOwner(userId);
   const session = getSession(sessionId);
+  if (islandEccSignupPaused(session)) throw new Error(ISLAND_ECC_SIGNUP_PAUSED_ERROR);
   if (isIslandEccHyroxSession(session) && !islandEccSignupOpen(session.dateISO, now)) {
     throw new Error(ISLAND_ECC_SIGNUP_LOCKED_ERROR);
   }
@@ -2918,6 +2926,7 @@ function decorateSession(s) {
   const out = { ...s };
   if (!o) return applyWntLeaderNote(applyIslandEccFlexibleTime(out, null));
   if (o.time) out.time = o.time;
+  if (o.signupPaused) out.signupPaused = true;
   if (o.cancelled) { out.cancelled = true; out.cancelReason = o.cancelled; }
   if (o.venueTBC) {
     out.venueTBC = true;
@@ -3896,6 +3905,29 @@ export function setVenueTBC(sessionId, on) {
   requirePaymentAdminActor();
   (state.sessionOverrides[sessionId] ||= {}).venueTBC = !!on;
   save();
+}
+
+export function setSessionSignupPaused(sessionId, paused) {
+  assertActiveSessionTarget(sessionId);
+  if (isLive()) return liveOps.liveSetIslandEccSignupOpen(sessionId, !paused);
+  requirePaymentAdminActor();
+  const session = getSession(sessionId);
+  if (!session) throw new Error("Session not found.");
+  if (!isIslandEccHyroxSession(session)) {
+    throw new Error("Only Island ECC HYROX weeks can pause sign-up.");
+  }
+  if (session.cancelled) throw new Error("Session is cancelled.");
+  const override = (state.sessionOverrides[sessionId] ||= {});
+  if (paused) {
+    override.signupPaused = true;
+    if (!String(override.notice || "").trim()) override.notice = ISLAND_ECC_SIGNUP_PAUSED_NOTICE;
+  } else {
+    delete override.signupPaused;
+    if (override.notice === ISLAND_ECC_SIGNUP_PAUSED_NOTICE) delete override.notice;
+  }
+  if (!Object.keys(override).length) delete state.sessionOverrides[sessionId];
+  save();
+  return getSession(sessionId);
 }
 
 export function setSessionNotice(sessionId, text) {

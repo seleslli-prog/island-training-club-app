@@ -712,6 +712,21 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(capacity24Migration, /set_operational_session_capacity/);
   assert.match(capacity24Migration, /places already held/);
   console.log("ok  Island ECC capacity is 24 from 14 Nov and admins can change one week");
+  const nov14Pause = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261109000002_pause_nov14_hyrox_signup.sql"),
+    "utf8",
+  );
+  assert.match(nov14Pause, /hyrox-quarry-bay-early-2026-11-14/);
+  assert.match(nov14Pause, /hyrox-quarry-bay-2026-11-14/);
+  assert.match(nov14Pause, /is_open = false/);
+  assert.match(nov14Pause, /set status = 'cancelled'/);
+  assert.match(nov14Pause, /status = 'dissolved'/);
+  assert.match(nov14Pause, /operational_session_signup_paused/);
+  assert.match(nov14Pause, /Sign-up is paused while the times are updated/);
+  assert.match(nov14Pause, /Your place has been cleared/);
+  assert.match(nov14Pause, /set_operational_island_ecc_signup_open/);
+  assert.match(nov14Pause, /HYROX sign-up is paused while the times are updated/);
+  console.log("ok  Sat 14 Nov HYROX sign-up is paused and current places are cleared");
   const lunchNoonMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261018000002_lunch_noon.sql"),
     "utf8",
@@ -5616,6 +5631,97 @@ assert.throws(
   "members must not book one Island ECC slot and queue for the other"
 );
 console.log("ok  one Island ECC booking or queue commitment per Saturday");
+{
+  const previousEmail = store.currentUser()?.email;
+  const previousSchedule = { ...views.scheduleState };
+  const pausedDate = data.isoDate(data.saturdayOnOrAfter(data.addDays(data.todayLocal(), 14)));
+  const earlyId = `hyrox-quarry-bay-early-${pausedDate}`;
+  const lateId = `hyrox-quarry-bay-${pausedDate}`;
+  const laterId = `hyrox-quarry-bay-${data.isoDate(data.addDays(data.parseISO(pausedDate), 7))}`;
+  const openAt = data.islandEccSignupOpensAt(pausedDate);
+  let hold = null;
+  try {
+    store.signIn("member@example.test");
+    assert.throws(
+      () => store.setSessionSignupPaused(earlyId, true),
+      /Approved Admin access required/,
+      "members must not pause HYROX sign-up",
+    );
+    hold = store.reserveSession("fixture-member", earlyId, openAt);
+    store.signIn("admin@example.test");
+    assert.throws(
+      () => store.setSessionSignupPaused("wnt-2026-11-18", true),
+      /Only Island ECC HYROX weeks can pause sign-up/,
+    );
+    store.setSessionSignupPaused(earlyId, true);
+    store.setSessionSignupPaused(lateId, true);
+    assert.equal(store.getBooking(hold.id).status, "reserved",
+      "pausing sign-up must leave an existing place in place");
+    assert.equal(store.getSession(earlyId).signupPaused, true);
+    assert.equal(store.getSession(earlyId).notice, data.ISLAND_ECC_SIGNUP_PAUSED_NOTICE);
+    store.signIn("member@example.test");
+    const heldHtml = views.viewActivity(earlyId);
+    assert.match(heldHtml, /To be paid/);
+    assert.match(heldHtml, /Pay now/);
+    assert.doesNotMatch(heldHtml, /Sign-up paused/);
+    store.releaseReservation(hold.id, openAt);
+    hold = null;
+    const pausedHtml = views.viewActivity(earlyId);
+    assert.match(pausedHtml, /Sign-up paused/);
+    assert.match(pausedHtml, /paused while the times are updated/);
+    assert.doesNotMatch(pausedHtml, /Pay · HK\$180/);
+    assert.doesNotMatch(pausedHtml, new RegExp(`href="#/checkout/${earlyId}"`));
+    const checkout = views.viewCheckout(earlyId);
+    assert.equal(checkout.redirect, `#/activity/${earlyId}`);
+    assert.throws(
+      () => store.reserveSession("fixture-member", earlyId, openAt),
+      /HYROX sign-up is paused while the times are updated/,
+    );
+    assert.throws(
+      () => store.joinWaitlist("fixture-member", lateId, openAt),
+      /HYROX sign-up is paused while the times are updated/,
+    );
+    const target = data.parseISO(pausedDate);
+    const weeks = Math.round(
+      (data.sundayOf(target).getTime() - data.sundayOf(data.todayLocal()).getTime())
+      / (7 * 24 * 60 * 60 * 1000),
+    );
+    views.scheduleState.weekOffset = weeks;
+    views.scheduleState.selected = pausedDate;
+    views.scheduleState.filter = "HYROX";
+    const scheduleHtml = views.viewSchedule();
+    assert.match(scheduleHtml, new RegExp(`href="#/activity/${earlyId}"[\\s\\S]*?Sign-up paused`));
+    assert.match(scheduleHtml, new RegExp(`href="#/activity/${lateId}"[\\s\\S]*?Sign-up paused`));
+    const laterHtml = views.viewActivity(laterId);
+    assert.doesNotMatch(laterHtml, /Sign-up paused/);
+    store.signIn("admin@example.test");
+    const adminHtml = await views.viewAdmin("activities");
+    assert.match(adminHtml, new RegExp(
+      `data-action="session-signup-paused" data-session="${earlyId}" data-paused="0"`,
+    ));
+    assert.match(adminHtml, /Reopen sign-up/);
+    store.setSessionSignupPaused(earlyId, false);
+    store.setSessionSignupPaused(lateId, false);
+    assert.notEqual(store.getSession(earlyId).signupPaused, true);
+    assert.equal(store.getSession(earlyId).notice, undefined);
+    store.signIn("member@example.test");
+    const reopened = views.viewActivity(earlyId);
+    assert.doesNotMatch(reopened, /Sign-up paused/);
+    assert.match(reopened, /Opens Monday at 6 PM|Pay · HK\$180/);
+  } finally {
+    if (hold && store.getBooking(hold.id)?.status === "reserved") {
+      store.signIn("admin@example.test");
+      store.releaseReservation(hold.id, openAt);
+    }
+    store.signIn("admin@example.test");
+    for (const sessionId of [earlyId, lateId]) {
+      if (store.getSession(sessionId)?.signupPaused) store.setSessionSignupPaused(sessionId, false);
+    }
+    Object.assign(views.scheduleState, previousSchedule);
+    if (previousEmail) store.signIn(previousEmail);
+  }
+  console.log("ok  paused Island ECC weeks hide sign-up until an admin reopens them");
+}
 {
   const previousEmail = store.currentUser()?.email;
   const realNow = Date.now;
