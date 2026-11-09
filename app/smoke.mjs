@@ -382,6 +382,12 @@ assert.deepEqual(
   assert.equal(oct24Late.capacity, 20);
   assert.equal(oct31Early.time, "09:00");
   assert.equal(oct31Early.capacity, 20);
+  const nov14Early = store.getSession("hyrox-quarry-bay-early-2026-11-14");
+  const nov14Late = store.getSession("hyrox-quarry-bay-2026-11-14");
+  assert.equal(nov14Early.capacity, 24);
+  assert.equal(nov14Late.capacity, 24);
+  assert.equal(nov14Early.time, "09:00");
+  assert.equal(nov14Late.time, "10:15");
   assert.equal(oct17Early.capacity, 30);
   assert.equal(oct17Late.capacity, 30);
   for (const session of [oct24Early, oct24Late, oct31Early]) {
@@ -695,6 +701,17 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(oct24ScheduleMigration, /session_date >= date '2026-10-24'/);
   assert.match(oct24ScheduleMigration, /time_tbc = false/);
   console.log("ok  Island ECC Oct 24 schedule migration sets 9:00 and 10:15 at capacity 20");
+  const capacity24Migration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261109000001_island_ecc_capacity_24.sql"),
+    "utf8",
+  );
+  assert.match(capacity24Migration, /capacity = 24/);
+  assert.match(capacity24Migration, /session_date >= date '2026-11-14'/);
+  assert.match(capacity24Migration, /hyrox-quarry-bay-early/);
+  assert.match(capacity24Migration, /hyrox-quarry-bay'/);
+  assert.match(capacity24Migration, /set_operational_session_capacity/);
+  assert.match(capacity24Migration, /places already held/);
+  console.log("ok  Island ECC capacity is 24 from 14 Nov and admins can change one week");
   const lunchNoonMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261018000002_lunch_noon.sql"),
     "utf8",
@@ -2675,7 +2692,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=admin-member-contact"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=member-phone-dedupe"',
+  'src="/app/js/app.js?v=session-capacity"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -5763,7 +5780,13 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     nudgeBefore + 1,
   );
 
-  const confirmedSaturday = "2026-11-14";
+  let confirmedSaturday = "2026-11-14";
+  if (store.userBookingFor("fixture-member", `hyrox-quarry-bay-${confirmedSaturday}`)
+      || store.userReservationFor("fixture-member", `hyrox-quarry-bay-${confirmedSaturday}`)
+      || store.userBookingFor("fixture-member", `hyrox-quarry-bay-early-${confirmedSaturday}`)
+      || store.userReservationFor("fixture-member", `hyrox-quarry-bay-early-${confirmedSaturday}`)) {
+    confirmedSaturday = "2026-12-12";
+  }
   const confirmedLate = store.getSession(`hyrox-quarry-bay-${confirmedSaturday}`);
   const confirmedEarly = store.getSession(`hyrox-quarry-bay-early-${confirmedSaturday}`);
   store.signIn("admin@example.test");
@@ -8913,6 +8936,19 @@ if (!store.cancelBooking(movedByOwner.id)
       || store.getSession(nextWeek.id).time !== "09:00" || store.getSession(nextWeek.id).timeTBC) {
     throw new Error("saving one Island ECC time must not change the other slot or later weeks");
   }
+  store.setSessionCapacity(weekEarly.id, 24);
+  if (store.getSession(weekEarly.id).capacity !== 24
+      || store.getSession(weekLate.id).capacity !== 20
+      || store.getSession(nextWeek.id).capacity !== 20) {
+    throw new Error("saving one Island ECC capacity must not change the other slot or later weeks");
+  }
+  try {
+    store.setSessionCapacity(weekEarly.id, 0);
+    throw new Error("capacity below 1 must be rejected");
+  } catch (err) {
+    if (!/at least 1/.test(err.message)) throw err;
+  }
+  store.setSessionCapacity(weekEarly.id, 20);
   store.setSessionTimeTBC(weekEarly.id);
   const restored = store.getSession(weekEarly.id);
   if (!restored.timeTBC || restored.time !== "09:00") {
@@ -9660,6 +9696,8 @@ for (const marker of [
   'data-action="reset-week-venue"',
   "Cancel this week's event",
   'id="form-session-time"',
+  'data-action="form-session-capacity"',
+  "Change capacity for this week",
   'id="form-session-notice"',
   'data-action="venue-tbc-toggle"',
   'id="form-cancel-week"',

@@ -3453,6 +3453,11 @@ function adminPaidSessionControls() {
             <p class="muted small">${s.timeTBC ? "No time set for this week." : `Saved time: ${esc(sessionTimeLabel(s))}.`}</p>
             <button class="btn ghost sm" type="submit">Save time</button>
           </form>
+          <form data-action="form-session-capacity" data-session="${esc(s.id)}" class="mt8">
+            <div class="field"><label>Change capacity for this week</label><input type="number" name="capacity" min="1" step="1" value="${esc(s.capacity ?? "")}" required></div>
+            <p class="muted small">Saved capacity: ${esc(s.capacity ?? "—")}.</p>
+            <button class="btn ghost sm" type="submit">Save capacity</button>
+          </form>
           ${islandEccFlexibleTime(s) && !s.timeTBC ? `<button class="btn ghost sm mt8" type="button" data-action="session-time-tbc" data-session="${esc(s.id)}">Mark time TBC</button>` : ""}
           <form id="form-session-notice" data-session="${esc(s.id)}" class="mt8">
             <div class="field"><label>Session note (weather, logistics)</label><input name="notice" value="${esc(override.notice || "")}" placeholder="Shown on Schedule + session page"></div>
@@ -3468,7 +3473,7 @@ function adminPaidSessionControls() {
   return `
     <details class="admin-section">
       <summary><h3 id="paid-sessions-title">Paid Sessions</h3></summary>
-    <p class="muted small mt8">Change the time, venue status or note for one dated HYROX session — or cancel that week.</p>
+    <p class="muted small mt8">Change the time, capacity, venue status or note for one dated HYROX session — or cancel that week.</p>
     ${sessionCards || `<div class="empty mt8">No upcoming paid sessions.</div>`}
     </details>`;
 }

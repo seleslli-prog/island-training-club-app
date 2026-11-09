@@ -12,14 +12,16 @@ export const ISLAND_ECC_HYROX_ACTIVITY_IDS = new Set([
 ]);
 
 // 17 Oct 2026 keeps 9:15 and 10:30, capacity 30. From 24 Oct the early slot
-// is 9:00 with capacity 20 and the later slot is 10:15 with capacity 20.
-// An admin can still mark one of those weeks TBC.
+// is 9:00 and the later slot is 10:15. Capacity stays 20 through 7 Nov, then
+// both slots are 24 from 14 Nov. An admin can still change one week.
 export const ISLAND_ECC_FLEXIBLE_TIME_FROM = "2026-10-24";
+export const ISLAND_ECC_CAPACITY_24_FROM = "2026-11-14";
 
 export function islandEccWeekSchedule(activityId, dateISO) {
   if (typeof dateISO === "string" && dateISO < ISLAND_ECC_FLEXIBLE_TIME_FROM) return null;
-  if (activityId === "hyrox-quarry-bay-early") return { time: "09:00", capacity: 20 };
-  if (activityId === "hyrox-quarry-bay") return { time: "10:15", capacity: 20 };
+  const capacity = typeof dateISO === "string" && dateISO >= ISLAND_ECC_CAPACITY_24_FROM ? 24 : 20;
+  if (activityId === "hyrox-quarry-bay-early") return { time: "09:00", capacity };
+  if (activityId === "hyrox-quarry-bay") return { time: "10:15", capacity };
   return null;
 }
 

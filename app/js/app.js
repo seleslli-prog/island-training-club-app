@@ -2391,6 +2391,23 @@ document.addEventListener("submit", async (e) => {
       break;
     }
 
+    case "form-session-capacity": {
+      e.preventDefault();
+      const capacity = new FormData(form).get("capacity");
+      const control = form.querySelector('[type="submit"]');
+      const controls = [...form.querySelectorAll("input, button")];
+      try {
+        await withBusyControl(control, "Saving…", async () => {
+          await store.setSessionCapacity(form.dataset.session, capacity);
+          toast("Session capacity updated");
+          await renderWithFeedback();
+        }, { busyKey: form, controls });
+      } catch (err) {
+        toast(err.message || "Unable to update the session capacity", true);
+      }
+      break;
+    }
+
     case "form-session-notice": {
       e.preventDefault();
       const notice = new FormData(form).get("notice");

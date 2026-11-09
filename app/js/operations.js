@@ -1424,6 +1424,17 @@ export async function liveSetSessionTime(sessionId, time) {
   });
 }
 
+export async function liveSetSessionCapacity(sessionId, capacity) {
+  return runOperationalRpc("set_operational_session_capacity", {
+    p_session_id: sessionId,
+    p_capacity: Number(capacity),
+  }, {
+    applyResult(result) {
+      patchLiveSession(result);
+    },
+  });
+}
+
 function rememberLiveTimeTBC(sessionId, result) {
   const session = patchLiveSession(result) || liveCache.sessions.get(sessionId);
   if (!session) return null;
