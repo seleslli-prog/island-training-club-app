@@ -329,6 +329,7 @@ as $$
 declare
   v_session public.operational_sessions;
   v_notice text := 'Sign-up is paused while the times are updated.';
+  v_reopened text := 'signup-reopened';
 begin
   perform public.operational_assert_admin('set_island_ecc_signup_open');
 
@@ -357,8 +358,14 @@ begin
   update public.operational_sessions
      set is_open = p_open,
          notice = case
+           when p_open and id in (
+             'hyrox-quarry-bay-early-2026-11-14',
+             'hyrox-quarry-bay-2026-11-14'
+           ) then v_reopened
            when p_open and notice = v_notice then null
-           when not p_open and (notice is null or btrim(notice) = '') then v_notice
+           when not p_open and (
+             notice is null or btrim(notice) = '' or notice = v_reopened
+           ) then v_notice
            else notice
          end
    where id = p_session_id

@@ -725,6 +725,7 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(nov14Pause, /Sign-up is paused while the times are updated/);
   assert.match(nov14Pause, /Your place has been cleared/);
   assert.match(nov14Pause, /set_operational_island_ecc_signup_open/);
+  assert.match(nov14Pause, /signup-reopened/);
   assert.match(nov14Pause, /HYROX sign-up is paused while the times are updated/);
   console.log("ok  Sat 14 Nov HYROX sign-up is paused and current places are cleared");
   const lunchNoonMigration = readFileSync(
@@ -3418,7 +3419,7 @@ for (const activityId of ["wnt", "run", "water"]) {
 }
 // booking tests need a session that hasn't started yet — today's sessions
 // are unbookable once their start time passes
-const paid = allUpcoming.find((s) => s.kind === "paid" && !data.sessionStarted(s));
+const paid = allUpcoming.find((s) => s.kind === "paid" && !s.signupPaused && !data.sessionStarted(s));
 const free = allUpcoming.find((s) => s.kind === "free");
 if (!paid || !free) throw new Error("expected both paid and free sessions in window");
 const localVisitorHome = await views.viewHome();
@@ -4170,7 +4171,7 @@ if (!paidHtml.includes('badge paid">HK$180</span>') || paidHtml.includes("per se
   failures++;
   console.error("FAIL unbooked paid activity badge should read only its price");
 } else console.log("ok  unbooked paid activity badge reads only its price");
-const unpaidBadgeSession = allUpcoming.find((s) => s.kind === "paid" && s.activityId === "hyrox-quarry-bay" && !data.sessionStarted(s));
+const unpaidBadgeSession = allUpcoming.find((s) => s.kind === "paid" && s.activityId === "hyrox-quarry-bay" && !s.signupPaused && !data.sessionStarted(s));
 installLocalFixtures();
 store.signIn("member@example.test");
 const paidHtmlWithAttendeeNames = views.viewActivity(paid.id, ["Alex C.", "Sam L."]);
@@ -4613,7 +4614,7 @@ if (!/approved member/i.test(pendingPrayerHtml) || pendingPrayerHtml.includes('i
 }
 // Island ECC remains the only paid HYROX path and must keep the pending-user
 // "Booking locked" gate used by the existing direct-session flow.
-const islandEccPaid = allUpcoming.find((s) => s.activityId === "hyrox-quarry-bay" && !data.sessionStarted(s));
+const islandEccPaid = allUpcoming.find((s) => s.activityId === "hyrox-quarry-bay" && !s.signupPaused && !data.sessionStarted(s));
 const pendHtml = views.viewActivity(islandEccPaid.id);
 if (!pendHtml.includes("Booking locked")) {
   failures++;
@@ -5580,7 +5581,7 @@ console.log("ok  styles.css contains all modal-related class definitions");
 
 // --- HYROX payment system: reserve -> mark -> collector confirm (Task 2) ---
 const islandEccSession = allUpcoming.find(
-  (s) => s.activityId === "hyrox-quarry-bay" && !data.sessionStarted(s)
+  (s) => s.activityId === "hyrox-quarry-bay" && !s.signupPaused && !data.sessionStarted(s)
 );
 if (!islandEccSession) throw new Error("expected an upcoming Island ECC session");
 const before = store.spotsLeft(islandEccSession);
@@ -5640,6 +5641,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   const laterId = `hyrox-quarry-bay-${data.isoDate(data.addDays(data.parseISO(pausedDate), 7))}`;
   const openAt = data.islandEccSignupOpensAt(pausedDate);
   let hold = null;
+  let nov14Hold = null;
   try {
     store.signIn("member@example.test");
     assert.throws(
@@ -5708,12 +5710,56 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     const reopened = views.viewActivity(earlyId);
     assert.doesNotMatch(reopened, /Sign-up paused/);
     assert.match(reopened, /Opens Monday at 6 PM|Pay · HK\$180/);
+    store.signIn("member@example.test");
+    for (const sessionId of [
+      "hyrox-quarry-bay-early-2026-11-14",
+      "hyrox-quarry-bay-2026-11-14",
+    ]) {
+      const html = views.viewActivity(sessionId);
+      assert.match(html, /Sign-up paused/);
+      assert.doesNotMatch(html, /Pay · HK\$180/);
+      assert.doesNotMatch(html, /Pay now/);
+      assert.doesNotMatch(html, new RegExp(`href="#/checkout/${sessionId}"`));
+      assert.doesNotMatch(html, /href="#\/pay\//);
+    }
+    const nov14Early = "hyrox-quarry-bay-early-2026-11-14";
+    const nov14OpenAt = data.islandEccSignupOpensAt("2026-11-14");
+    assert.throws(
+      () => store.reserveSession("fixture-member", nov14Early, nov14OpenAt),
+      /HYROX sign-up is paused while the times are updated/,
+    );
+    store.signIn("admin@example.test");
+    store.setSessionSignupPaused(nov14Early, false);
+    nov14Hold = store.reserveSession("fixture-member", nov14Early, nov14OpenAt);
+    store.setSessionSignupPaused(nov14Early, true);
+    store.signIn("member@example.test");
+    const nov14Held = views.viewActivity(nov14Early);
+    assert.match(nov14Held, /Sign-up paused/);
+    assert.doesNotMatch(nov14Held, /Pay now/);
+    assert.doesNotMatch(views.viewBooking(nov14Hold.id), /href="#\/pay\//);
+    assert.equal(views.viewPay(nov14Hold.id).redirect, `#/activity/${nov14Early}`);
+    assert.throws(
+      () => store.markBookingPaid(nov14Hold.id, "PayMe", "NOV14"),
+      /HYROX sign-up is paused while the times are updated/,
+    );
+    store.signIn("admin@example.test");
+    store.releaseReservation(nov14Hold.id, nov14OpenAt);
+    store.setSessionSignupPaused(nov14Early, true);
   } finally {
     if (hold && store.getBooking(hold.id)?.status === "reserved") {
       store.signIn("admin@example.test");
       store.releaseReservation(hold.id, openAt);
     }
     store.signIn("admin@example.test");
+    if (nov14Hold && store.getBooking(nov14Hold.id)?.status === "reserved") {
+      store.releaseReservation(nov14Hold.id, data.islandEccSignupOpensAt("2026-11-14"));
+    }
+    for (const sessionId of [
+      "hyrox-quarry-bay-early-2026-11-14",
+      "hyrox-quarry-bay-2026-11-14",
+    ]) {
+      if (!store.getSession(sessionId)?.signupPaused) store.setSessionSignupPaused(sessionId, true);
+    }
     for (const sessionId of [earlyId, lateId]) {
       if (store.getSession(sessionId)?.signupPaused) store.setSessionSignupPaused(sessionId, false);
     }
@@ -5887,7 +5933,8 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   );
 
   let confirmedSaturday = "2026-11-14";
-  if (store.userBookingFor("fixture-member", `hyrox-quarry-bay-${confirmedSaturday}`)
+  if (store.getSession(`hyrox-quarry-bay-${confirmedSaturday}`)?.signupPaused
+      || store.userBookingFor("fixture-member", `hyrox-quarry-bay-${confirmedSaturday}`)
       || store.userReservationFor("fixture-member", `hyrox-quarry-bay-${confirmedSaturday}`)
       || store.userBookingFor("fixture-member", `hyrox-quarry-bay-early-${confirmedSaturday}`)
       || store.userReservationFor("fixture-member", `hyrox-quarry-bay-early-${confirmedSaturday}`)) {
@@ -5944,7 +5991,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   assert.doesNotMatch(otherDetail, /Book &amp; pay|Book & pay/);
   assert.doesNotMatch(otherDetail, /join-waitlist/);
   {
-    const waitlistSaturday = "2026-11-21";
+    const waitlistSaturday = "2026-11-28";
     const waitlistSession = store.getSession(`hyrox-quarry-bay-${waitlistSaturday}`);
     if (!waitlistSession) throw new Error("expected a later Island ECC session for waitlist UI");
     const waitlistActivity = store.getActivity("hyrox-quarry-bay");
@@ -5998,6 +6045,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     store.signIn("admin@example.test");
     const selfSession = store.upcomingSessions(60).find((session) =>
       session.activityId === "hyrox-quarry-bay"
+      && !session.signupPaused
       && !data.sessionStarted(session)
       && !store.userBookingFor(store.currentUser().id, session.id)
       && !store.userReservationFor(store.currentUser().id, session.id)
@@ -6180,6 +6228,7 @@ if (bookingInMyWeek && !(await views.viewHome()).includes(bookedActivityLink)) {
   // A confirmed booking next week must not appear even inside the 14-day set.
   const nextWeekSession = allUpcoming.find((session) =>
     session.kind === "paid"
+    && !session.signupPaused
     && session.id !== booking.sessionId
     && session.dateISO > myWeekEndISO
     && session.dateISO !== booking.snapshot.dateISO
@@ -8294,7 +8343,7 @@ console.log("ok  reset");
   installLocalFixtures();
   const paidSessions = store.upcomingSessions(70).filter((session) =>
     session.activityId === "hyrox-quarry-bay"
-      && !session.cancelled && !data.sessionStarted(session)
+      && !session.signupPaused && !session.cancelled && !data.sessionStarted(session)
   );
   if (paidSessions.length < 3) throw new Error("attendance tests need three future paid sessions");
 
@@ -8651,7 +8700,8 @@ function installLocalFixtures({ withMemberBooking = false } = {}) {
   ];
   if (withMemberBooking) {
     const upcoming = store.upcomingSessions(14);
-    const fixtureMemberSession = upcoming.find((s) => s.activityId === "hyrox-quarry-bay" && !data.sessionStarted(s));
+    const fixtureMemberSession = upcoming.find((s) =>
+      s.activityId === "hyrox-quarry-bay" && !s.signupPaused && !data.sessionStarted(s));
     if (fixtureMemberSession) {
       clean.bookings = [
         ...(clean.bookings || []),
@@ -8770,7 +8820,7 @@ store.load();
 // Payment access belongs at the state seam, including mutations called
 // without rendering their gated controls first.
 const paymentGateSession = store.upcomingSessions(14).find(
-  (session) => session.kind === "paid" && !data.sessionStarted(session)
+  (session) => session.kind === "paid" && !session.signupPaused && !data.sessionStarted(session)
 );
 if (!paymentGateSession) throw new Error("Payment seam checks need an upcoming paid session");
 for (const blockedId of ["giving-pending", "giving-declined", "missing-member"]) {
@@ -8788,7 +8838,7 @@ for (const blockedId of ["giving-pending", "giving-declined", "missing-member"])
   }
 }
 const authoritySessions = store.upcomingSessions(42).filter(
-  (session) => session.kind === "paid" && !data.sessionStarted(session)
+  (session) => session.kind === "paid" && !session.signupPaused && !data.sessionStarted(session)
 );
 const cancelledAuthoritySession = authoritySessions.find((session) => session.id !== paymentGateSession.id);
 const tamperAuthoritySession = authoritySessions.find(
@@ -9006,7 +9056,7 @@ if (movedByOwner.userId !== "giving-member" || movedByOwner.status !== "confirme
 }
 const movedDate = store.getSession(movedByOwner.sessionId)?.dateISO;
 const releaseSession = store.upcomingSessions(28).find((session) =>
-  session.kind === "paid" && !data.sessionStarted(session) && !session.cancelled
+  session.kind === "paid" && !session.signupPaused && !data.sessionStarted(session) && !session.cancelled
   && session.id !== movedByOwner.sessionId
   && session.dateISO !== movedDate
 );
@@ -9245,7 +9295,7 @@ const receiptMigrationFixture = {
 mem.set("itc.prototype.v1", JSON.stringify(receiptMigrationFixture));
 store.load();
 const receiptSession = store.upcomingSessions(14).find(
-  (session) => session.kind === "paid" && !data.sessionStarted(session)
+  (session) => session.kind === "paid" && !session.signupPaused && !data.sessionStarted(session)
 );
 if (!receiptSession) throw new Error("post-migration receipt check needs an upcoming paid session");
 const migratedReservation = store.reserveSession("receipt-member", receiptSession, islandEccOpenNow(receiptSession));
@@ -10318,7 +10368,7 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
     web_push_ops: !!optedIn.webPushOps,
   });
   const paidSession = store.upcomingSessions(21).find((session) =>
-    session.kind === "paid" && !data.sessionStarted(session)
+    session.kind === "paid" && !session.signupPaused && !data.sessionStarted(session)
     && !store.userBookingFor(optedIn.id, session.id));
   if (!paidSession) {
     failures++;
@@ -10337,7 +10387,7 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
   store.signIn("member@example.test");
   const optedOut = store.currentUser();
   const otherSession = store.upcomingSessions(21).find((session) =>
-    session.kind === "paid" && !data.sessionStarted(session)
+    session.kind === "paid" && !session.signupPaused && !data.sessionStarted(session)
     && !store.userBookingFor(optedOut.id, session.id));
   if (!otherSession) {
     failures++;

@@ -33,6 +33,8 @@ import {
   ISLAND_ECC_SIGNUP_CLOSED_ERROR,
   ISLAND_ECC_SIGNUP_PAUSED_ERROR,
   ISLAND_ECC_SIGNUP_PAUSED_NOTICE,
+  ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS,
+  ISLAND_ECC_SIGNUP_REOPENED_NOTICE,
   islandEccPaymentDeadlineAt,
   sessionReminderTomorrowAt,
   sessionReminderMorningAt,
@@ -2367,7 +2369,17 @@ export function islandEccSignupClosedFor(session, now = Date.now()) {
 }
 
 export function islandEccSignupPaused(session) {
-  return isIslandEccHyroxSession(session) && session?.signupPaused === true;
+  if (!isIslandEccHyroxSession(session)) return false;
+  if (session?.signupReopened === true) return false;
+  if (ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(session?.id)) return true;
+  return session?.signupPaused === true;
+}
+
+// Sat 14 Nov is cleared while the times change, so an existing place must
+// not keep a Pay button. A normal admin pause still lets current holds pay.
+export function islandEccSignupPaymentClosed(session) {
+  return ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(session?.id)
+    && islandEccSignupPaused(session);
 }
 
 export function islandEccOtherSlotTaken(session, userId = currentUser()?.id) {
@@ -2465,6 +2477,9 @@ export function markBookingPaid(bookingId, method, ref, now = Date.now()) {
   const b = getBooking(bookingId);
   if (!b || b.status !== "reserved" || b.paymentMarkedAt) return null;
   requireAuthorizedPaymentOwner(b.userId);
+  if (islandEccSignupPaymentClosed(getSession(b.sessionId))) {
+    throw new Error(ISLAND_ECC_SIGNUP_PAUSED_ERROR);
+  }
   b.paymentMarkedAt = now;
   b.paidMethod = method === "FPS" ? "FPS" : "PayMe";
   b.paymentRef = String(ref ?? "").trim() || null;
@@ -2924,7 +2939,12 @@ function applyIslandEccFlexibleTime(session, override) {
 function decorateSession(s) {
   const o = state.sessionOverrides[s.id];
   const out = { ...s };
-  if (!o) return applyWntLeaderNote(applyIslandEccFlexibleTime(out, null));
+  if (!o) {
+    return applyForcedSignupPause(
+      applyWntLeaderNote(applyIslandEccFlexibleTime(out, null)),
+      null,
+    );
+  }
   if (o.time) out.time = o.time;
   if (o.signupPaused) out.signupPaused = true;
   if (o.cancelled) { out.cancelled = true; out.cancelReason = o.cancelled; }
@@ -2947,7 +2967,24 @@ function decorateSession(s) {
   if (hasConfirmedVenue(out.location, out.mapsQuery)) out.venueTBC = false;
   const decorated = applyWntLeaderNote(applyIslandEccFlexibleTime(out, o));
   if (o.capacity != null) decorated.capacity = Number(o.capacity);
-  return decorated;
+  return applyForcedSignupPause(decorated, o);
+}
+
+function applyForcedSignupPause(session, override) {
+  if (!ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(session?.id)) return session;
+  if (override?.signupReopened || session?.notice === ISLAND_ECC_SIGNUP_REOPENED_NOTICE) {
+    const reopened = { ...session, signupPaused: false, signupReopened: true };
+    if (reopened.notice === ISLAND_ECC_SIGNUP_PAUSED_NOTICE
+        || reopened.notice === ISLAND_ECC_SIGNUP_REOPENED_NOTICE) {
+      delete reopened.notice;
+    }
+    return reopened;
+  }
+  return {
+    ...session,
+    signupPaused: true,
+    notice: session.notice || ISLAND_ECC_SIGNUP_PAUSED_NOTICE,
+  };
 }
 
 function applyWntLeaderNote(session) {
@@ -3920,10 +3957,13 @@ export function setSessionSignupPaused(sessionId, paused) {
   const override = (state.sessionOverrides[sessionId] ||= {});
   if (paused) {
     override.signupPaused = true;
+    delete override.signupReopened;
     if (!String(override.notice || "").trim()) override.notice = ISLAND_ECC_SIGNUP_PAUSED_NOTICE;
   } else {
     delete override.signupPaused;
-    if (override.notice === ISLAND_ECC_SIGNUP_PAUSED_NOTICE) delete override.notice;
+    if (ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(sessionId)) override.signupReopened = true;
+    if (override.notice === ISLAND_ECC_SIGNUP_PAUSED_NOTICE
+        || override.notice === ISLAND_ECC_SIGNUP_REOPENED_NOTICE) delete override.notice;
   }
   if (!Object.keys(override).length) delete state.sessionOverrides[sessionId];
   save();
