@@ -2936,7 +2936,9 @@ function decorateSession(s) {
     if (point) Object.assign(out, { meetingLat: point.lat, meetingLng: point.lng });
   }
   if (hasConfirmedVenue(out.location, out.mapsQuery)) out.venueTBC = false;
-  return applyWntLeaderNote(applyIslandEccFlexibleTime(out, o));
+  const decorated = applyWntLeaderNote(applyIslandEccFlexibleTime(out, o));
+  if (o.capacity != null) decorated.capacity = Number(o.capacity);
+  return decorated;
 }
 
 function applyWntLeaderNote(session) {
@@ -3843,6 +3845,27 @@ export function setSessionTime(sessionId, time) {
         `#/activity/${sessionId}`);
     }
   }
+  save();
+  return getSession(sessionId);
+}
+
+export function setSessionCapacity(sessionId, capacity) {
+  assertActiveSessionTarget(sessionId);
+  if (isLive()) return liveOps.liveSetSessionCapacity(sessionId, capacity);
+  requirePaymentAdminActor();
+  const session = getSession(sessionId);
+  const nextCapacity = Number(capacity);
+  if (!session) throw new Error("Session not found.");
+  if (!Number.isInteger(nextCapacity) || nextCapacity < 1) {
+    throw new Error("Enter a capacity of at least 1.");
+  }
+  const held = heldBookingsForSession(sessionId).length;
+  if (nextCapacity < held) {
+    throw new Error(`Capacity cannot be lower than the ${held} places already held.`);
+  }
+  if (session.capacity === nextCapacity) return session;
+  const override = (state.sessionOverrides[sessionId] ||= {});
+  override.capacity = nextCapacity;
   save();
   return getSession(sessionId);
 }
