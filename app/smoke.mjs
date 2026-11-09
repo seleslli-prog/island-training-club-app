@@ -2690,9 +2690,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=session-cap-align"',
+  'href="/app/styles.css?v=session-cap-inline"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=session-cap-align"',
+  'src="/app/js/app.js?v=session-cap-inline"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -9727,9 +9727,9 @@ assert.deepEqual(
   "Recurring Activity Defaults must sort by weekday, then start time"
 );
 assert.equal(
-  (recurringDefaultsHtml.match(/class="session-cap">cap 24</g) || []).length,
+  (recurringDefaultsHtml.match(/HK\$180 · cap 24/g) || []).length,
   2,
-  "both Island ECC defaults keep capacity in the same right-hand slot"
+  "both Island ECC defaults keep capacity beside the price"
 );
 assert.equal(data.islandEccWeekSchedule("hyrox-quarry-bay-early").capacity, 24);
 assert.equal(data.islandEccWeekSchedule("hyrox-quarry-bay").capacity, 24);
