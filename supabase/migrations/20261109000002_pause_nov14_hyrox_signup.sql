@@ -120,17 +120,18 @@ begin
    where person.profile_id is not null
      and exists (select 1 from audited);
 
+  with cancelled_bookings as (
+    update public.operational_bookings b
+       set status = 'cancelled',
+           attended_at = null,
+           attended_by = null
+     where b.session_id = any (v_ids)
+       and b.status in ('reserved', 'confirmed', 'attended')
+    returning b.session_id, b.profile_id, b.replacement_profile_id
+  )
   insert into nov14_released (session_id, profile_id)
   select released.session_id, person.profile_id
-    from (
-      update public.operational_bookings b
-         set status = 'cancelled',
-             attended_at = null,
-             attended_by = null
-       where b.session_id = any (v_ids)
-         and b.status in ('reserved', 'confirmed', 'attended')
-      returning b.session_id, b.profile_id, b.replacement_profile_id
-    ) released
+    from cancelled_bookings released
     cross join lateral (
       select released.profile_id
       union
@@ -138,16 +139,17 @@ begin
     ) person
    where person.profile_id is not null;
 
+  with dissolved_queue as (
+    update public.operational_queue_entries q
+       set status = 'dissolved',
+           resolved_at = now()
+     where q.session_id = any (v_ids)
+       and q.status = 'active'
+    returning q.session_id, q.profile_id
+  )
   insert into nov14_released (session_id, profile_id)
   select q.session_id, q.profile_id
-    from (
-      update public.operational_queue_entries q
-         set status = 'dissolved',
-             resolved_at = now()
-       where q.session_id = any (v_ids)
-         and q.status = 'active'
-      returning q.session_id, q.profile_id
-    ) q
+    from dissolved_queue q
    where q.profile_id is not null;
 
   insert into public.notifications (profile_id, kind, title, body, destination)
