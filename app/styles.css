@@ -854,6 +854,20 @@ a.profile-row:hover .pr-text strong { color: var(--accent); }
   color: var(--muted);
 }
 
+.session-row p.with-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.session-row .session-cap {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .session-row .row-end {
   display: flex;
   flex-direction: column;
