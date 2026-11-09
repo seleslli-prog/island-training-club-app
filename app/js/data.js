@@ -19,7 +19,7 @@ export const ISLAND_ECC_CAPACITY_24_FROM = "2026-11-14";
 
 export function islandEccWeekSchedule(activityId, dateISO) {
   if (typeof dateISO === "string" && dateISO < ISLAND_ECC_FLEXIBLE_TIME_FROM) return null;
-  const capacity = typeof dateISO === "string" && dateISO >= ISLAND_ECC_CAPACITY_24_FROM ? 24 : 20;
+  const capacity = typeof dateISO !== "string" || dateISO >= ISLAND_ECC_CAPACITY_24_FROM ? 24 : 20;
   if (activityId === "hyrox-quarry-bay-early") return { time: "09:00", capacity };
   if (activityId === "hyrox-quarry-bay") return { time: "10:15", capacity };
   return null;

@@ -3978,11 +3978,12 @@ function adminActivities() {
   const activityRows = acts
     .map((a) => {
       const scheduled = islandEccWeekSchedule(a.id);
+      const capacity = scheduled?.capacity ?? a.capacity;
       const body = `
           <time>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][a.weekday]}<small>${esc(scheduled?.time || a.time)}</small></time>
           <div>
             <h3>${esc(a.name)}</h3>
-            <p>${esc(a.location)}${a.kind === "paid" ? ` · ${fmtMoney(a.price)} · cap ${scheduled?.capacity ?? a.capacity}` : " · open attendance"}</p>
+            <p class="${a.kind === "paid" && capacity != null ? "with-cap" : ""}"><span>${esc(a.location)}${a.kind === "paid" ? ` · ${fmtMoney(a.price)}` : " · open attendance"}</span>${a.kind === "paid" && capacity != null ? `<span class="session-cap">cap ${esc(capacity)}</span>` : ""}</p>
           </div>
           <div class="row-end">
             ${a.kind === "free" ? '<span class="badge free">Free</span>' : a.kind === "rsvp" ? '<span class="badge free">RSVP</span>' : '<span class="badge paid">Paid</span>'}

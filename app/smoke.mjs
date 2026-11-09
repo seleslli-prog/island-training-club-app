@@ -2690,9 +2690,9 @@ assert.match(appIndexSource, /href="\/app\/styles\.css\?v=[a-z0-9-]+"/,
   "stylesheet URL must be versioned so visual fixes bypass stale browser CSS");
 for (const assetReference of [
   'href="/app/manifest.webmanifest"',
-  'href="/app/styles.css?v=admin-member-contact"',
+  'href="/app/styles.css?v=session-cap-align"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=session-capacity"',
+  'src="/app/js/app.js?v=session-cap-align"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -9726,6 +9726,13 @@ assert.deepEqual(
   ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 09:00", "Sat 10:15", "Sat 12:00"],
   "Recurring Activity Defaults must sort by weekday, then start time"
 );
+assert.equal(
+  (recurringDefaultsHtml.match(/class="session-cap">cap 24</g) || []).length,
+  2,
+  "both Island ECC defaults keep capacity in the same right-hand slot"
+);
+assert.equal(data.islandEccWeekSchedule("hyrox-quarry-bay-early").capacity, 24);
+assert.equal(data.islandEccWeekSchedule("hyrox-quarry-bay").capacity, 24);
 if (!activitiesHtml.includes("Admin Tools") || activitiesHtml.includes("Club Operations")) {
   throw new Error("Admin heading must read Admin Tools");
 }
