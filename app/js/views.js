@@ -176,9 +176,9 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
     end = store.sessionRequiresRsvp(s)
       ? `<span class="badge free booked">Going</span><span class="spots">${store.attendeeCountFor(s)} going</span>`
       : `<span class="badge free booked">${booked.status === "attended" ? "Arrived" : "Booked"}</span>`;
-  } else if (reserved?.paymentMarkedAt) {
+  } else if (reserved?.paymentMarkedAt && !store.islandEccSignupPaymentClosed(s)) {
     end = `<span class="badge warn">Awaiting confirmation</span>`;
-  } else if (reserved) {
+  } else if (reserved && !store.islandEccSignupPaymentClosed(s)) {
     end = `<span class="badge warn">Pay by ${fmtDeadline(reserved.payDeadlineAt)}</span>`;
   } else if (store.islandEccSignupPaused(s)) {
     end = `<span class="badge neutral">Sign-up paused</span>`;
@@ -820,7 +820,7 @@ export function viewActivity(sessionId, options) {
         <a class="btn" href="#/booking/${booking.id}">Manage booking</a>
         ${directionsLink}
       </div>`;
-  } else if (reservation) {
+  } else if (reservation && !store.islandEccSignupPaymentClosed(s)) {
     const selfCollectorHold = store.canConfirmOwnCollectorBooking(reservation.id);
     actionBlock = selfCollectorHold ? `
       <div class="banner mt16">
@@ -2622,6 +2622,9 @@ export function viewCheckout(sessionId) {
   if (confirmed) {
     return { redirect: `#/booking/${confirmed.id}` };
   }
+  if (store.islandEccSignupPaymentClosed(s)) {
+    return { redirect: `#/activity/${sessionId}` };
+  }
   const existingRes = store.userReservationFor(user.id, s.id);
   if (existingRes) {
     return {
@@ -2696,6 +2699,10 @@ export function viewPay(bookingId) {
   if (!b || !user || user.status !== "approved" || b.userId !== user.id) return viewNotFound("Booking not found.");
   if (b.status !== "reserved" || b.paymentMarkedAt)
     return { redirect: `#/booking/${b.id}` };
+  const pausedSession = store.getSession(b.sessionId);
+  if (pausedSession && store.islandEccSignupPaymentClosed(pausedSession)) {
+    return { redirect: `#/activity/${b.sessionId}` };
+  }
   const s = b.snapshot;
   const collector = store.collectorFor(b.sessionId);
   const selfCollector = store.canConfirmOwnCollectorBooking(b.id);
@@ -2918,7 +2925,15 @@ export function viewBooking(bookingId) {
 
   let head = "";
   let actions = "";
-  if (b.status === "reserved" && !b.paymentMarkedAt) {
+  if (b.status === "reserved" && !b.paymentMarkedAt
+      && assignedSession && store.islandEccSignupPaymentClosed(assignedSession)) {
+    head = `
+      <h1 class="display sm mt16">Sign-up paused</h1>
+      <p class="subcopy mt8">Sign-up for this Saturday is paused while the times are updated. Payment stays closed until the new time is posted.</p>`;
+    actions = b.sessionId
+      ? `<a class="btn ghost" href="#/activity/${b.sessionId}">Back to session</a>`
+      : "";
+  } else if (b.status === "reserved" && !b.paymentMarkedAt) {
     const selfCollector = mine && store.canConfirmOwnCollectorBooking(b.id);
     head = `
       <h1 class="display sm mt16">Spot held.</h1>

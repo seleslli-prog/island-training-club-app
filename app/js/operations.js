@@ -11,7 +11,14 @@
 // any local mutation that would otherwise mask the failure.
 // ==========================================================================
 
-import { SEED_ACTIVITIES, ISLAND_ECC_HYROX_ACTIVITY_IDS, compareSessionsByStart } from "./data.js";
+import {
+  SEED_ACTIVITIES,
+  ISLAND_ECC_HYROX_ACTIVITY_IDS,
+  ISLAND_ECC_SIGNUP_PAUSED_NOTICE,
+  ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS,
+  ISLAND_ECC_SIGNUP_REOPENED_NOTICE,
+  compareSessionsByStart,
+} from "./data.js";
 import { isLive, supabase } from "./config.js";
 import {
   isRetiredHyroxActivityId,
@@ -110,6 +117,16 @@ function buildSessionRow(row, templatesById = null) {
   const externalPayment = !!row.external_payment || !!template?.external_payment;
   const externalPrice = row.external_price_hkd ?? template?.external_price_hkd ?? null;
   const freePresentation = oneOff || FREE_PRESENTATION_ACTIVITY_IDS.has(row.activity_id);
+  const signupReopened = row.notice === ISLAND_ECC_SIGNUP_REOPENED_NOTICE;
+  const signupForcedClosed = ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(row.id) && !signupReopened;
+  const signupPaused = signupForcedClosed || (
+    !signupReopened
+    && ISLAND_ECC_HYROX_ACTIVITY_IDS.has(row.activity_id)
+    && row.is_open === false
+  );
+  const notice = signupReopened
+    ? null
+    : (row.notice || (signupForcedClosed ? ISLAND_ECC_SIGNUP_PAUSED_NOTICE : null));
   const legacyMidtown = row.activity_id === "hyrox-midtown"
     && row.venue === "Midtown 28";
   const venue = legacyMidtown
@@ -155,9 +172,10 @@ function buildSessionRow(row, templatesById = null) {
     price: row.price_hkd,
     heldCount: Number.isFinite(Number(row.held_count)) ? Number(row.held_count) : null,
     isOpen: row.is_open,
-    signupPaused: ISLAND_ECC_HYROX_ACTIVITY_IDS.has(row.activity_id) && row.is_open === false,
+    signupPaused,
+    signupReopened,
     venueTBC: !!row.venue_tbc,
-    notice: row.notice || null,
+    notice,
     cancelReason: row.cancel_reason || null,
     cancelled: !!row.cancelled_at,
     cancelledAt: row.cancelled_at || null,
