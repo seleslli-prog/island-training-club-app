@@ -11,7 +11,7 @@
 // any local mutation that would otherwise mask the failure.
 // ==========================================================================
 
-import { SEED_ACTIVITIES, compareSessionsByStart } from "./data.js";
+import { SEED_ACTIVITIES, ISLAND_ECC_HYROX_ACTIVITY_IDS, compareSessionsByStart } from "./data.js";
 import { isLive, supabase } from "./config.js";
 import {
   isRetiredHyroxActivityId,
@@ -155,6 +155,7 @@ function buildSessionRow(row, templatesById = null) {
     price: row.price_hkd,
     heldCount: Number.isFinite(Number(row.held_count)) ? Number(row.held_count) : null,
     isOpen: row.is_open,
+    signupPaused: ISLAND_ECC_HYROX_ACTIVITY_IDS.has(row.activity_id) && row.is_open === false,
     venueTBC: !!row.venue_tbc,
     notice: row.notice || null,
     cancelReason: row.cancel_reason || null,
@@ -1476,6 +1477,17 @@ export async function liveSetSessionNotice(sessionId, notice) {
   return runOperationalRpc("set_operational_notice", {
     p_session_id: sessionId,
     p_notice: notice || "",
+  });
+}
+
+export async function liveSetIslandEccSignupOpen(sessionId, open) {
+  return runOperationalRpc("set_operational_island_ecc_signup_open", {
+    p_session_id: sessionId,
+    p_open: !!open,
+  }, {
+    applyResult(result) {
+      patchLiveSession(result);
+    },
   });
 }
 

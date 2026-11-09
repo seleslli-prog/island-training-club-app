@@ -1857,6 +1857,19 @@ document.addEventListener("click", async (e) => {
       } catch (err) { toast(err.message || "Unable to update the venue status", true); }
       break;
 
+    case "session-signup-paused":
+      try {
+        await withBusyControl(el, "Updating…", async () => {
+          const paused = el.dataset.paused === "1";
+          await store.setSessionSignupPaused(el.dataset.session, paused);
+          toast(paused ? "Sign-up paused for this week" : "Sign-up reopened");
+          await renderWithFeedback();
+        });
+      } catch (err) {
+        toast(err.message || "Unable to update sign-up", true);
+      }
+      break;
+
     case "session-time-tbc":
       try {
         await withBusyControl(el, "Updating…", async () => {

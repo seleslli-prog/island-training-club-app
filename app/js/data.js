@@ -316,6 +316,8 @@ export function islandEccSignupClosed(sessionDateISO, now = Date.now()) {
 
 export const ISLAND_ECC_SIGNUP_LOCKED_ERROR = "HYROX sign-up opens Monday at 6 PM HKT.";
 export const ISLAND_ECC_SIGNUP_CLOSED_ERROR = "HYROX sign-up closes Thursday at 6 PM HKT.";
+export const ISLAND_ECC_SIGNUP_PAUSED_ERROR = "HYROX sign-up is paused while the times are updated.";
+export const ISLAND_ECC_SIGNUP_PAUSED_NOTICE = "Sign-up is paused while the times are updated.";
 
 export function todayLocal() {
   const d = new Date();
@@ -696,6 +698,7 @@ export const SESSION_REMINDER_KINDS = Object.freeze([
   "operational_session_cancelled",
   "operational_session_cancelled_no_defer",
   "operational_session_time_updated",
+  "operational_session_signup_paused",
   "operational_session_reminder_tomorrow",
   "operational_session_reminder_morning",
   "session-cancelled",
@@ -744,6 +747,7 @@ const NOTIFICATION_DESTINATIONS = new Map([
   ["operational_payment_marked", "#/admin/payments"],
   ["operational_gym_finalized", "#/admin/payments"],
   ["operational_session_cancelled", "#/schedule"],
+  ["operational_session_signup_paused", "#/schedule"],
   ["operational_session_venue_updated", "#/schedule"],
   ["admin_application_submitted", "#/admin/approvals"],
   ["admin_application_approved", "#/admin/members"],

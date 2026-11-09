@@ -180,6 +180,8 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
     end = `<span class="badge warn">Awaiting confirmation</span>`;
   } else if (reserved) {
     end = `<span class="badge warn">Pay by ${fmtDeadline(reserved.payDeadlineAt)}</span>`;
+  } else if (store.islandEccSignupPaused(s)) {
+    end = `<span class="badge neutral">Sign-up paused</span>`;
   } else if (store.islandEccSignupLocked(s)) {
     end = `<span class="badge neutral">Opens Monday at 6 PM</span>`;
   } else if (store.islandEccSignupClosedFor(s)) {
@@ -845,6 +847,13 @@ export function viewActivity(sessionId, options) {
         <a class="btn" href="#/pay/${reservation.id}">Pay now</a>
         ${directionsLink}
       </div>`;
+  } else if (store.islandEccSignupPaused(s)) {
+    actionBlock = `
+      <div class="banner mt16">
+        <span class="kicker">Sign-up paused</span>
+        <p>Sign-up for this Saturday is paused while the times are updated. You will be able to sign up again once the new times are posted.</p>
+      </div>
+      ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
   } else if (isMember && store.islandEccSignupLocked(s)) {
     actionBlock = `
       <div class="banner mt16">
@@ -2623,7 +2632,7 @@ export function viewCheckout(sessionId) {
   }
   if (sessionStarted(s) || s.cancelled || store.spotsLeft(s) <= 0)
     return { redirect: `#/activity/${sessionId}` };
-  if (store.islandEccSignupLocked(s) || store.islandEccSignupClosedFor(s) || store.islandEccOtherSlotTaken(s)) {
+  if (store.islandEccSignupPaused(s) || store.islandEccSignupLocked(s) || store.islandEccSignupClosedFor(s) || store.islandEccOtherSlotTaken(s)) {
     return { redirect: `#/activity/${sessionId}` };
   }
   if (store.canConfirmOwnCollectorSession(s.id)) {
@@ -3459,6 +3468,9 @@ function adminPaidSessionControls() {
             <button class="btn ghost sm" type="submit">Save capacity</button>
           </form>
           ${islandEccFlexibleTime(s) && !s.timeTBC ? `<button class="btn ghost sm mt8" type="button" data-action="session-time-tbc" data-session="${esc(s.id)}">Mark time TBC</button>` : ""}
+          ${ISLAND_ECC_HYROX_ACTIVITY_IDS.has(s.activityId) ? `
+          <button class="btn ghost sm mt8" type="button" data-action="session-signup-paused" data-session="${esc(s.id)}" data-paused="${s.signupPaused ? "0" : "1"}">${s.signupPaused ? "Reopen sign-up" : "Pause sign-up"}</button>
+          <p class="muted small">${s.signupPaused ? "Sign-up is paused for this week. Reopen it after the time is updated." : "Pausing stops new sign-ups for this week. People already signed up stay on the list until they are cleared."}</p>` : ""}
           <form id="form-session-notice" data-session="${esc(s.id)}" class="mt8">
             <div class="field"><label>Session note (weather, logistics)</label><input name="notice" value="${esc(override.notice || "")}" placeholder="Shown on Schedule + session page"></div>
             <button class="btn ghost sm" type="submit">Post note</button>
