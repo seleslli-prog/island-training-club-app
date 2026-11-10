@@ -3852,21 +3852,28 @@ export function cancelSessionWeek(sessionId, reason, now = Date.now()) {
   save();
 }
 
+function approvedSessionAlertUserIds() {
+  return state.users
+    .filter((user) => canReceiveRsvpNotification(user?.id))
+    .map((user) => user.id);
+}
+
+function notifySessionUpdate(session, kind, title, body) {
+  if (!session?.id) return;
+  for (const userId of approvedSessionAlertUserIds()) {
+    notify(userId, kind, body, `#/activity/${session.id}`, title);
+  }
+}
+
+function sessionUpdateWhen(session) {
+  const when = fmtDate(session.dateISO);
+  const time = session?.timeTBC ? "" : fmtTime(session?.time);
+  return time ? `${when} at ${time}` : when;
+}
+
 function notifyIslandEccTimeChange(session, body) {
   if (!ISLAND_ECC_HYROX_ACTIVITY_IDS.has(session?.activityId)) return;
-  const recipients = [...new Set(state.bookings
-    .filter((booking) => booking.sessionId === session.id && ["reserved", "confirmed"].includes(booking.status))
-    .map((booking) => booking.userId)
-    .filter(Boolean))];
-  for (const userId of recipients) {
-    notify(
-      userId,
-      "operational_session_time_updated",
-      body,
-      `#/activity/${session.id}`,
-      "HYROX time updated",
-    );
-  }
+  notifySessionUpdate(session, "operational_session_time_updated", "HYROX time updated", body);
 }
 
 export function setSessionTime(sessionId, time) {
@@ -3955,6 +3962,7 @@ export function setSessionSignupPaused(sessionId, paused) {
   }
   if (session.cancelled) throw new Error("Session is cancelled.");
   const override = (state.sessionOverrides[sessionId] ||= {});
+  const wasPaused = islandEccSignupPaused(session);
   if (paused) {
     override.signupPaused = true;
     delete override.signupReopened;
@@ -3967,7 +3975,20 @@ export function setSessionSignupPaused(sessionId, paused) {
   }
   if (!Object.keys(override).length) delete state.sessionOverrides[sessionId];
   save();
-  return getSession(sessionId);
+  const next = getSession(sessionId);
+  if (islandEccSignupPaused(next) !== wasPaused) {
+    const when = sessionUpdateWhen(next);
+    notifySessionUpdate(
+      next,
+      paused ? "operational_session_signup_paused" : "operational_session_signup_reopened",
+      paused ? "HYROX sign-up paused" : "HYROX sign-up reopened",
+      paused
+        ? `Sign-up for ITC HYROX on ${when} is paused.`
+        : `Sign-up for ITC HYROX on ${when} is open again.`,
+    );
+    save();
+  }
+  return next;
 }
 
 export function setSessionNotice(sessionId, text) {
