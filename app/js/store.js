@@ -2370,7 +2370,7 @@ export function islandEccSignupClosedFor(session, now = Date.now()) {
 
 export function islandEccSignupPaused(session) {
   if (!isIslandEccHyroxSession(session)) return false;
-  if (session?.signupReopened === true) return false;
+  if (session?.signupReopened === true || session?.isOpen === true) return false;
   if (ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(session?.id)) return true;
   return session?.signupPaused === true;
 }
