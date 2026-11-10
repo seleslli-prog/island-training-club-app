@@ -2386,7 +2386,7 @@ for (const marker of [
   }
 }
 for (const [pattern, label] of [
-  [/v_payment_marked_after\s*-\s*v_payment_marked_before\s*=\s*2\b/i, "payment-marked producer count"],
+  [/v_payment_marked_after\s*-\s*v_payment_marked_before\s*=\s*1\b/i, "payment-marked producer count"],
   [/v_gym_finalized_after\s*-\s*v_gym_finalized_before\s*=\s*2\b/i, "gym-finalized producer count"],
   [/v_cancelled_member_after\s*-\s*v_cancelled_member_before\s*=\s*1\b/i, "member cancellation producer count"],
   [/v_cancelled_admin_after\s*-\s*v_cancelled_admin_before\s*=\s*2\b/i, "Admin cancellation producer count"],
@@ -2398,22 +2398,29 @@ for (const [pattern, label] of [
 if (!/v_expected_admin_recipients\s+constant\s+uuid\[\]\s*:=\s*array\[\s*'aa000000-0000-0000-0000-00000000a001'::uuid\s*,\s*'ff000000-0000-0000-0000-00000000f001'::uuid\s*\]/i.test(operationalBackendIntegrationSource)) {
   throw new Error("notification integration missing exact Admin recipient fixture");
 }
-const paymentMarkedOnce = readFileSync(
-  resolve(__dirnameSmoke, "../supabase/migrations/20261110000002_payment_marked_once.sql"),
+const paymentMarkedCoordinator = readFileSync(
+  resolve(__dirnameSmoke, "../supabase/migrations/20261110000003_payment_marked_coordinator_only.sql"),
   "utf8",
 );
-assert.match(paymentMarkedOnce, /function public\.mark_operational_payment_legacy/);
-assert.match(paymentMarkedOnce, /Payment has already been marked/);
-assert.match(paymentMarkedOnce, /union/);
-assert.match(paymentMarkedOnce, /role in \('admin', 'super_admin'\)/);
-assert.doesNotMatch(paymentMarkedOnce, /cross join lateral/);
-assert.match(paymentMarkedOnce, /kept\.id < extra\.id/);
-console.log("ok  one I've paid alert reaches each collector and admin once");
+assert.match(paymentMarkedCoordinator, /function public\.mark_operational_payment_legacy/);
+assert.match(paymentMarkedCoordinator, /Payment has already been marked/);
+assert.match(paymentMarkedCoordinator, /ca\.collector_profile_id/);
+assert.match(paymentMarkedCoordinator, /order by ca\.week_start desc/);
+assert.match(paymentMarkedCoordinator, /limit 1/);
+assert.doesNotMatch(paymentMarkedCoordinator, /union/);
+assert.doesNotMatch(paymentMarkedCoordinator, /from public\.profiles/);
+assert.doesNotMatch(paymentMarkedCoordinator, /cross join lateral/);
+assert.match(paymentMarkedCoordinator, /n\.profile_id is distinct from/);
+assert.match(paymentMarkedCoordinator, /kept\.id < extra\.id/);
+if (!/payment marking reaches only the coordinator on duty/.test(operationalBackendIntegrationSource)) {
+  throw new Error("notification integration must keep I've paid with the coordinator on duty");
+}
+console.log("ok  one I've paid alert reaches only the coordinator");
 const exactAdminRecipientAssertions = operationalBackendIntegrationSource.match(
   /array_agg\(profile_id\s+order\s+by\s+profile_id\)[\s\S]*?=\s*v_expected_admin_recipients/gi
 ) || [];
-if (exactAdminRecipientAssertions.length !== 2) {
-  throw new Error("notification integration must assert exact recipients for both Admin producers");
+if (exactAdminRecipientAssertions.length !== 1) {
+  throw new Error("notification integration must assert exact Admin recipients for gym finalization only");
 }
 if (!/perform\s+(?:public\.)?cancel_operational_session\s*\(\s*v_unique_cancel_session\b/i.test(operationalBackendIntegrationSource)) {
   throw new Error("notification integration must exercise the real unique cancellation producer");
