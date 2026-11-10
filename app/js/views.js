@@ -2116,7 +2116,7 @@ async function accountNotificationsEdit(user) {
     })}
     <form id="form-privacy" data-form="privacy-preferences" class="card mt16"><div class="card-body">
       <label class="check"><input type="checkbox" name="session_alerts" ${hydrated.sessionAlerts !== false ? "checked" : ""}> Session alerts</label>
-      <p class="muted small">Bookings, RSVPs, venue updates, cancellations, plus a reminder the day before and on the morning of your session. In-app, and web push when that is on.</p>
+      <p class="muted small">Bookings, RSVPs, venue, time, and sign-up updates, cancellations, plus a reminder the day before and on the morning of your session. In-app, and web push when that is on.</p>
       <label class="check"><input type="checkbox" name="hyrox_payment_reminders" ${hydrated.hyroxPaymentReminders !== false ? "checked" : ""}> HYROX payment reminders</label>
       <p class="muted small">Thursday payment reminders for unpaid HYROX reservations. You can still check payment status in the app.</p>
       <label class="check"><input type="checkbox" name="email_receipts" ${hydrated.emailReceipts ? "checked" : ""}> Email receipts</label>

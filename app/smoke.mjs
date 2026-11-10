@@ -727,6 +727,18 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(nov14Pause, /set_operational_island_ecc_signup_open/);
   assert.match(nov14Pause, /signup-reopened/);
   assert.match(nov14Pause, /HYROX sign-up is paused while the times are updated/);
+  const sessionUpdateAlerts = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261110000001_session_update_alerts.sql"),
+    "utf8",
+  );
+  assert.match(sessionUpdateAlerts, /private\.notify_session_update_alert/);
+  assert.match(sessionUpdateAlerts, /p\.role in \('member', 'admin', 'super_admin'\)/);
+  assert.match(sessionUpdateAlerts, /operational_session_time_updated/);
+  assert.match(sessionUpdateAlerts, /operational_session_signup_paused/);
+  assert.match(sessionUpdateAlerts, /operational_session_signup_reopened/);
+  assert.match(sessionUpdateAlerts, /HYROX sign-up reopened/);
+  assert.doesNotMatch(sessionUpdateAlerts, /from public\.operational_bookings b/);
+  console.log("ok  HYROX time, pause, and reopen alerts go to every approved user");
   const nov14Early = {
     id: "hyrox-quarry-bay-early-2026-11-14",
     activity_id: "hyrox-quarry-bay-early",
@@ -2737,7 +2749,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=session-cap-inline"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=signup-reopen"',
+  'src="/app/js/app.js?v=session-update-alerts"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -5679,13 +5691,42 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
       "members must not pause HYROX sign-up",
     );
     hold = store.reserveSession("fixture-member", earlyId, openAt);
+    store.signIn("other-admin@example.test");
+    await store.updateMyPrivacyPreferences({
+      session_alerts: false,
+      email_receipts: false,
+      community_news: false,
+      hyrox_payment_reminders: true,
+      web_push_ops: false,
+    });
     store.signIn("admin@example.test");
     assert.throws(
       () => store.setSessionSignupPaused("wnt-2026-11-18", true),
       /Only Island ECC HYROX weeks can pause sign-up/,
     );
+    const sessionAlertCount = (userId, kind, sessionId) => store.notificationsFor(userId).filter(
+      (note) => note.kind === kind && note.link === `#/activity/${sessionId}`
+    ).length;
+    store.setSessionSignupPaused(earlyId, true);
     store.setSessionSignupPaused(earlyId, true);
     store.setSessionSignupPaused(lateId, true);
+    assert.equal(sessionAlertCount("fixture-member", "operational_session_signup_paused", earlyId), 1,
+      "a booked member receives the sign-up pause alert");
+    assert.equal(sessionAlertCount("fixture-admin", "operational_session_signup_paused", earlyId), 1,
+      "an admin with no booking receives the sign-up pause alert");
+    assert.equal(sessionAlertCount("fixture-other-admin", "operational_session_signup_paused", earlyId), 0,
+      "session alerts off skips the sign-up pause");
+    const originalEarlyTime = store.getSession(earlyId).time;
+    const changedEarlyTime = originalEarlyTime === "09:00" ? "09:30" : "09:00";
+    store.setSessionTime(earlyId, changedEarlyTime);
+    store.setSessionTime(earlyId, changedEarlyTime);
+    assert.equal(sessionAlertCount("fixture-member", "operational_session_time_updated", earlyId), 1,
+      "a time change alerts a member who is not the only recipient");
+    assert.equal(sessionAlertCount("fixture-admin", "operational_session_time_updated", earlyId), 1,
+      "a time change alerts every approved user");
+    assert.equal(sessionAlertCount("fixture-other-admin", "operational_session_time_updated", earlyId), 0,
+      "session alerts off skips the time change");
+    store.setSessionTime(earlyId, originalEarlyTime);
     assert.equal(store.getBooking(hold.id).status, "reserved",
       "pausing sign-up must leave an existing place in place");
     assert.equal(store.getSession(earlyId).signupPaused, true);
@@ -5732,7 +5773,13 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     ));
     assert.match(adminHtml, /Reopen sign-up/);
     store.setSessionSignupPaused(earlyId, false);
+    store.setSessionSignupPaused(earlyId, false);
     store.setSessionSignupPaused(lateId, false);
+    assert.equal(sessionAlertCount("fixture-member", "operational_session_signup_reopened", earlyId), 1,
+      "reopening sign-up alerts every approved user once");
+    assert.equal(sessionAlertCount("fixture-admin", "operational_session_signup_reopened", earlyId), 1);
+    assert.equal(sessionAlertCount("fixture-other-admin", "operational_session_signup_reopened", earlyId), 0,
+      "session alerts off skips the sign-up reopen");
     assert.notEqual(store.getSession(earlyId).signupPaused, true);
     assert.equal(store.getSession(earlyId).notice, undefined);
     store.signIn("member@example.test");
@@ -5792,6 +5839,14 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     for (const sessionId of [earlyId, lateId]) {
       if (store.getSession(sessionId)?.signupPaused) store.setSessionSignupPaused(sessionId, false);
     }
+    store.signIn("other-admin@example.test");
+    await store.updateMyPrivacyPreferences({
+      session_alerts: true,
+      email_receipts: false,
+      community_news: false,
+      hyrox_payment_reminders: true,
+      web_push_ops: false,
+    });
     Object.assign(views.scheduleState, previousSchedule);
     if (previousEmail) store.signIn(previousEmail);
   }
