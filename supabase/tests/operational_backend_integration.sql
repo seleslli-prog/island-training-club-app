@@ -3188,10 +3188,16 @@ begin
     'cancelled free Admin notification has exact Activity Details destination'
   );
 
-  -- Payment-marked Admin fallback rows use the stable payments section;
-  -- approval points back to the member's exact booking. Isolate this fallback
-  -- from the suite's standing collector assignments, then restore them below.
+  -- Payment marked goes only to the coordinator on duty. Isolate that duty
+  -- from the suite's standing assignments, then restore them below.
+  -- Approval still points back to the member's exact booking.
   delete from public.collector_assignments;
+  insert into public.collector_assignments
+    (week_start, collector_profile_id, assigned_by)
+  values
+    (v_routing_date,
+     'dd000000-0000-0000-0000-00000000d001',
+     'ff000000-0000-0000-0000-00000000f001');
   select count(*), coalesce(array_agg(id), array[]::uuid[])
     into v_payment_marked_before, v_payment_marked_existing_ids
     from public.notifications
@@ -3206,8 +3212,8 @@ begin
    where kind = 'operational_payment_marked'
      and body = v_payment_marked_body;
   perform pg_temp.op_assert(
-    v_payment_marked_after - v_payment_marked_before = 2,
-    'payment marking produces exactly two Admin notifications for this action'
+    v_payment_marked_after - v_payment_marked_before = 1,
+    'payment marking produces exactly one coordinator notification for this action'
   );
   perform pg_temp.op_assert(
     (select array_agg(profile_id order by profile_id)
@@ -3215,8 +3221,8 @@ begin
       where kind = 'operational_payment_marked'
         and body = v_payment_marked_body
         and not (id = any(v_payment_marked_existing_ids)))
-      = v_expected_admin_recipients,
-    'payment marking reaches exactly the Admin and Super Admin recipients'
+      = array['dd000000-0000-0000-0000-00000000d001'::uuid],
+    'payment marking reaches only the coordinator on duty'
   );
   perform pg_temp.op_assert(
     not exists (
@@ -3229,6 +3235,7 @@ begin
     ),
     'payment-marked Admin notifications use the payments destination'
   );
+  delete from public.collector_assignments;
   insert into public.collector_assignments
     (week_start, collector_profile_id, assigned_by)
   values
