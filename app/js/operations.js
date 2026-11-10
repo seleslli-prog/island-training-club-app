@@ -13,10 +13,7 @@
 
 import {
   SEED_ACTIVITIES,
-  ISLAND_ECC_HYROX_ACTIVITY_IDS,
-  ISLAND_ECC_SIGNUP_PAUSED_NOTICE,
-  ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS,
-  ISLAND_ECC_SIGNUP_REOPENED_NOTICE,
+  islandEccLiveSignupPause,
   compareSessionsByStart,
 } from "./data.js";
 import { isLive, supabase } from "./config.js";
@@ -117,16 +114,7 @@ function buildSessionRow(row, templatesById = null) {
   const externalPayment = !!row.external_payment || !!template?.external_payment;
   const externalPrice = row.external_price_hkd ?? template?.external_price_hkd ?? null;
   const freePresentation = oneOff || FREE_PRESENTATION_ACTIVITY_IDS.has(row.activity_id);
-  const signupReopened = row.notice === ISLAND_ECC_SIGNUP_REOPENED_NOTICE;
-  const signupForcedClosed = ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(row.id) && !signupReopened;
-  const signupPaused = signupForcedClosed || (
-    !signupReopened
-    && ISLAND_ECC_HYROX_ACTIVITY_IDS.has(row.activity_id)
-    && row.is_open === false
-  );
-  const notice = signupReopened
-    ? null
-    : (row.notice || (signupForcedClosed ? ISLAND_ECC_SIGNUP_PAUSED_NOTICE : null));
+  const { signupPaused, signupReopened, notice } = islandEccLiveSignupPause(row);
   const legacyMidtown = row.activity_id === "hyrox-midtown"
     && row.venue === "Midtown 28";
   const venue = legacyMidtown

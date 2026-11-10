@@ -727,6 +727,35 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(nov14Pause, /set_operational_island_ecc_signup_open/);
   assert.match(nov14Pause, /signup-reopened/);
   assert.match(nov14Pause, /HYROX sign-up is paused while the times are updated/);
+  const nov14Early = {
+    id: "hyrox-quarry-bay-early-2026-11-14",
+    activity_id: "hyrox-quarry-bay-early",
+  };
+  assert.equal(data.islandEccLiveSignupPause({
+    ...nov14Early,
+    is_open: false,
+    notice: data.ISLAND_ECC_SIGNUP_PAUSED_NOTICE,
+  }).signupPaused, true, "a closed Sat 14 Nov row stays paused");
+  const reopenedRow = data.islandEccLiveSignupPause({
+    ...nov14Early,
+    is_open: true,
+    notice: null,
+  });
+  assert.equal(reopenedRow.signupPaused, false,
+    "reopening Sat 14 Nov must follow is_open when the marker note is missing");
+  assert.equal(reopenedRow.signupReopened, true);
+  assert.equal(reopenedRow.notice, null);
+  assert.equal(data.islandEccLiveSignupPause({
+    ...nov14Early,
+    is_open: true,
+    notice: data.ISLAND_ECC_SIGNUP_PAUSED_NOTICE,
+  }).notice, null, "an open Sat 14 Nov row must not keep the pause note");
+  assert.equal(store.islandEccSignupPaused({
+    id: nov14Early.id,
+    activityId: nov14Early.activity_id,
+    isOpen: true,
+    signupPaused: true,
+  }), false, "schedule must leave the pause badge once the saved session is open");
   console.log("ok  Sat 14 Nov HYROX sign-up is paused and current places are cleared");
   const lunchNoonMigration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261018000002_lunch_noon.sql"),
@@ -2708,7 +2737,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=session-cap-inline"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=session-cap-inline"',
+  'src="/app/js/app.js?v=signup-reopen"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',

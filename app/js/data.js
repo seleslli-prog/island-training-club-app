@@ -318,13 +318,41 @@ export const ISLAND_ECC_SIGNUP_LOCKED_ERROR = "HYROX sign-up opens Monday at 6 P
 export const ISLAND_ECC_SIGNUP_CLOSED_ERROR = "HYROX sign-up closes Thursday at 6 PM HKT.";
 export const ISLAND_ECC_SIGNUP_PAUSED_ERROR = "HYROX sign-up is paused while the times are updated.";
 export const ISLAND_ECC_SIGNUP_PAUSED_NOTICE = "Sign-up is paused while the times are updated.";
-// These two weeks stay closed in the app until an admin reopens them, even
-// when the database still has them open.
+// Sat 14 Nov starts closed. Reopening saves is_open on the session. The
+// live function may clear the pause note without writing the marker below,
+// so an open session counts as reopened.
 export const ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS = new Set([
   "hyrox-quarry-bay-early-2026-11-14",
   "hyrox-quarry-bay-2026-11-14",
 ]);
 export const ISLAND_ECC_SIGNUP_REOPENED_NOTICE = "signup-reopened";
+
+export function islandEccLiveSignupPause(row) {
+  const id = row?.id;
+  const markedReopened = row?.notice === ISLAND_ECC_SIGNUP_REOPENED_NOTICE;
+  const savedOpen = row?.is_open === true;
+  const tracked = ISLAND_ECC_SIGNUP_PAUSED_SESSION_IDS.has(id);
+  const signupReopened = markedReopened || (tracked && savedOpen);
+  const forcedClosed = tracked && !signupReopened;
+  const signupPaused = forcedClosed || (
+    !signupReopened
+    && ISLAND_ECC_HYROX_ACTIVITY_IDS.has(row?.activity_id)
+    && row?.is_open === false
+  );
+  const rawNotice = row?.notice || null;
+  const hideNotice = markedReopened
+    || (signupReopened && (
+      rawNotice === ISLAND_ECC_SIGNUP_PAUSED_NOTICE
+      || rawNotice === ISLAND_ECC_SIGNUP_REOPENED_NOTICE
+    ));
+  return {
+    signupPaused,
+    signupReopened,
+    notice: hideNotice
+      ? null
+      : (rawNotice || (forcedClosed ? ISLAND_ECC_SIGNUP_PAUSED_NOTICE : null)),
+  };
+}
 
 export function todayLocal() {
   const d = new Date();
