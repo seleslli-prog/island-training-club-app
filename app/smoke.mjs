@@ -2398,6 +2398,17 @@ for (const [pattern, label] of [
 if (!/v_expected_admin_recipients\s+constant\s+uuid\[\]\s*:=\s*array\[\s*'aa000000-0000-0000-0000-00000000a001'::uuid\s*,\s*'ff000000-0000-0000-0000-00000000f001'::uuid\s*\]/i.test(operationalBackendIntegrationSource)) {
   throw new Error("notification integration missing exact Admin recipient fixture");
 }
+const paymentMarkedOnce = readFileSync(
+  resolve(__dirnameSmoke, "../supabase/migrations/20261110000002_payment_marked_once.sql"),
+  "utf8",
+);
+assert.match(paymentMarkedOnce, /function public\.mark_operational_payment_legacy/);
+assert.match(paymentMarkedOnce, /Payment has already been marked/);
+assert.match(paymentMarkedOnce, /union/);
+assert.match(paymentMarkedOnce, /role in \('admin', 'super_admin'\)/);
+assert.doesNotMatch(paymentMarkedOnce, /cross join lateral/);
+assert.match(paymentMarkedOnce, /kept\.id < extra\.id/);
+console.log("ok  one I've paid alert reaches each collector and admin once");
 const exactAdminRecipientAssertions = operationalBackendIntegrationSource.match(
   /array_agg\(profile_id\s+order\s+by\s+profile_id\)[\s\S]*?=\s*v_expected_admin_recipients/gi
 ) || [];
