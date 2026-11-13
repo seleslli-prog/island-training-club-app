@@ -64,6 +64,7 @@ import {
 import { normalizeMeetingPoint, normalizeVenueLocation, hasConfirmedVenue } from "./venue.js";
 import { announcementPlainText, assertSafeAnnouncementMarkdown } from "./announcement-markdown.js";
 import * as liveOps from "./operations.js";
+import { explainUserFacingError } from "./operational-errors.js";
 
 const STORAGE_KEY = "itc.prototype.v1";
 const APPLY_DEVICE_KEY = "itc.device.id";
@@ -1521,7 +1522,7 @@ export async function updateMyDonorId(raw) {
     .eq("profile_id", cu.id)
     .select("donor_id")
     .single();
-  if (error) throw error;
+  if (error) throw explainUserFacingError(error, "Unable to save Donor ID");
   if (liveApplicationCacheValid(cu.id) && liveApplication) {
     rememberLiveApplication(cu.id, { ...liveApplication, donor_id: data.donor_id });
   } else {
