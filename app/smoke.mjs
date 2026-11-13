@@ -2767,7 +2767,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=session-cap-inline"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=session-update-alerts"',
+  'src="/app/js/app.js?v=operational-errors"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -10562,6 +10562,83 @@ console.log("ok  replacement route preserves sign-in gate, privacy, and confirme
     } else console.log("ok  pre-Oct-12 ops purge is a one-shot SQL Editor script");
   }
 }
+
+const { explainUserFacingError } = await import("./js/operational-errors.js");
+const { presentOperationalError, runOperationalRpc } = await import("./js/operations.js");
+
+const operationalErrorCases = [
+  [null, "Unable to save — try again."],
+  ["", "Unable to save — try again."],
+  [{}, "Unable to save — try again."],
+  [new Error("   "), "Unable to save — try again."],
+  ["Session is full", "Session is full."],
+  ["ERROR: Session is full", "Session is full."],
+  ["Session is already cancelled.", "Session is already cancelled."],
+  ["Payment has already been marked.", "Payment has already been marked."],
+  ["Administrator access required for: approve_payment", "Admin access required."],
+  [{ code: "PGRST202", message: "Could not find operational_replacement in the schema cache" },
+    "Replacement setup is temporarily unavailable. Please contact ITC."],
+  [{ code: "PGRST202", message: "set_operational_session_time_tbc(text, boolean) does not exist" },
+    "Mark time TBC needs the latest database update before it can save."],
+  ["permission denied for function set_operational_session_time_tbc",
+    "Mark time TBC is installed, but signed-in admins are not allowed to run it yet."],
+  ["HYROX sign-up closes Thursday at 6 PM HKT.",
+    "HYROX sign-up closes Thursday at 6 PM HKT."],
+  ["Choose one Island ECC HYROX slot per Saturday.",
+    "Choose one Island ECC HYROX slot per Saturday."],
+  ["Unable to open this replacement invite.",
+    "Unable to open this replacement invite."],
+  ["JWT expired", "Sign in again to continue."],
+  [new TypeError("Failed to fetch"), "The connection dropped. Try again."],
+  ["duplicate key value violates unique constraint \"operational_bookings_one_active_per_session\"",
+    "Unable to save — try again."],
+  ["delete from public.profiles where id = 'secret'", "Unable to save — try again."],
+  ["x".repeat(400), "Unable to save — try again."],
+  [{ message: "first line\nselect secret from private.settings" }, "Unable to save — try again."],
+];
+for (const [input, expected] of operationalErrorCases) {
+  assert.equal(explainUserFacingError(input).message, expected);
+}
+assert.equal(
+  explainUserFacingError(explainUserFacingError("JWT expired")).message,
+  "Sign in again to continue.",
+);
+assert.equal(
+  explainUserFacingError({ code: "PGRST301", message: "JWT expired" }, "Unable to mark payment").message,
+  "Sign in again to continue.",
+);
+assert.equal(
+  explainUserFacingError(null, "Unable to reserve this spot").message,
+  "Unable to reserve this spot",
+);
+console.log("ok  operational errors keep product copy and hide internal failures");
+
+assert.equal(
+  presentOperationalError("Session is full").message,
+  explainUserFacingError("Session is full").message,
+);
+await assert.rejects(
+  () => runOperationalRpc("reserve_operational_session", { p_session_id: "missing" }),
+  (err) => {
+    assert.equal(err instanceof Error, true);
+    assert.equal(err.message, "Live operations are unavailable in this deployment.");
+    assert.doesNotMatch(err.message, /relation |jwt|select /i);
+    return true;
+  },
+);
+const paymentHandlers = readFileSync(resolve(__dirnameSmoke, "js/app.js"), "utf8");
+for (const fallback of [
+  "Unable to reserve this spot",
+  "Unable to take this spot",
+  "Unable to mark payment",
+]) {
+  assert.match(paymentHandlers, new RegExp(`explainUserFacingError\\(err, "${fallback}"\\)`));
+}
+assert.match(
+  readFileSync(resolve(__dirnameSmoke, "js/store.js"), "utf8"),
+  /throw explainUserFacingError\(error, "Unable to save Donor ID"\)/,
+);
+console.log("ok  reserve, pay, and Donor ID surface the same operational errors");
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll smoke tests passed.");
 process.exit(failures ? 1 : 0);

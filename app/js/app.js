@@ -23,6 +23,7 @@ import {
   normalizeVenueLocation,
   TAMAR_DEFAULT_MEETING_POINT,
 } from "./venue.js";
+import { explainUserFacingError } from "./operational-errors.js";
 import {
   ensureHomeScreenPush,
   isHomeScreenApp,
@@ -2220,7 +2221,7 @@ document.addEventListener("submit", async (e) => {
           location.hash = `#/pay/${booking.id}`;
         }, { busyKey: form, controls });
       } catch (err) {
-        toast(err.message || "Unable to reserve this spot", true);
+        toast(explainUserFacingError(err, "Unable to reserve this spot").message, true);
       }
       break;
     }
@@ -2246,7 +2247,7 @@ document.addEventListener("submit", async (e) => {
           location.hash = `#/booking/${booking.id}`;
         }, { busyKey: form, controls });
       } catch (err) {
-        toast(err.message || "Unable to take this spot", true);
+        toast(explainUserFacingError(err, "Unable to take this spot").message, true);
       }
       break;
     }
@@ -2266,7 +2267,7 @@ document.addEventListener("submit", async (e) => {
           location.hash = `#/booking/${booking.id}`;
         }, { busyKey: form, controls });
       } catch (err) {
-        toast(err.message || "Unable to mark payment", true);
+        toast(explainUserFacingError(err, "Unable to mark payment").message, true);
       }
       break;
     }

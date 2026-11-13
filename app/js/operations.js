@@ -25,6 +25,7 @@ import {
   isRetiredHyroxReceipt,
 } from "./hyrox-retirement.js";
 import { normalizeMeetingPoint } from "./venue.js";
+import { explainUserFacingError } from "./operational-errors.js";
 
 const LIVE_TABLES = [
   "operational_sessions",
@@ -634,54 +635,12 @@ function replaceState(payload) {
   liveCache.updatedAt = Date.now();
 }
 
+export function presentOperationalError(error) {
+  return explainUserFacingError(error);
+}
+
 function operationalProblem(error) {
-  if (!error) return new Error("Unable to save — try again.");
-  const message = String(error.message || error);
-  if (error.code === "PGRST202" && message.includes("operational_replacement")) {
-    return new Error("Replacement setup is temporarily unavailable. Please contact ITC.");
-  }
-  if (error.code === "PGRST202" && message.includes("set_operational_session_time_tbc")) {
-    return new Error("Mark time TBC needs the latest database update before it can save.");
-  }
-  if (message.includes("permission denied for function set_operational_session_time_tbc")) {
-    return new Error("Mark time TBC is installed, but signed-in admins are not allowed to run it yet.");
-  }
-  if (message.includes("time_tbc")) {
-    return new Error("Mark time TBC needs the latest database update before it can save.");
-  }
-  if (message.includes("Session is cancelled")) return new Error("Session is cancelled.");
-  if (message.includes("Session is full")) return new Error("Session is full.");
-  if (message.includes("Session is not open")) return new Error("Session is not open.");
-  if (message.includes("Already booked")) return new Error("Already booked.");
-  if (message.includes("Approved membership required")) return new Error("Approved membership required.");
-  if (message.includes("Not authorized for this booking")) return new Error("Not authorized for this booking.");
-  if (message.includes("Not authorized for this queue entry")) return new Error("Not authorized for this queue entry.");
-  if (message.includes("Not authorized for this payout profile")) return new Error("Not authorized for this payout profile.");
-  if (message.includes("Administrator access required")) return new Error("Admin access required.");
-  if (message.includes("Cancellation reason is required")) return new Error("Cancellation reason is required.");
-  if (message.includes("Payment has not been marked")) return new Error("Payment has not been marked.");
-  if (message.includes("Payment has already been marked")) return new Error("Payment has already been marked.");
-  if (message.includes("Payment has already been processed")) return new Error("Payment has already been processed.");
-  if (message.includes("Booking is not awaiting approval")) return new Error("Booking is not awaiting approval.");
-  if (message.includes("Only confirmed bookings can be deferred")) return new Error("Only confirmed bookings can be deferred.");
-  if (message.includes("Target must be a session of the same activity")) return new Error("Target must be a session of the same activity.");
-  if (message.includes("Target must be later than the current session")) return new Error("Target must be later than the current session.");
-  if (message.includes("Target session is full")) return new Error("Target session is full.");
-  if (message.includes("Session has already started")) return new Error("Session has already started.");
-  if (message.includes("Session is already cancelled")) return new Error("Session is already cancelled.");
-  if (message.includes("Gym confirmation has already been recorded")) return new Error("Gym confirmation has already been recorded.");
-  if (message.includes("Session not found")) return new Error("Session not found.");
-  if (message.includes("Booking not found")) return new Error("Booking not found.");
-  if (message.includes("Queue entry not found")) return new Error("Queue entry not found.");
-  if (message.includes("Authentication required")) return new Error("Authentication required.");
-  if (message.includes("Waitlist is only for open sessions")) return new Error("Waitlist is only for open sessions.");
-  if (message.includes("Waitlist is only for full sessions")) return new Error("Waitlist is only for full sessions.");
-  if (message.includes("Session is not full")) return new Error("Session is not full.");
-  if (message.includes("Activity venue is fixed.")
-      || message.includes("replacement invite")
-      || message.includes("replacement request")
-      || message.includes("replacement")) return new Error(message);
-  return new Error(message || "Unable to save — try again.");
+  return presentOperationalError(error);
 }
 
 let hydrationPromise = null;
