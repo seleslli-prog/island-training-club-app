@@ -18,6 +18,7 @@ export const ISLAND_ECC_HYROX_ACTIVITY_IDS = new Set([
 export const ISLAND_ECC_FLEXIBLE_TIME_FROM = "2026-10-24";
 export const ISLAND_ECC_CAPACITY_24_FROM = "2026-11-14";
 export const ISLAND_ECC_CURRENT_TIMES_FROM = "2026-11-21";
+export const SATURDAY_LUNCH_1230_FROM = "2026-11-21";
 
 export function islandEccWeekSchedule(activityId, dateISO) {
   if (typeof dateISO === "string" && dateISO < ISLAND_ECC_FLEXIBLE_TIME_FROM) return null;
@@ -30,6 +31,13 @@ export function islandEccWeekSchedule(activityId, dateISO) {
     return { time: currentTimes ? "11:15" : "10:15", capacity };
   }
   return null;
+}
+
+// Post-Training Lunch stays 12:00 before 21 Nov. From that Saturday, and for
+// the current recurring default, it is 12:30. A dated override still wins.
+export function saturdayLunchTime(dateISO) {
+  if (typeof dateISO === "string" && dateISO < SATURDAY_LUNCH_1230_FROM) return "12:00";
+  return "12:30";
 }
 
 export function islandEccFlexibleTime(session) {
