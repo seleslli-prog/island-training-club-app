@@ -270,7 +270,8 @@ function islandEccClockAt(sessionDateISO, daysBefore, hhmm) {
 }
 
 export function islandEccSignupOpensAt(sessionDateISO) {
-  return islandEccClockAt(sessionDateISO, -5, "18:00");
+  // Sunday 18:00 HKT in the same week as the Saturday session.
+  return islandEccClockAt(sessionDateISO, -6, "18:00");
 }
 
 export function islandEccPaymentDeadlineAt(sessionDateISO) {
@@ -314,7 +315,7 @@ export function islandEccSignupClosed(sessionDateISO, now = Date.now()) {
     && now >= islandEccPaymentDeadlineAt(sessionDateISO);
 }
 
-export const ISLAND_ECC_SIGNUP_LOCKED_ERROR = "HYROX sign-up opens Monday at 6 PM HKT.";
+export const ISLAND_ECC_SIGNUP_LOCKED_ERROR = "HYROX sign-up opens Sunday at 6 PM HKT.";
 export const ISLAND_ECC_SIGNUP_CLOSED_ERROR = "HYROX sign-up closes Thursday at 6 PM HKT.";
 export const ISLAND_ECC_SIGNUP_PAUSED_ERROR = "HYROX sign-up is paused while the times are updated.";
 export const ISLAND_ECC_SIGNUP_PAUSED_NOTICE = "Sign-up is paused while the times are updated.";

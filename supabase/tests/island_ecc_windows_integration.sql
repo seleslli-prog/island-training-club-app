@@ -1,6 +1,6 @@
 -- Island Training Club — Island ECC signup-window integration tests
 --
--- Plain SQL covering Monday lock, Thursday/Friday pay-by, waitlist promote,
+-- Plain SQL covering Sunday 18:00 open, Thursday/Friday pay-by, waitlist promote,
 -- member/collector reminders, opt-out, and collector finalize nudge.
 -- Run after every ordered migration through
 -- supabase/tests/verify_operational_backend.sh against a disposable
@@ -129,8 +129,8 @@ declare
   v_confirmed_early text := 'hyrox-quarry-bay-early-2026-10-24';
   v_confirmed_late text := 'hyrox-quarry-bay-2026-10-24';
   v_bft text := 'hyrox-bft-2026-10-10';
-  v_monday_open timestamptz :=
-    ((date '2026-10-10' - 5) + time '18:00') at time zone 'Asia/Hong_Kong';
+  v_sunday_open timestamptz :=
+    ((date '2026-10-10' - 6) + time '18:00') at time zone 'Asia/Hong_Kong';
   v_thursday_deadline timestamptz :=
     ((date '2026-10-10' - 2) + time '18:00') at time zone 'Asia/Hong_Kong';
   v_friday_18 timestamptz :=
@@ -138,7 +138,7 @@ declare
   v_friday_21 timestamptz :=
     ((date '2026-10-10' - 1) + time '21:00') at time zone 'Asia/Hong_Kong';
   v_optout_open timestamptz :=
-    ((date '2026-10-17' - 5) + time '18:00') at time zone 'Asia/Hong_Kong';
+    ((date '2026-10-17' - 6) + time '18:00') at time zone 'Asia/Hong_Kong';
   v_optout_friday_18 timestamptz :=
     ((date '2026-10-17' - 1) + time '18:00') at time zone 'Asia/Hong_Kong';
   v_confirmed_friday_21 timestamptz :=
@@ -154,7 +154,7 @@ declare
 begin
   perform set_config(
     'itc.clock',
-    (v_monday_open - interval '1 second')::text,
+    (v_sunday_open - interval '1 second')::text,
     true
   );
   perform set_config('request.jwt.claim.sub', v_holder::text, true);
@@ -162,16 +162,16 @@ begin
   perform pg_temp.expect_rejected(
     format('select public.reserve_operational_session(%L)', v_late),
     '23514',
-    'HYROX sign-up opens Monday at 6 PM HKT.'
+    'HYROX sign-up opens Sunday at 6 PM HKT.'
   );
   perform pg_temp.expect_rejected(
     format('select public.join_operational_queue(%L, %L)', v_late, 'waitlist'),
     '23514',
-    'HYROX sign-up opens Monday at 6 PM HKT.'
+    'HYROX sign-up opens Sunday at 6 PM HKT.'
   );
   reset role;
 
-  perform set_config('itc.clock', v_monday_open::text, true);
+  perform set_config('itc.clock', v_sunday_open::text, true);
   perform set_config('request.jwt.claim.sub', v_holder::text, true);
   set local role authenticated;
   select * into v_hold
@@ -181,7 +181,7 @@ begin
   perform pg_temp.assert(
     v_hold.status = 'reserved'
       and v_hold.pay_deadline_at = v_thursday_deadline,
-    'Island ECC reserve after Monday 18:00 must stamp Thursday 18:00 HKT pay-by'
+    'Island ECC reserve after Sunday 18:00 must stamp Thursday 18:00 HKT pay-by'
   );
 
   perform set_config('request.jwt.claim.sub', v_holder::text, true);
@@ -380,7 +380,7 @@ begin
     'Friday 21:00 must not nudge when both Island ECC sessions are gym-confirmed'
   );
 
-  perform set_config('itc.clock', v_monday_open::text, true);
+  perform set_config('itc.clock', v_sunday_open::text, true);
   perform set_config('request.jwt.claim.sub', v_holder::text, true);
   set local role authenticated;
   perform pg_temp.expect_rejected(
