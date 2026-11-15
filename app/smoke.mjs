@@ -388,6 +388,14 @@ assert.deepEqual(
   assert.equal(nov14Late.capacity, 24);
   assert.equal(nov14Early.time, "09:00");
   assert.equal(nov14Late.time, "10:15");
+  const nov21Early = store.getSession("hyrox-quarry-bay-early-2026-11-21");
+  const nov21Late = store.getSession("hyrox-quarry-bay-2026-11-21");
+  assert.equal(nov21Early.time, "10:00");
+  assert.equal(nov21Late.time, "11:15");
+  assert.equal(nov21Early.capacity, 24);
+  assert.equal(nov21Late.capacity, 24);
+  assert.equal(data.islandEccWeekSchedule("hyrox-quarry-bay-early").time, "10:00");
+  assert.equal(data.islandEccWeekSchedule("hyrox-quarry-bay").time, "11:15");
   assert.equal(oct17Early.capacity, 30);
   assert.equal(oct17Late.capacity, 30);
   for (const session of [oct24Early, oct24Late, oct31Early]) {
@@ -396,7 +404,7 @@ assert.deepEqual(
   }
   assert.equal(data.sessionTimeLabel(oct24Early), "9 AM");
   assert.equal(data.sessionTimeLabel(oct24Late), "10:15 AM");
-  console.log("ok  Island ECC times stay fixed on 17 Oct and use 9:00 and 10:15 from 24 Oct");
+  console.log("ok  Island ECC times stay fixed through 14 Nov and use 10:00 and 11:15 from 21 Nov");
 }
 assert.equal(data.fmtMoney(180), "HK$180",
   "consumer-facing Hong Kong prices should use the standard HK$ symbol");
@@ -701,6 +709,16 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.match(oct24ScheduleMigration, /session_date >= date '2026-10-24'/);
   assert.match(oct24ScheduleMigration, /time_tbc = false/);
   console.log("ok  Island ECC Oct 24 schedule migration sets 9:00 and 10:15 at capacity 20");
+  const nov21TimesMigration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261115000002_island_ecc_times_1015.sql"),
+    "utf8",
+  );
+  assert.match(nov21TimesMigration, /session_date >= date '2026-11-21'/);
+  assert.match(nov21TimesMigration, /set start_time = time '10:00'[\s\S]*activity_id = 'hyrox-quarry-bay-early'/);
+  assert.match(nov21TimesMigration, /set start_time = time '11:15'[\s\S]*where activity_id = 'hyrox-quarry-bay'\s+and session_date >= date '2026-11-21'/);
+  assert.doesNotMatch(nov21TimesMigration, /capacity/);
+  assert.doesNotMatch(nov21TimesMigration, /create or replace function/);
+  console.log("ok  Island ECC times from 21 Nov are 10:00 and 11:15");
   const capacity24Migration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261109000001_island_ecc_capacity_24.sql"),
     "utf8",
@@ -2783,7 +2801,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=session-cap-inline"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=hyrox-signup-sunday"',
+  'src="/app/js/app.js?v=hyrox-saturday-times"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -10003,7 +10021,7 @@ const recurringDayTimes = [...recurringDefaultsHtml.matchAll(
 )].map((match) => `${match[1]} ${match[2]}`);
 assert.deepEqual(
   recurringDayTimes,
-  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 09:00", "Sat 10:15", "Sat 12:00"],
+  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 10:00", "Sat 11:15", "Sat 12:00"],
   "Recurring Activity Defaults must sort by weekday, then start time"
 );
 assert.equal(
