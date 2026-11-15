@@ -254,13 +254,13 @@ assert.ok(quarryBaySeed, "Island ECC HYROX must remain seeded");
 assert.ok(quarryBayEarlySeed, "the early Island ECC HYROX slot must be seeded");
 {
   const saturday = "2026-10-10";
-  assert.equal(data.islandEccSignupOpensAt(saturday), Date.parse("2026-10-05T18:00:00+08:00"));
+  assert.equal(data.islandEccSignupOpensAt(saturday), Date.parse("2026-10-04T18:00:00+08:00"));
   assert.equal(data.islandEccPaymentDeadlineAt(saturday), Date.parse("2026-10-08T18:00:00+08:00"));
   assert.equal(data.islandEccMemberReminderAt(saturday), Date.parse("2026-10-09T18:00:00+08:00"));
   assert.equal(data.islandEccLeftoverPayByAt(saturday), Date.parse("2026-10-09T21:00:00+08:00"));
   assert.equal(data.islandEccCollectorFinalizeNudgeAt(saturday), Date.parse("2026-10-09T21:00:00+08:00"));
-  assert.equal(data.islandEccSignupOpen(saturday, Date.parse("2026-10-05T17:59:00+08:00")), false);
-  assert.equal(data.islandEccSignupOpen(saturday, Date.parse("2026-10-05T18:00:00+08:00")), true);
+  assert.equal(data.islandEccSignupOpen(saturday, Date.parse("2026-10-04T17:59:00+08:00")), false);
+  assert.equal(data.islandEccSignupOpen(saturday, Date.parse("2026-10-04T18:00:00+08:00")), true);
   assert.equal(
     data.islandEccNextPayDeadline(saturday, Date.parse("2026-10-08T17:59:00+08:00")),
     Date.parse("2026-10-08T18:00:00+08:00"),
@@ -294,7 +294,7 @@ assert.ok(quarryBayEarlySeed, "the early Island ECC HYROX slot must be seeded");
     data.nextPayDeadline(saturday, Date.parse("2026-10-08T18:00:00+08:00")),
     data.finalCheckpointFor(saturday),
   );
-  assert.equal(data.ISLAND_ECC_SIGNUP_LOCKED_ERROR, "HYROX sign-up opens Monday at 6 PM HKT.");
+  assert.equal(data.ISLAND_ECC_SIGNUP_LOCKED_ERROR, "HYROX sign-up opens Sunday at 6 PM HKT.");
   console.log("ok  Island ECC HKT signup and pay-by helpers");
 }
 assert.equal(data.SEED_ACTIVITIES.some((activity) => activity.id === "hyrox"), false,
@@ -1667,6 +1667,22 @@ console.log("ok  dual Island ECC migration retimes, provisions and guards both s
     );
   }
   console.log("ok  Island ECC signup-window migration markers");
+  const sundayOpenMigrationSource = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261115000001_island_ecc_signup_opens_sunday.sql"),
+    "utf8",
+  );
+  assert.match(sundayOpenMigrationSource, /p_session_date - 6/);
+  assert.match(sundayOpenMigrationSource, /HYROX sign-up opens Sunday at 6 PM HKT\./);
+  assert.match(sundayOpenMigrationSource, /HYROX sign-up closes Thursday at 6 PM HKT\./);
+  assert.doesNotMatch(
+    sundayOpenMigrationSource,
+    /create or replace function private\.island_ecc_payment_deadline_at/,
+  );
+  assert.doesNotMatch(
+    sundayOpenMigrationSource,
+    /create or replace function private\.island_ecc_next_pay_deadline/,
+  );
+  console.log("ok  Island ECC sign-up opens Sunday 6 PM and keeps Thursday close");
   const hardThursdayMigrationSource = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261016000001_island_ecc_hard_thursday_deadline.sql"),
     "utf8",
@@ -2767,7 +2783,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=session-cap-inline"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=operational-errors"',
+  'src="/app/js/app.js?v=hyrox-signup-sunday"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -5803,8 +5819,11 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     store.signIn("member@example.test");
     const reopened = views.viewActivity(earlyId);
     assert.doesNotMatch(reopened, /Sign-up paused/);
-    assert.match(reopened, /Opens Monday at 6 PM|Pay · HK\$180/);
+    assert.match(reopened, /Opens Sunday at 6 PM|Pay · HK\$180/);
     store.signIn("member@example.test");
+    const nov14Clock = Date.now;
+    Date.now = () => Date.parse("2026-11-13T12:00:00+08:00");
+    try {
     for (const sessionId of [
       "hyrox-quarry-bay-early-2026-11-14",
       "hyrox-quarry-bay-2026-11-14",
@@ -5839,6 +5858,9 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     store.signIn("admin@example.test");
     store.releaseReservation(nov14Hold.id, nov14OpenAt);
     store.setSessionSignupPaused(nov14Early, true);
+    } finally {
+      Date.now = nov14Clock;
+    }
   } finally {
     if (hold && store.getBooking(hold.id)?.status === "reserved") {
       store.signIn("admin@example.test");
@@ -5895,7 +5917,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     }
     Date.now = () => openAt - 1;
     const beforeOpenDetail = views.viewActivity("hyrox-quarry-bay-2026-12-05");
-    assert.match(beforeOpenDetail, /Opens Monday at 6 PM/);
+    assert.match(beforeOpenDetail, /Opens Sunday at 6 PM/);
     assert.doesNotMatch(beforeOpenDetail, /Pay · HK\$180/);
     Date.now = () => openAt;
     directPaid = store.reserveSession(store.currentUser().id, "hyrox-quarry-bay-early-2026-12-05", openAt);
@@ -5923,7 +5945,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   );
   assert.throws(
     () => store.joinWaitlist(signIn.user.id, lockedLate.id, beforeOpen),
-    /HYROX sign-up opens Monday at 6 PM HKT/,
+    /HYROX sign-up opens Sunday at 6 PM HKT/,
   );
   const openAt = data.islandEccSignupOpensAt(lockedSaturday);
   store.signIn("admin@example.test");
@@ -6064,12 +6086,12 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   );
   const restoredHold = store.getBooking(r1.id);
   if (restoredHold && preservedDeadline != null) restoredHold.payDeadlineAt = preservedDeadline;
-  console.log("ok  Island ECC Monday lock, Thursday expiry, and Friday local sweeps");
+  console.log("ok  Island ECC Sunday open, Thursday expiry, and Friday local sweeps");
 }
 {
   const lockedUi = store.getSession("hyrox-quarry-bay-2026-12-05");
   const lockedDetail = views.viewActivity(lockedUi.id);
-  assert.match(lockedDetail, /Opens Monday at 6 PM/);
+  assert.match(lockedDetail, /Opens Sunday at 6 PM/);
   assert.doesNotMatch(lockedDetail, /Book &amp; pay|Book & pay/);
   assert.doesNotMatch(lockedDetail, /form-reserve/);
   assert.doesNotMatch(lockedDetail, /join-waitlist/);
@@ -6080,7 +6102,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   );
   views.scheduleState.selected = lockedUi.dateISO;
   views.scheduleState.filter = "all";
-  assert.match(views.viewSchedule(), /Opens Monday at 6 PM/);
+  assert.match(views.viewSchedule(), /Opens Sunday at 6 PM/);
   const otherDetailNow = Date.now;
   let otherDetail;
   try {
@@ -6089,7 +6111,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
   } finally {
     Date.now = otherDetailNow;
   }
-  assert.match(otherDetail, /already registered this Saturday|Opens Monday at 6 PM/);
+  assert.match(otherDetail, /already registered this Saturday|Opens Sunday at 6 PM/);
   assert.doesNotMatch(otherDetail, /Book &amp; pay|Book & pay/);
   assert.doesNotMatch(otherDetail, /join-waitlist/);
   {
@@ -6138,7 +6160,7 @@ console.log("ok  one Island ECC booking or queue commitment per Saturday");
     Date.now = realNow;
     if (previousUser) store.signIn(previousUser);
   }
-  console.log("ok  Island ECC Monday lock and exclusive-slot copy");
+  console.log("ok  Island ECC Sunday open and exclusive-slot copy");
 }
 {
   const previousEmail = store.currentUser()?.email;

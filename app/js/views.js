@@ -183,7 +183,7 @@ function sessionRow(s, { past, showDate = true, highlight } = {}) {
   } else if (store.islandEccSignupPaused(s)) {
     end = `<span class="badge neutral">Sign-up paused</span>`;
   } else if (store.islandEccSignupLocked(s)) {
-    end = `<span class="badge neutral">Opens Monday at 6 PM</span>`;
+    end = `<span class="badge neutral">Opens Sunday at 6 PM</span>`;
   } else if (store.islandEccSignupClosedFor(s)) {
     end = `<span class="badge neutral">Closed Thursday 6 PM</span>`;
   } else if (s.kind === "rsvp") {
@@ -857,8 +857,8 @@ export function viewActivity(sessionId, options) {
   } else if (isMember && store.islandEccSignupLocked(s)) {
     actionBlock = `
       <div class="banner mt16">
-        <span class="kicker">Opens Monday at 6 PM</span>
-        <p>Island ECC HYROX sign-up for this Saturday opens Monday at 6 PM HKT. Both time slots open together.</p>
+        <span class="kicker">Opens Sunday at 6 PM</span>
+        <p>Island ECC HYROX sign-up for this Saturday opens Sunday at 6 PM HKT. Both time slots open together.</p>
       </div>
       ${directionsLink ? `<div class="btn-row">${directionsLink}</div>` : ""}`;
   } else if (isMember && store.islandEccSignupClosedFor(s)) {
