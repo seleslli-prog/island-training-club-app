@@ -719,6 +719,17 @@ const __dirnameSmoke = dirname(fileURLToPath(import.meta.url));
   assert.doesNotMatch(nov21TimesMigration, /capacity/);
   assert.doesNotMatch(nov21TimesMigration, /create or replace function/);
   console.log("ok  Island ECC times from 21 Nov are 10:00 and 11:15");
+  const lunch1230Migration = readFileSync(
+    resolve(__dirnameSmoke, "../supabase/migrations/20261115000003_saturday_lunch_1230.sql"),
+    "utf8",
+  );
+  assert.match(lunch1230Migration, /activity_id = 'lunch'/);
+  assert.match(lunch1230Migration, /start_time = time '12:30'/);
+  assert.match(lunch1230Migration, /session_date >= date '2026-11-21'/);
+  assert.doesNotMatch(lunch1230Migration, /capacity/);
+  assert.doesNotMatch(lunch1230Migration, /create or replace function/);
+  assert.doesNotMatch(lunch1230Migration, /hyrox-quarry-bay/);
+  console.log("ok  Saturday lunch is 12:30 from 21 Nov");
   const capacity24Migration = readFileSync(
     resolve(__dirnameSmoke, "../supabase/migrations/20261109000001_island_ecc_capacity_24.sql"),
     "utf8",
@@ -2801,7 +2812,7 @@ for (const assetReference of [
   'href="/app/manifest.webmanifest"',
   'href="/app/styles.css?v=session-cap-inline"',
   'src="/app/js/config.js"',
-  'src="/app/js/app.js?v=hyrox-saturday-times"',
+  'src="/app/js/app.js?v=saturday-lunch-1230"',
   'href="/app/vendor/supabase-js.2.117.2.umd.js"',
   'href="/assets/itc/favicon-48.png"',
   'href="/assets/fonts/archivo-latin-variable.woff2"',
@@ -8078,8 +8089,12 @@ installLocalFixtures();
     throw new Error("the lunch is uncapped — capacity and spots must be null");
   store.signIn("member@example.test");
   const lunchHtml = views.viewActivity(lunch.id);
-  if (lunch.time !== "12:00")
-    throw new Error("the recurring Saturday lunch must start at 12:00");
+  const expectedLunchTime = lunch.dateISO >= "2026-11-21" ? "12:30" : "12:00";
+  if (lunch.time !== expectedLunchTime)
+    throw new Error(`the Saturday lunch on ${lunch.dateISO} must start at ${expectedLunchTime}`);
+  assert.equal(store.getSession("lunch-2026-11-14").time, "12:00");
+  assert.equal(store.getSession("lunch-2026-11-21").time, "12:30");
+  assert.equal(data.saturdayLunchTime(), "12:30");
   if (!lunchHtml.includes("Count me in") || lunchHtml.includes("Book & pay"))
     throw new Error("RSVP activity should offer Count me in, not checkout");
   assert.doesNotMatch(lunchHtml, /pays their own bill|pay your own bill|Pay your own bill/i,
@@ -10021,7 +10036,7 @@ const recurringDayTimes = [...recurringDefaultsHtml.matchAll(
 )].map((match) => `${match[1]} ${match[2]}`);
 assert.deepEqual(
   recurringDayTimes,
-  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 10:00", "Sat 11:15", "Sat 12:00"],
+  ["Mon 19:30", "Tue 19:30", "Wed 19:30", "Sat 10:00", "Sat 11:15", "Sat 12:30"],
   "Recurring Activity Defaults must sort by weekday, then start time"
 );
 assert.equal(

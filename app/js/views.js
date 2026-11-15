@@ -25,6 +25,7 @@ import {
   ISLAND_ECC_HYROX_ACTIVITY_IDS,
   islandEccFlexibleTime,
   islandEccWeekSchedule,
+  saturdayLunchTime,
   compareActivitiesByWeekday,
   compareSessionsByStart,
   findSession,
@@ -4005,8 +4006,9 @@ function adminActivities() {
   const activityRows = acts
     .map((a) => {
       const scheduled = islandEccWeekSchedule(a.id);
+      const time = scheduled?.time || (a.id === "lunch" ? saturdayLunchTime() : a.time);
       const body = `
-          <time>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][a.weekday]}<small>${esc(scheduled?.time || a.time)}</small></time>
+          <time>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][a.weekday]}<small>${esc(time)}</small></time>
           <div>
             <h3>${esc(a.name)}</h3>
             <p>${esc(a.location)}${a.kind === "paid" ? ` · ${fmtMoney(a.price)} · cap ${scheduled?.capacity ?? a.capacity}` : " · open attendance"}</p>

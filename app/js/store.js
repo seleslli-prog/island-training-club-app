@@ -10,6 +10,7 @@ import {
   ISLAND_ECC_HYROX_ACTIVITY_IDS,
   islandEccFlexibleTime,
   islandEccWeekSchedule,
+  saturdayLunchTime,
   compareSessionsByStart,
   sessionsInRange,
   sessionStarted,
@@ -2925,6 +2926,12 @@ const WNT_CANONICAL_NOTES = new Set([
   WNT_CONFIRMED_NOTE,
 ]);
 
+function applySaturdayLunchTime(session, override) {
+  if (session?.activityId !== "lunch" || override?.time) return session;
+  const time = saturdayLunchTime(session.dateISO);
+  return time && time !== session.time ? { ...session, time } : session;
+}
+
 function applyIslandEccFlexibleTime(session, override) {
   if (!islandEccFlexibleTime(session)) return session;
   const scheduled = islandEccWeekSchedule(session.activityId, session.dateISO);
@@ -2942,7 +2949,7 @@ function decorateSession(s) {
   const out = { ...s };
   if (!o) {
     return applyForcedSignupPause(
-      applyWntLeaderNote(applyIslandEccFlexibleTime(out, null)),
+      applyWntLeaderNote(applySaturdayLunchTime(applyIslandEccFlexibleTime(out, null), null)),
       null,
     );
   }
@@ -2966,7 +2973,7 @@ function decorateSession(s) {
     if (point) Object.assign(out, { meetingLat: point.lat, meetingLng: point.lng });
   }
   if (hasConfirmedVenue(out.location, out.mapsQuery)) out.venueTBC = false;
-  const decorated = applyWntLeaderNote(applyIslandEccFlexibleTime(out, o));
+  const decorated = applyWntLeaderNote(applySaturdayLunchTime(applyIslandEccFlexibleTime(out, o), o));
   if (o.capacity != null) decorated.capacity = Number(o.capacity);
   return applyForcedSignupPause(decorated, o);
 }
