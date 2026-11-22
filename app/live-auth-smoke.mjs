@@ -2902,6 +2902,10 @@ assert.equal(adminRows.find((row) => row.state === "pending_review").pendingPrev
 const adminResolveUrl = new URL(avatarResolveCalls.at(-1).url);
 assert.equal(adminResolveUrl.searchParams.get("scope"), "admin_members");
 const adminAvatarHtml = await views.viewAdmin("members");
+const membersOrder = ["Ready for review", "Search members", "Profile photo review", "Indemnity records"]
+  .map((label) => adminAvatarHtml.indexOf(label));
+assert.ok(membersOrder.every((index, position) => index >= 0 && (position === 0 || index > membersOrder[position - 1])),
+  "Members order is Ready for review, the directory, photo review, then indemnity");
 assert.match(adminAvatarHtml, /Profile photo review/);
 assert.match(adminAvatarHtml, /data-action="avatar-hide"/);
 assert.match(adminAvatarHtml, /data-action="avatar-approve"/);
@@ -3216,8 +3220,9 @@ assert.match(awaitingEmptyHtml, /Ready for review \(1\)/);
 assert.doesNotMatch(awaitingEmptyHtml, /Awaiting application/);
 submittedProfile.role = "member";
 const allEmptyHtml = await views.viewAdmin("approvals");
-assert.doesNotMatch(allEmptyHtml, /data-approval-card|Ready for review|Awaiting application/,
-  "Members must omit the approval groups when no pending profiles remain");
+assert.match(allEmptyHtml, /Ready for review \(0\)[\s\S]*No applications ready for review\./);
+assert.doesNotMatch(allEmptyHtml, /data-approval-card|Awaiting application/,
+  "Members keeps an empty Ready for review line when nobody is waiting");
 submittedProfile.role = "pending";
 incompleteProfile.role = "pending";
 const decisionButton = (profileId, action) => approvalsHtml.match(
@@ -3358,10 +3363,11 @@ views.adminMemberFilters.role = "admin";
 const filteredMembersHtml = await views.viewAdmin("members");
 assert.match(filteredMembersHtml, /data-action="admin-member-filters-clear"[^>]*>Clear filters</);
 const filteredResultsStart = filteredMembersHtml.indexOf('class="member-results"');
-const filteredApprovalsStart = filteredMembersHtml.indexOf('class="member-approvals"');
-const filteredResultsHtml = filteredMembersHtml.slice(
-  filteredResultsStart, filteredApprovalsStart < 0 ? undefined : filteredApprovalsStart
-);
+const filteredResultsEnd = ["Profile photo review", "Indemnity records"]
+  .map((label) => filteredMembersHtml.indexOf(label, filteredResultsStart))
+  .filter((index) => index >= 0)
+  .sort((a, b) => a - b)[0];
+const filteredResultsHtml = filteredMembersHtml.slice(filteredResultsStart, filteredResultsEnd);
 assert.match(filteredResultsHtml, /Tina Admin/);
 for (const excluded of ["Riley Runner", "Micah Member", "Submitted Runner", "Declined Runner"]) {
   assert.doesNotMatch(filteredResultsHtml, new RegExp(excluded));
@@ -8093,7 +8099,8 @@ moderationGate.resolve();
 assert.equal(await firstModeration, true);
 avatarModerationGate = null;
 assert.notEqual(viewEl.innerHTML, "moderation-before", "successful moderation must rerender Admin Members");
-assert.match(viewEl.innerHTML, /No profile photos awaiting review/);
+assert.doesNotMatch(viewEl.innerHTML, /Profile photo review|No profile photos awaiting review/,
+  "an empty photo queue stays off Members");
 
 Object.assign(avatarAdminRows[1], pendingRowBackup);
 store.clearAvatarCache();
