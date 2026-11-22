@@ -3700,7 +3700,6 @@ function adminApprovals(pending) {
   }
 
   const ready = pending.filter((item) => item.applicationSubmitted);
-  const awaiting = pending.filter((item) => !item.applicationSubmitted);
   const section = (title, items, emptyCopy, renderCard) => `
     <section class="approval-group">
       <div class="section-head"><h2>${title} (${items.length})</h2></div>
@@ -3738,28 +3737,8 @@ function adminApprovals(pending) {
       </div>
       <div class="decision-error" role="alert" hidden></div>
     </div></div>`;
-  const awaitingCard = (u) => `
-    <div class="card booking-card applicant applicant-awaiting" id="approval-${esc(u.id)}" data-approval-card data-applicant-name="${esc(u.fullName)}"><div class="card-body">
-      <header>
-        <div>
-          <div class="kicker dim" style="margin-top:0">Joined ${joinedDate(u)}</div>
-          <h3 class="mt8">${esc(u.fullName)}</h3>
-        </div>
-        <span class="badge neutral">Awaiting</span>
-      </header>
-      <dl><dt>Email</dt><dd>${esc(u.email)}</dd></dl>
-      <p class="hero-meta mt8"><strong>Application not submitted</strong></p>
-      <p class="muted small">This pending profile has not finished the membership application yet, so approval stays locked until they submit it.</p>
-      <div class="actions">
-        <button class="btn sm" type="button" data-action="approve" data-user="${esc(u.id)}" data-applicant-name="${esc(u.fullName)}" disabled>Approve</button>
-        <button class="btn danger sm" type="button" data-action="decline" data-user="${esc(u.id)}" data-applicant-name="${esc(u.fullName)}" disabled>Decline</button>
-      </div>
-    </div></div>`;
 
-  return [
-    section("Ready for review", ready, "No applications ready for review.", readyCard),
-    section("Awaiting application", awaiting, "No members awaiting an application.", awaitingCard),
-  ].join("");
+  return section("Ready for review", ready, "No applications ready for review.", readyCard);
 }
 
 function adminPrayerTimestamp(value) {

@@ -3186,18 +3186,14 @@ if (queue.some((item) => item.id === authUser.id)) {
   throw new Error("Approved/admin profiles must not enter the approval queue");
 }
 const approvalsHtml = await views.viewAdmin("approvals");
-assert.match(approvalsHtml, /Ready for review \(1\)/);
-assert.match(approvalsHtml, /Awaiting application \(1\)/);
-const readyForReviewStart = approvalsHtml.indexOf("Ready for review (1)");
-const awaitingApplicationStart = approvalsHtml.indexOf("Awaiting application (1)");
-const readyForReviewHtml = approvalsHtml.slice(readyForReviewStart, awaitingApplicationStart);
-assert.match(readyForReviewHtml, /data-applicant-name="Submitted Runner"/,
+const memberApprovalsHtml = approvalsHtml.slice(approvalsHtml.indexOf('class="member-approvals"'));
+assert.match(memberApprovalsHtml, /Ready for review \(1\)/);
+assert.doesNotMatch(memberApprovalsHtml, /Awaiting application/,
+  "Members must not show the Awaiting application section");
+assert.match(memberApprovalsHtml, /data-applicant-name="Submitted Runner"/,
   "the submitted application must render in Ready for review");
-assert.doesNotMatch(readyForReviewHtml, /data-applicant-name="Incomplete Runner"/,
-  "an incomplete application must not render in Ready for review");
-if (!approvalsHtml.includes("Application not submitted")) {
-  throw new Error("Approvals must explain incomplete pending profiles");
-}
+assert.doesNotMatch(memberApprovalsHtml, /data-applicant-name="Incomplete Runner"|Application not submitted|applicant-awaiting/,
+  "an incomplete application must not render on Members");
 assert.match(approvalsHtml, /<dt>Indemnity<\/dt><dd>Accepted<\/dd>/);
 const submittedApplication = structuredClone(applicationRows.get("pending-submitted"));
 applicationRows.set("pending-submitted", {
@@ -3212,12 +3208,12 @@ const incompleteProfile = pendingProfiles.find((item) => item.id === "pending-in
 submittedProfile.role = "member";
 const readyEmptyHtml = await views.viewAdmin("approvals");
 assert.match(readyEmptyHtml, /Ready for review \(0\)[\s\S]*No applications ready for review\./);
-assert.match(readyEmptyHtml, /Awaiting application \(1\)/);
+assert.doesNotMatch(readyEmptyHtml, /Awaiting application/);
 submittedProfile.role = "pending";
 incompleteProfile.role = "member";
 const awaitingEmptyHtml = await views.viewAdmin("approvals");
 assert.match(awaitingEmptyHtml, /Ready for review \(1\)/);
-assert.match(awaitingEmptyHtml, /Awaiting application \(0\)[\s\S]*No members awaiting an application\./);
+assert.doesNotMatch(awaitingEmptyHtml, /Awaiting application/);
 submittedProfile.role = "member";
 const allEmptyHtml = await views.viewAdmin("approvals");
 assert.doesNotMatch(allEmptyHtml, /data-approval-card|Ready for review|Awaiting application/,
@@ -3228,8 +3224,8 @@ const decisionButton = (profileId, action) => approvalsHtml.match(
   new RegExp(`<button[^>]*data-action="${action}"[^>]*data-user="${profileId}"[^>]*>`)
 )?.[0] || "";
 for (const action of ["approve", "decline"]) {
-  assert.match(decisionButton("pending-incomplete", action), /\sdisabled(?:\s|>)/,
-    `Incomplete ${action} must be disabled`);
+  assert.equal(decisionButton("pending-incomplete", action), "",
+    `Incomplete ${action} must stay off Members`);
   assert.doesNotMatch(decisionButton("pending-submitted", action), /\sdisabled(?:\s|>)/,
     `Submitted ${action} must be enabled`);
 }
