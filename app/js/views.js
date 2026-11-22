@@ -3695,10 +3695,6 @@ function adminWeeklyEventControls() {
 }
 
 function adminApprovals(pending) {
-  if (!pending.length) {
-    return `<div class="empty">No pending members. New signups will land here.</div>`;
-  }
-
   const ready = pending.filter((item) => item.applicationSubmitted);
   const section = (title, items, emptyCopy, renderCard) => `
     <section class="approval-group">
@@ -4103,9 +4099,8 @@ function adminMembers(
     const matchesRole = adminMemberFilters.role === "all" || normalizedRole(u.role) === adminMemberFilters.role;
     return matchesQuery && matchesStatus && matchesRole;
   });
-  const approvalsSection = pendingApplicants.length
-    ? adminApprovals(pendingApplicants)
-    : "";
+  const approvalsSection = adminApprovals(pendingApplicants);
+  const photoReviewSection = pendingRows.length || avatarLoadFailed ? pendingQueue : "";
   const option = (value, label, selected) =>
     `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
   const filterChip = (key, value, label) =>
@@ -4170,12 +4165,7 @@ function adminMembers(
   const hasActiveFilters = adminMemberFilters.query.length > 0 ||
     adminMemberFilters.status !== "all" || adminMemberFilters.role !== "all";
   return `
-    ${pendingQueue}
-    <div class="card mt16"><div class="card-body">
-      <h2>Indemnity records</h2>
-      <p class="muted small mt8">Download every profile, including members who have not accepted the current indemnity.</p>
-      <button class="btn ghost sm mt16" type="button" data-action="download-indemnity-list">Download indemnity list</button>
-    </div></div>
+    <div class="member-approvals">${approvalsSection}</div>
     <p class="muted small mt16">${canEdit ? "Role changes are Super Admin only." : "Only a Super Admin can change roles."}</p>
     <div class="member-filters" aria-label="Filter members">
       <div class="field"><label for="member-search">Search members</label><input id="member-search" type="search" value="${esc(adminMemberFilters.query)}" placeholder="Name or email" data-input="member-search"></div>
@@ -4194,7 +4184,12 @@ function adminMembers(
       ${hasActiveFilters ? '<button class="admin-filters-clear" type="button" data-action="admin-member-filters-clear">Clear filters</button>' : ""}
     </div>
     <div class="member-results">${rows || `<div class="empty">No members match${activeFilters ? ` ${activeFilters}` : " these filters"}.</div>`}</div>
-    ${approvalsSection ? `<div class="member-approvals">${approvalsSection}</div>` : ""}`;
+    ${photoReviewSection}
+    <div class="card mt16"><div class="card-body">
+      <h2>Indemnity records</h2>
+      <p class="muted small mt8">Download every profile, including members who have not accepted the current indemnity.</p>
+      <button class="btn ghost sm mt16" type="button" data-action="download-indemnity-list">Download indemnity list</button>
+    </div></div>`;
 }
 
 export function viewAdminActivity(id) {
