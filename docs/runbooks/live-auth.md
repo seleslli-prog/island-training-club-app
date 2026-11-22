@@ -1684,7 +1684,7 @@ order by rc.created_at desc;
 
 ## Application drafts and approval states
 
-- Google OAuth or email magic-link authentication creates `public.profiles(role = 'pending')`. Until an `applications` row exists, Admin shows the profile under **Awaiting application** and approval controls remain locked.
+- Google OAuth or email magic-link authentication creates `public.profiles(role = 'pending')`. Until an `applications` row exists, Admin Members does not list that profile, and approval stays unavailable.
 - The live membership form calls `saveMyApplication()` and upserts `public.applications`. Successful submission moves the profile to **Ready for review**.
 - Unfinished forms auto-save every 500 ms to `itc.apply.draft.v1` on that browser only. Drafts are not uploaded to Supabase and do not appear to administrators.
 - Home, Account, and Apply expose Continue / Discard controls while a local draft exists.
